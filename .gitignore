@@ -1,0 +1,12 @@
+output/
+state/
+data/
+workspace/
+node_modules/
+*.log
+.DS_Store
+/codex-remote
+/codex-remote.exe
+
+/anywhereToAgent
+/anywhereToAgent.exe

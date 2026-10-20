@@ -1,0 +1,17 @@
+.git
+node_modules
+output
+state
+data
+workspace
+codex-remote
+codex-remote.exe
+*.log
+.DS_Store
+.env
+.env.*
+*.key
+*.pem
+
+anywhereToAgent
+anywhereToAgent.exe

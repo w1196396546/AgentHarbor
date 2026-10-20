@@ -1,0 +1,16 @@
+# Use a dedicated domain. Set the relay public_url to this same origin.
+remote.example.com {
+    request_body {
+        # Encrypted envelope limit; the desktop keeps the 20 MiB attachment limit.
+        max_size 48MiB
+    }
+    reverse_proxy 127.0.0.1:8080 {
+        header_up Host {http.request.hostport}
+        # Caddy handles WebSocket upgrades; disable buffering for streamed replies.
+        flush_interval -1
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 120s
+        }
+    }
+}

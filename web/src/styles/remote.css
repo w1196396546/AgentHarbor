@@ -1,0 +1,7 @@
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@import "./solid-glass.css";
+@import "./workspace.css" layer(legacy);
+@import "./remote-glass.css";
+@source "../";

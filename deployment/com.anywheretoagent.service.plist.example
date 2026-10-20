@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.anywheretoagent.service</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.local/bin/anywhereToAgent</string>
+        <string>--data-dir</string>
+        <string>__HOME__/.local/share/anywhereToAgent</string>
+        <string>--config</string>
+        <string>__HOME__/.local/share/anywhereToAgent/config.json</string>
+        <string>--admin-listen</string>
+        <string>127.0.0.1:9090</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/anywhereToAgent/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/anywhereToAgent/stderr.log</string>
+</dict>
+</plist>
