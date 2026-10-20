@@ -230,6 +230,15 @@ func TestAccountClaimUsesOnlyCurrentPairedDevice(t *testing.T) {
 	peer, done := testClient(t, ts, id, secret, mockClient(id, strings.Repeat("6", 64)))
 	client := browser(t)
 	pairBrowser(t, client, ts, id)
+	otherID := strings.Repeat("9", 32)
+	testClient(t, ts, otherID, strings.Repeat("8", 64), mockClient(otherID, strings.Repeat("7", 64)))
+	pairBrowser(t, client, ts, otherID)
+	// The default cookie now belongs to another device; claim follows the selected cookie.
+	client.Transport = accountTransport(func(r *http.Request) (*http.Response, error) {
+		copy := r.Clone(r.Context())
+		copy.Header.Set("X-Remote-Device", id)
+		return http.DefaultTransport.RoundTrip(copy)
+	})
 	s.accountHTTP = &http.Client{Transport: accountTransport(func(r *http.Request) (*http.Response, error) {
 		return fixtureJSON(map[string]any{"code": 0, "data": map[string]any{"id": 7, "email": "owner@example.test", "status": "active"}}), nil
 	})}

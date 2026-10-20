@@ -260,7 +260,11 @@ func (s *Server) claimAccountDevice(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusBadRequest, "Invalid device claim")
 		return
 	}
-	cookie, _ := r.Cookie(s.cookieName())
+	cookie, _, cookieErr := s.sessionCookie(r)
+	if cookieErr != nil || !validHex(cookie.Value, 64) {
+		failure(w, http.StatusUnauthorized, "Device authorization is unavailable")
+		return
+	}
 	s.mu.Lock()
 	device, exists := s.state.Devices[paired.DeviceID]
 	current, authorized := s.state.Sessions[digest(cookie.Value)]

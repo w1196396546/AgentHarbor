@@ -36,6 +36,8 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 
 `GET /api/account` 返回当前用户与其设备；`POST /api/account/device` 以 `{id,name}` 重命名或 `{id,revoke:true}` 撤销，跨账户 ID 返回 404。管理员仍使用独立的管理凭证与认证，`/api/admin/state` 增加用户和设备所属用户 ID，`POST /api/admin/user` 的 `{id,disabled}` 可以停用或恢复中转用户。停用会原子撤销其账户会话和浏览器路由授权，并断开其在线设备；恢复后须重新登录/配对，不能复活旧会话。用户资料默认来自平台，无本地注册密码或邮箱修改接口。平台验证码挑战或第三方登录暂不代理，失败会明确提示；TOTP 使用平台真实 `totp_code` 字段。
 
+自部署设备可在账户页通过 `POST /api/account/claim {}` 绑定。它同时要求账户会话和所选设备的已配对 HttpOnly 会话，不接受任意设备 ID；已归属其他账户时返回 409。`GET /api/account` 的 `current_device` 及绑定操作均按 `X-Remote-Device` 选择同一设备 cookie，不能误用上一次配对的通用 cookie。设备切换只选择本浏览器保留的独立加密凭据；每个标签页固定自己的当前设备，其他标签页切换不改变本页后续命令的路由。
+
 安全边界：Remote 仍知路由标识、设备名、在线状态、时间和密文大小。网页脚本由中转提供，密钥在同来源 localStorage；端点失陷、同来源 XSS 或恶意替换脚本可窃取密钥。因此本方案防被动中转读取和状态文件泄漏，不承诺抵抗恶意网页服务器或前向保密。可信 HTTPS 来源与静态资源完整性仍为前提。
 
 ## Agent 接口与目录边界
