@@ -6,7 +6,7 @@ anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远
 
 | 部件 | 负责 | 数据所在位置 |
 | --- | --- | --- |
-| agentTools“远程连接”页 | 选择预设/自部署服务、共享项目、连接状态、生成二维码/授权码、已授权浏览器与撤销 | 用户电脑 |
+| agentTools“远程连接”页 | 选择预设/自部署服务、Codex 原生项目目录与可选额外目录、连接状态、生成二维码/授权码、已授权浏览器与撤销 | 用户电脑 |
 | agentTools 连接端 | 主动 WSS 连接、配对、签发和校验浏览器授权、转发到本机执行引擎 | 用户电脑 |
 | 本机 Agent 适配器（当前 Codex） | 读取原生历史、新建/继续/停止任务、工具审批、文件和更改、SSE 事件 | 用户电脑 |
 | Remote | 设备路由、浏览器入口、请求/响应和事件中转、设备凭证哈希、私有浏览器会话映射 | 公网服务器 |
@@ -99,7 +99,7 @@ SSE 增量经 WebSocket 转到 Remote，再持续发送给浏览器；代理必�
 
 `internal/remoteclient` 位于 agentTools：连接管理、设备身份、配对和浏览器授权；其 `agent` 子包定义执行适配接口，`engine` 子包注册和选择适配器；当前 Codex 实现负责原有会话能力。模型供应商、API 接入和 Codex 数据目录都来自用户电脑的配置。需要经过 agentTools 网关时，沿用 agentTools 的 Codex 接入；Remote 不改变模型请求路径。
 
-共享项目限定历史列表、文件搜索/引用、预览和下载。浏览器不能指定未共享目录。网页主菜单使用 Codex 的三档审批模式：请求批准（内部值 `workspace-write`）映射为 workspace-write 沙箱、`approvalPolicy: on-request` 和 `approvalsReviewer: user`；帮我批准（`auto-review`）使用同一沙箱与审批策略，并设置 `approvalsReviewer: auto_review`；完全访问（`full-access`）使用 danger-full-access 沙箱、`approvalPolicy: never` 和 reviewer user。旧 `read-only` 会话保留兼容。full-access 按本机运行用户权限执行，不能把共享文件列表误认为操作系统沙箱。
+Codex 原生项目目录与明确配置的额外目录限定历史列表、文件搜索/引用、预览和下载。目录由本机只读 App 状态和官方 SQLite 索引确定，无需先发现或逐个共享；浏览器不能指定范围外目录。网页主菜单使用 Codex 的三档审批模式：请求批准（内部值 `workspace-write`）映射为 workspace-write 沙箱、`approvalPolicy: on-request` 和 `approvalsReviewer: user`；帮我批准（`auto-review`）使用同一沙箱与审批策略，并设置 `approvalsReviewer: auto_review`；完全访问（`full-access`）使用 danger-full-access 沙箱、`approvalPolicy: never` 和 reviewer user。旧 `read-only` 会话保留兼容。full-access 按本机运行用户权限执行，不能把共享文件列表误认为操作系统沙箱。
 
 原应用会话以实际 owner 的设置为准。网页更改模型、强度、模式或权限时调用 `POST /api/threads/{id}/settings`，携当前 owner epoch，仅传用户改变的字段；等待本机原 owner 的规范快照确认后返回 `options`，详情及 SSE 的 `live.options` 同步实际设置。请求未确认时保留原设置与草稿，不伪装为保存成功。普通发送未明确选择新设置时继承原 owner，不重新应用网页默认沙箱或 reviewer。自定义沙箱、额外根目录和不能准确映射的命名 profile 保持自定义，不自动转换成只读或完全访问。组织 requirements 和原 App 的验证仍适用，原生拒绝或未确认时报告错误，不降级伪装为已启用。
 
