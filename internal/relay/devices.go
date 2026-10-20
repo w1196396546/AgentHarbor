@@ -13,6 +13,7 @@ const maxBrowserSessions = 4096
 
 type DeviceInfo struct {
 	ID        string    `json:"id"`
+	UserID    int64     `json:"user_id,omitempty"`
 	Name      string    `json:"name"`
 	Online    bool      `json:"online"`
 	Revoked   bool      `json:"revoked"`
@@ -22,6 +23,8 @@ type DeviceInfo struct {
 
 type storedDevice struct {
 	ID         string    `json:"id"`
+	UserID     int64     `json:"user_id,omitempty"`
+	Alias      string    `json:"alias,omitempty"`
 	Name       string    `json:"name"`
 	SecretHash string    `json:"secret_hash"`
 	Revoked    bool      `json:"revoked"`
@@ -34,10 +37,17 @@ func (s *Server) Devices() []DeviceInfo {
 	defer s.mu.Unlock()
 	devices := make([]DeviceInfo, 0, len(s.state.Devices))
 	for _, d := range s.state.Devices {
-		devices = append(devices, DeviceInfo{ID: d.ID, Name: d.Name, Online: s.clients[d.ID] != nil, Revoked: d.Revoked, CreatedAt: d.CreatedAt, LastSeen: d.LastSeen})
+		devices = append(devices, DeviceInfo{ID: d.ID, UserID: d.UserID, Name: deviceName(d), Online: s.clients[d.ID] != nil, Revoked: d.Revoked, CreatedAt: d.CreatedAt, LastSeen: d.LastSeen})
 	}
 	slices.SortFunc(devices, func(a, b DeviceInfo) int { return strings.Compare(a.ID, b.ID) })
 	return devices
+}
+
+func deviceName(device storedDevice) string {
+	if device.Alias != "" {
+		return device.Alias
+	}
+	return device.Name
 }
 
 func (s *Server) RevokeDevice(id string) error {

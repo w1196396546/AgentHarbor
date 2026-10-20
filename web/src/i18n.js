@@ -48,6 +48,7 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["My account and devices", "我的账户与设备", "我的帳戶與裝置", "アカウントとデバイス", "Mein Konto und Geräte"],
   ["Close navigation", "关闭导航", "關閉導覽", "ナビゲーションを閉じる", "Navigation schließen"],
   ["Open navigation", "打开导航", "開啟導覽", "ナビゲーションを開く", "Navigation öffnen"],
   ["Search conversations", "搜索会话", "搜尋對話", "チャットを検索", "Unterhaltungen suchen"],

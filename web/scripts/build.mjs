@@ -4,7 +4,7 @@ import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import { copyFile, readFile, writeFile } from "node:fs/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
-for (const name of ["remote", "admin"]) {
+for (const name of ["remote", "admin", "account"]) {
   await build({
     configFile: false,
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
@@ -25,7 +25,7 @@ for (const name of ["remote", "admin"]) {
     },
   });
 }
-for (const name of ["index", "admin"])
+for (const name of ["index", "admin", "account"])
   await copyFile(
     root + `web/${name}.html`,
     root + `internal/relay/assets/${name}.html`,

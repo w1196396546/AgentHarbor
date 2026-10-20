@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, ArrowRight, CircleCheck, Monitor, RefreshCw, Server, Settings2, ShieldCheck, Unplug } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CircleCheck,
+  Monitor,
+  RefreshCw,
+  Server,
+  Settings2,
+  ShieldCheck,
+  Unplug,
+} from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Panel } from "./components/ui/panel";
 import { Label } from "./components/ui/label";
 import { Input } from "./components/ui/input";
-import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from "./components/ui/empty";
+import {
+  Empty,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "./components/ui/empty";
 import { Modal } from "./components/workspace-surfaces";
 import { Tag } from "./components/ui/tag";
 import { ThemeToggle, applyTheme } from "./theme";
@@ -17,6 +32,7 @@ function AdminApp() {
     [loginError, setLoginError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
+    [disableUser, setDisableUser] = useState(null),
     [revoke, setRevoke] = useState(null);
   const generation = useRef(0),
     timer = useRef(),
@@ -171,6 +187,10 @@ function AdminApp() {
               <Monitor size={16} />
               连接设备
             </a>
+            <a className="admin-nav" href="#users">
+              <ShieldCheck size={16} />
+              用户管理
+            </a>
             <a className="admin-nav" href="#configuration">
               <Settings2 size={16} />
               服务配置
@@ -291,6 +311,11 @@ function AdminApp() {
                         <h2>{device.name || "未命名电脑"}</h2>
                         <code>{device.id}</code>
                         <p>
+                          {device.user_id
+                            ? "FullCupAI 用户 #" + device.user_id
+                            : "旧版未绑定账户"}
+                        </p>
+                        <p>
                           {device.last_seen
                             ? "最后连接：" +
                               new Date(device.last_seen).toLocaleString()
@@ -330,6 +355,79 @@ function AdminApp() {
                   </Empty>
                 )}
               </div>
+            </Panel>
+            <Panel id="users" title="FullCupAI 用户" className="admin-section">
+              {state?.users?.length ? (
+                state.users.map((user) => (
+                  <div key={user.id} className="relay-device">
+                    <span className="device-illustration">
+                      <ShieldCheck size={24} />
+                    </span>
+                    <div className="relay-device-info">
+                      <h2>{user.username || user.email}</h2>
+                      <p>
+                        {user.email} · #{user.id}
+                      </p>
+                      <p>
+                        {
+                          state.devices.filter(
+                            (device) => device.user_id === user.id,
+                          ).length
+                        }{" "}
+                        台设备
+                      </p>
+                      {disableUser === user.id && (
+                        <p role="status">
+                          停用将断开该用户的设备并撤销浏览器授权。恢复后需重新登录和配对。
+                        </p>
+                      )}
+                    </div>
+                    <Tag className="device-status">
+                      {user.disabled ? "已停用" : "正常"}
+                    </Tag>
+                    <Button
+                      variant={
+                        disableUser === user.id ? "destructive" : "ghost"
+                      }
+                      disabled={busy}
+                      onClick={() => {
+                        if (!user.disabled && disableUser !== user.id) {
+                          setDisableUser(user.id);
+                          return;
+                        }
+                        run(async () => {
+                          setState(
+                            await api("user", {
+                              id: user.id,
+                              disabled: !user.disabled,
+                            }),
+                          );
+                          setDisableUser(null);
+                        });
+                      }}
+                    >
+                      {user.disabled
+                        ? "恢复用户"
+                        : disableUser === user.id
+                          ? "确认停用"
+                          : "停用用户"}
+                    </Button>
+                    {disableUser === user.id && (
+                      <Button
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setDisableUser(null)}
+                      >
+                        取消
+                      </Button>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="section-note">
+                  用户登录或设备连接后自动同步 FullCupAI 资料。
+                </p>
+              )}
             </Panel>
             <div className="admin-settings-grid">
               <Panel

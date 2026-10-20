@@ -30,6 +30,21 @@ func (a *Admin) Handler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/admin/state", a.state)
+	mux.HandleFunc("POST /api/admin/user", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			ID       int64 `json:"id"`
+			Disabled bool  `json:"disabled"`
+		}
+		if adminDecode(w, r, &in) != nil || in.ID <= 0 {
+			http.Error(w, "Invalid user", http.StatusBadRequest)
+			return
+		}
+		if a.server.setUserDisabled(in.ID, in.Disabled) != nil {
+			http.Error(w, "Unable to update user", http.StatusBadRequest)
+			return
+		}
+		a.state(w, r)
+	})
 	mux.HandleFunc("POST /api/admin/revoke-device", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			ID string `json:"id"`
@@ -84,7 +99,7 @@ func (a *Admin) state(w http.ResponseWriter, r *http.Request) {
 			online++
 		}
 	}
-	adminJSON(w, map[string]any{"config": a.server.Config(), "devices": devices, "status": map[string]any{"running": true, "online": online, "registered": len(devices)}, "credential_path": a.tokenPath})
+	adminJSON(w, map[string]any{"config": a.server.Config(), "devices": devices, "users": a.server.Users(), "status": map[string]any{"running": true, "online": online, "registered": len(devices)}, "credential_path": a.tokenPath})
 }
 
 func adminDecode(w http.ResponseWriter, r *http.Request, value any) error {

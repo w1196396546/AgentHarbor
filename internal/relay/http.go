@@ -43,6 +43,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("POST /api/secure", s.secure)
 	mux.HandleFunc("GET /api/device", s.device)
+	mux.HandleFunc("GET /api/account", s.account)
+	mux.HandleFunc("POST /api/account/login", s.accountLogin)
+	mux.HandleFunc("POST /api/account/logout", s.accountLogout)
+	mux.HandleFunc("POST /api/account/device", s.manageAccountDevice)
+	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) {
+		page, err := Asset("account.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(page)
+	})
 	for _, route := range []string{
 		"GET /api/sessions", "GET /api/sessions/{id}", "GET /api/sessions/{id}/history", "GET /api/sessions/{id}/events",
 		"POST /api/threads", "POST /api/threads/{id}/turn", "POST /api/threads/{id}/interrupt", "POST /api/threads/{id}/answer", "POST /api/threads/{id}/steer", "POST /api/threads/{id}/connect", "POST /api/threads/{id}/settings",

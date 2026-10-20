@@ -20,6 +20,9 @@ export function Dialogs() {
           </Button>
         </div>
         <p id="deviceDetails"></p>
+        <p>
+          <a href="/account" data-t="My account and devices"></a>
+        </p>
         <p data-t="Manage shared projects and authorized browsers on the remote connection page in agentTools."></p>
         <p data-t="Relay administration is separate and does not grant access to this computer."></p>
       </Modal>

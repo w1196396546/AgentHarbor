@@ -89,12 +89,22 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		_ = ws.Close(websocket.StatusPolicyViolation, "Invalid client registration")
 		return
 	}
+	var account UserInfo
+	if token := r.Header.Get("X-Remote-FullCup-Token"); token != "" {
+		verifyCtx, stop := context.WithTimeout(r.Context(), 8*time.Second)
+		account, err = s.verifyFullCupAccount(verifyCtx, token)
+		stop()
+		if err != nil {
+			_ = ws.Close(websocket.StatusPolicyViolation, "FullCupAI account verification failed")
+			return
+		}
+	}
 	c := &connection{ws: ws}
 	s.mu.Lock()
 	device, exists := s.state.Devices[registration.DeviceID]
 	providedHash := digest(registration.DeviceSecret)
 	allowedNew := s.cfg.RegistrationEnabled == nil || *s.cfg.RegistrationEnabled
-	if s.closed || s.clients[registration.DeviceID] != nil || (exists && (device.Revoked || subtle.ConstantTimeCompare([]byte(providedHash), []byte(device.SecretHash)) != 1)) || (!exists && (!allowedNew || len(s.state.Devices) >= maxDevices)) {
+	if s.closed || account.ID != 0 && (s.state.Users[account.ID].Disabled || s.state.Users[account.ID].ID == 0 && len(s.state.Users) >= maxDevices) || exists && device.UserID != 0 && device.UserID != account.ID || s.clients[registration.DeviceID] != nil || (exists && (device.Revoked || subtle.ConstantTimeCompare([]byte(providedHash), []byte(device.SecretHash)) != 1)) || (!exists && (!allowedNew || len(s.state.Devices) >= maxDevices)) {
 		s.mu.Unlock()
 		_ = ws.Close(websocket.StatusPolicyViolation, "Device cannot connect")
 		return
@@ -105,6 +115,16 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	device.Name, device.LastSeen = registration.DeviceName, now
 	next := s.copyState()
+	if account.ID != 0 {
+		previous := next.Users[account.ID]
+		account.CreatedAt = previous.CreatedAt
+		if account.CreatedAt.IsZero() {
+			account.CreatedAt = now
+		}
+		account.LastSeen = now
+		next.Users[account.ID] = account
+		device.UserID = account.ID
+	}
 	next.Devices[device.ID] = device
 	if err := s.saveState(next); err != nil {
 		s.mu.Unlock()

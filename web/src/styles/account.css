@@ -1,0 +1,76 @@
+.account-dashboard {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-dashboard .admin-content {
+  max-width: 1000px;
+}
+.account-login-panel {
+  max-width: 480px;
+}
+.account-login-form {
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+}
+.account-login-form .dialog-actions {
+  margin-top: 10px;
+}
+.account-login-form .section-note {
+  padding: 4px 0 0;
+}
+.account-factor-note {
+  margin: 0 0 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.account-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.account-toolbar > span {
+  color: var(--muted-foreground);
+  margin-right: auto;
+}
+.account-device {
+  flex-wrap: wrap;
+}
+.account-device .relay-device-info {
+  min-width: 0;
+}
+.account-device .relay-device-info > label {
+  display: block;
+  margin-bottom: 6px;
+}
+.account-device .relay-device-info > input {
+  margin-bottom: 6px;
+}
+.account-device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.account-revoke-note {
+  flex-basis: 100%;
+  margin: 0 0 0 60px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.account-footer {
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: flex-start;
+}
+@media (max-width: 640px) {
+  .account-login-form {
+    padding: 18px 16px;
+  }
+  .account-device-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+  .account-revoke-note {
+    margin-left: 0;
+  }
+}

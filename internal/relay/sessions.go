@@ -49,7 +49,7 @@ func (s *Server) session(r *http.Request) (browserSession, bool) {
 	defer s.mu.Unlock()
 	session, ok := s.state.Sessions[digest(cookie.Value)]
 	device, exists := s.state.Devices[session.DeviceID]
-	return session, ok && exists && !device.Revoked && session.ExpiresAt.After(time.Now()) && !s.closed
+	return session, ok && exists && !device.Revoked && !s.state.Users[device.UserID].Disabled && session.ExpiresAt.After(time.Now()) && !s.closed
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (s *Server) device(w http.ResponseWriter, r *http.Request) {
 	device := s.state.Devices[session.DeviceID]
 	online := s.clients[session.DeviceID] != nil
 	s.mu.Unlock()
-	jsonReply(w, http.StatusOK, map[string]any{"id": device.ID, "name": device.Name, "online": online})
+	jsonReply(w, http.StatusOK, map[string]any{"id": device.ID, "name": deviceName(device), "online": online})
 }
 
 // Call with mu held. Cancellation does not wait for the streaming handler.

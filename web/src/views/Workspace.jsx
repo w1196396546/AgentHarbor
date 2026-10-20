@@ -111,6 +111,10 @@ export function Workspace() {
               ></span>
             </span>
             <div>
+              <a className="settings-link" href="/account">
+                <span data-icon="agent"></span>
+                <span data-t="My account and devices"></span>
+              </a>
               <a className="settings-link" href="/admin">
                 <span data-icon="settings"></span>
                 <span data-t="Relay administration"></span>

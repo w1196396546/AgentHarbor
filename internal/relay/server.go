@@ -30,6 +30,7 @@ type Server struct {
 	requests    map[string]map[uint64]context.CancelFunc
 	nextRequest uint64
 	admin       http.Handler
+	accountHTTP *http.Client
 	ctx         context.Context
 	cancel      context.CancelFunc
 	closed      bool
@@ -68,6 +69,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{cfg: cfg, public: public, clients: map[string]*connection{}, attempts: map[string]attemptWindow{}, requests: map[string]map[uint64]context.CancelFunc{}, closeDone: make(chan struct{}), ctx: ctx, cancel: cancel}
+	s.accountHTTP = &http.Client{Timeout: 8 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	if err := s.loadState(); err != nil {
 		cancel()
 		return nil, err
