@@ -28,7 +28,7 @@ var publicAssets = sync.OnceValue(func() http.Handler {
 		etag            string
 	}
 	bundles := map[string]bundle{}
-	for _, name := range []string{"remote.js", "remote.css", "admin.js", "admin.css"} {
+	for _, name := range []string{"remote.js", "remote.css", "admin.js", "admin.css", "account.js", "account.css"} {
 		raw, err := Asset(name)
 		if err != nil {
 			continue
