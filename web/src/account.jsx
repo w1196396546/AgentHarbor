@@ -204,6 +204,16 @@ function AccountApp() {
             <>
               <div className="account-toolbar">
                 <span>{account.devices.length} 台设备</span>
+                {account.current_device && !account.current_device.user_id && (
+                  <Button
+                    type="button"
+                    variant="glass"
+                    disabled={busy}
+                    onClick={() => run(async () => setAccount(await api("/claim", {})))}
+                  >
+                    绑定当前设备
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="glass"

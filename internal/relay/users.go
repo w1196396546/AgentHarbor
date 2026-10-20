@@ -232,7 +232,63 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 	}
 	devices := s.Devices()
 	devices = slices.DeleteFunc(devices, func(device DeviceInfo) bool { return device.UserID != user.ID })
-	jsonReply(w, http.StatusOK, map[string]any{"user": user, "devices": devices})
+	var current *DeviceInfo
+	if paired, ok := s.session(r); ok {
+		s.mu.Lock()
+		device, exists := s.state.Devices[paired.DeviceID]
+		if exists {
+			current = &DeviceInfo{ID: device.ID, UserID: device.UserID, Name: deviceName(device), Online: s.clients[device.ID] != nil, Revoked: device.Revoked, CreatedAt: device.CreatedAt, LastSeen: device.LastSeen}
+		}
+		s.mu.Unlock()
+	}
+	jsonReply(w, http.StatusOK, map[string]any{"user": user, "devices": devices, "current_device": current})
+}
+
+func (s *Server) claimAccountDevice(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.accountUser(r)
+	if !ok {
+		failure(w, http.StatusUnauthorized, "Sign in with your FullCupAI account")
+		return
+	}
+	paired, ok := s.session(r)
+	if !ok {
+		failure(w, http.StatusUnauthorized, "Pair this browser with the device first")
+		return
+	}
+	var in struct{}
+	if decode(w, r, &in) != nil {
+		failure(w, http.StatusBadRequest, "Invalid device claim")
+		return
+	}
+	cookie, _ := r.Cookie(s.cookieName())
+	s.mu.Lock()
+	device, exists := s.state.Devices[paired.DeviceID]
+	current, authorized := s.state.Sessions[digest(cookie.Value)]
+	if !exists || device.Revoked || !authorized || current.ID != paired.ID || !current.ExpiresAt.After(time.Now()) || s.state.Users[user.ID].Disabled {
+		s.mu.Unlock()
+		failure(w, http.StatusUnauthorized, "Device authorization is unavailable")
+		return
+	}
+	if device.UserID != 0 && device.UserID != user.ID {
+		s.mu.Unlock()
+		failure(w, http.StatusConflict, "This device belongs to another account")
+		return
+	}
+	if device.UserID == user.ID {
+		s.mu.Unlock()
+		s.account(w, r)
+		return
+	}
+	next := s.copyState()
+	device.UserID = user.ID
+	next.Devices[device.ID] = device
+	err := s.saveState(next)
+	s.mu.Unlock()
+	if err != nil {
+		failure(w, http.StatusInternalServerError, "Unable to bind this device")
+		return
+	}
+	s.account(w, r)
 }
 
 func (s *Server) manageAccountDevice(w http.ResponseWriter, r *http.Request) {

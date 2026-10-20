@@ -104,7 +104,11 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	device, exists := s.state.Devices[registration.DeviceID]
 	providedHash := digest(registration.DeviceSecret)
 	allowedNew := s.cfg.RegistrationEnabled == nil || *s.cfg.RegistrationEnabled
-	if s.closed || account.ID != 0 && (s.state.Users[account.ID].Disabled || s.state.Users[account.ID].ID == 0 && len(s.state.Users) >= maxDevices) || exists && device.UserID != 0 && device.UserID != account.ID || s.clients[registration.DeviceID] != nil || (exists && (device.Revoked || subtle.ConstantTimeCompare([]byte(providedHash), []byte(device.SecretHash)) != 1)) || (!exists && (!allowedNew || len(s.state.Devices) >= maxDevices)) {
+	ownerID := account.ID
+	if ownerID == 0 {
+		ownerID = device.UserID
+	}
+	if s.closed || ownerID != 0 && s.state.Users[ownerID].Disabled || account.ID != 0 && s.state.Users[account.ID].ID == 0 && len(s.state.Users) >= maxDevices || s.clients[registration.DeviceID] != nil || (exists && (device.Revoked || subtle.ConstantTimeCompare([]byte(providedHash), []byte(device.SecretHash)) != 1)) || (!exists && (!allowedNew || len(s.state.Devices) >= maxDevices)) {
 		s.mu.Unlock()
 		_ = ws.Close(websocket.StatusPolicyViolation, "Device cannot connect")
 		return
@@ -115,7 +119,16 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	device.Name, device.LastSeen = registration.DeviceName, now
 	next := s.copyState()
+	revokedKeys := []string{}
 	if account.ID != 0 {
+		if device.UserID != account.ID {
+			for key, session := range next.Sessions {
+				if session.DeviceID == device.ID {
+					delete(next.Sessions, key)
+					revokedKeys = append(revokedKeys, key)
+				}
+			}
+		}
 		previous := next.Users[account.ID]
 		account.CreatedAt = previous.CreatedAt
 		if account.CreatedAt.IsZero() {
@@ -130,6 +143,9 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		_ = ws.Close(websocket.StatusInternalError, "Unable to persist device registration")
 		return
+	}
+	for _, key := range revokedKeys {
+		s.cancelRequests(key)
 	}
 	s.clients[device.ID] = c
 	s.mu.Unlock()

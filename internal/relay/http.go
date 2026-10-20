@@ -47,6 +47,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/account/login", s.accountLogin)
 	mux.HandleFunc("POST /api/account/logout", s.accountLogout)
 	mux.HandleFunc("POST /api/account/device", s.manageAccountDevice)
+	mux.HandleFunc("POST /api/account/claim", s.claimAccountDevice)
 	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) {
 		page, err := Asset("account.html")
 		if err != nil {

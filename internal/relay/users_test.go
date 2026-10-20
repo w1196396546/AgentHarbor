@@ -166,7 +166,145 @@ func TestDeviceRegistrationVerifiesFullCupOwner(t *testing.T) {
 	if bytes.Contains(data, []byte("fixture-device-token")) {
 		t.Fatal("platform token persisted")
 	}
-	rejectedRegistration(t, ts, id, strings.Repeat("8", 64))
+	peer, done := testClient(t, ts, id, strings.Repeat("8", 64), mockClient(id, strings.Repeat("9", 64)))
+	peer.Close()
+	<-done
+	waitOffline(t, s, id)
+	if s.Devices()[0].UserID != 7 {
+		t.Fatal("headerless reconnect lost verified owner")
+	}
+}
+
+func TestDeviceAccountSwitchRevokesOldBrowserSessions(t *testing.T) {
+	s, ts := testRelay(t, "")
+	s.accountHTTP = &http.Client{Transport: accountTransport(func(r *http.Request) (*http.Response, error) {
+		return fixtureJSON(map[string]any{"code": 0, "data": map[string]any{"id": 8, "email": "next@example.test", "status": "active"}}), nil
+	})}
+	id, secret := strings.Repeat("1", 32), strings.Repeat("2", 64)
+	key := digest("old-browser")
+	s.mu.Lock()
+	next := s.copyState()
+	next.Users[7] = UserInfo{ID: 7, Email: "old@example.test", Status: "active"}
+	next.Devices[id] = storedDevice{ID: id, UserID: 7, Name: "Computer", SecretHash: digest(secret)}
+	next.Sessions[key] = browserSession{ID: strings.Repeat("3", 32), DeviceID: id, Grant: strings.Repeat("3", 32), ExpiresAt: time.Now().Add(time.Hour), Encrypted: true}
+	err := s.saveState(next)
+	cancelled := make(chan struct{})
+	s.requests[key] = map[uint64]context.CancelFunc{1: func() { close(cancelled) }}
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	headers := make(http.Header)
+	headers.Set("X-Remote-FullCup-Token", "fixture-new-account")
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/api/client/connect", &websocket.DialOptions{HTTPHeader: headers})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	data, _ := json.Marshal(map[string]any{"type": "register", "protocol": 1, "device_id": id, "device_secret": secret, "device_name": "Computer"})
+	if err := ws.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ws.Read(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("account switch left old browser stream alive")
+	}
+	s.mu.Lock()
+	owner := s.state.Devices[id].UserID
+	_, oldGrant := s.state.Sessions[key]
+	s.mu.Unlock()
+	if owner != 8 || oldGrant {
+		t.Fatal("owner transfer kept previous authorization")
+	}
+}
+
+func TestAccountClaimUsesOnlyCurrentPairedDevice(t *testing.T) {
+	s, ts := testRelay(t, "")
+	id, secret := strings.Repeat("4", 32), strings.Repeat("5", 64)
+	peer, done := testClient(t, ts, id, secret, mockClient(id, strings.Repeat("6", 64)))
+	client := browser(t)
+	pairBrowser(t, client, ts, id)
+	s.accountHTTP = &http.Client{Transport: accountTransport(func(r *http.Request) (*http.Response, error) {
+		return fixtureJSON(map[string]any{"code": 0, "data": map[string]any{"id": 7, "email": "owner@example.test", "status": "active"}}), nil
+	})}
+	response := accountCall(t, client, ts.URL, "/api/account/claim", map[string]any{})
+	response.Body.Close()
+	if response.StatusCode != 401 {
+		t.Fatal("pairing alone granted owner claim")
+	}
+	response = accountCall(t, client, ts.URL, "/api/account/login", map[string]any{"access_token": "fixture-owner"})
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("account login failed")
+	}
+	unpaired := browser(t)
+	response = accountCall(t, unpaired, ts.URL, "/api/account/login", map[string]any{"access_token": "fixture-owner"})
+	response.Body.Close()
+	response = accountCall(t, unpaired, ts.URL, "/api/account/claim", map[string]any{})
+	response.Body.Close()
+	if response.StatusCode != 401 {
+		t.Fatal("account login claimed a device without pairing")
+	}
+	response = accountCall(t, client, ts.URL, "/api/account/claim", map[string]any{"id": strings.Repeat("a", 32)})
+	response.Body.Close()
+	if response.StatusCode != 400 {
+		t.Fatal("claim accepted arbitrary device ID")
+	}
+	response = accountCall(t, client, ts.URL, "/api/account", nil)
+	var before struct {
+		Current *DeviceInfo `json:"current_device"`
+	}
+	_ = json.NewDecoder(response.Body).Decode(&before)
+	response.Body.Close()
+	if before.Current == nil || before.Current.ID != id || before.Current.UserID != 0 {
+		t.Fatal("unowned current device was not offered for claim")
+	}
+	response = accountCall(t, client, ts.URL, "/api/account/claim", map[string]any{})
+	response.Body.Close()
+	if response.StatusCode != 200 || s.Devices()[0].UserID != 7 {
+		t.Fatal("paired device was not bound to account")
+	}
+	response = accountCall(t, client, ts.URL, "/api/account/claim", map[string]any{})
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("same-account claim was not idempotent")
+	}
+	peer.Close()
+	<-done
+	waitOffline(t, s, id)
+	reconnected, reconnectDone := testClient(t, ts, id, secret, mockClient(id, strings.Repeat("6", 64)))
+	if s.Devices()[0].UserID != 7 {
+		t.Fatal("headerless self-host reconnect lost claimed owner")
+	}
+	s.mu.Lock()
+	next := s.copyState()
+	next.Users[8] = UserInfo{ID: 8, Email: "other@example.test", Status: "active"}
+	device := next.Devices[id]
+	device.UserID = 8
+	next.Devices[id] = device
+	err := s.saveState(next)
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = accountCall(t, client, ts.URL, "/api/account/claim", map[string]any{})
+	response.Body.Close()
+	if response.StatusCode != 409 {
+		t.Fatal("claim transferred a device owned by another account")
+	}
+	reconnected.Close()
+	<-reconnectDone
+	waitOffline(t, s, id)
+	if err := s.setUserDisabled(8, true); err != nil {
+		t.Fatal(err)
+	}
+	rejectedRegistration(t, ts, id, secret)
 }
 
 func TestFullCupPasswordLoginPreservesSecondFactor(t *testing.T) {
