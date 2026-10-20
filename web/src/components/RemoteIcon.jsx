@@ -1,4 +1,4 @@
-import { AlertTriangle, CodeXml, Plus, Search, RefreshCw, Folder, ChevronDown, LogOut, PanelLeft, FileDiff, File, Pencil, X, ListTodo, ShieldCheck, Square, ArrowUp, ArrowDown, CircleHelp, Check, Clock, Terminal, Brain, Wrench, Globe, Copy, Image, Link, ExternalLink, Bot, Settings, ArrowLeft, Download } from "lucide-react";
+import { AlertTriangle, CodeXml, Plus, Search, RefreshCw, Folder, ChevronDown, LogOut, PanelLeft, FileDiff, File, Pencil, X, ListTodo, ShieldCheck, Square, ArrowUp, ArrowDown, CircleHelp, Check, Clock, Terminal, Brain, Wrench, Globe, Copy, Image, Link, ExternalLink, Bot, Settings, ArrowLeft, Download, Pin } from "lucide-react";
 
 const icons = {
   warning: AlertTriangle,
@@ -34,6 +34,7 @@ const icons = {
   settings: Settings,
   back: ArrowLeft,
   download: Download,
+  pin: Pin,
 };
 export function RemoteIcon({ name, className = "", ...props }) {
   const Icon = icons[name] || File;

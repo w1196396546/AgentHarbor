@@ -49,6 +49,8 @@ export function createAgentLifecycle({
     state.listProject = "";
     state.sessions = [];
     state.projects = [];
+    state.sidebarProjects = null;
+    state.pinnedIDs = [];
     state.archivedSelection = "";
     state.ownerUnavailable = false;
     state.live = {};

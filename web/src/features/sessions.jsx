@@ -39,7 +39,13 @@ export function createSessions({
     $("sidebarToggle").setAttribute("aria-expanded", String(open));
   }
   function projectName(path) {
-    return path?.split(/[\\/]/).filter(Boolean).pop() || t("All projects");
+    return (
+      state.sidebarProjects?.find((project) =>
+        project.root_paths?.includes(path),
+      )?.name ||
+      path?.split(/[\\/]/).filter(Boolean).pop() ||
+      t("All projects")
+    );
   }
   function showWorkspace() {
     $("pair").hidden = true;
@@ -58,6 +64,8 @@ export function createSessions({
     );
     if (seq !== state.listSeq || project !== state.listProject) return;
     state.projects = value.projects || [];
+    state.sidebarProjects = value.sidebar_projects || null;
+    state.pinnedIDs = value.pinned_ids || [];
     state.sessions = append
       ? [...state.sessions, ...value.sessions]
       : value.sessions;
@@ -132,85 +140,137 @@ export function createSessions({
       ]),
     );
     const groups = new Map();
-    for (const session of rows) {
-      const owner =
-        state.projects
-          .filter(
-            (path) =>
-              session.cwd === path ||
-              session.cwd.startsWith(path.replace(/[\\/]$/, "") + "/"),
-          )
-          .sort((a, b) => b.length - a.length)[0] ||
-        session.cwd ||
-        "";
-      if (!groups.has(owner)) groups.set(owner, []);
-      groups.get(owner).push(session);
+    if (state.sidebarProjects && state.projects.length) {
+      const pinned = new Set(state.pinnedIDs);
+      groups.set("pinned", { name: t("Pinned"), icon: "pin", sessions: [] });
+      for (const project of state.sidebarProjects.filter(
+        (project) =>
+          !state.listProject || project.root_paths?.includes(state.listProject),
+      ))
+        groups.set("project:" + project.id, {
+          name: project.name,
+          path: project.root_paths?.join("\n"),
+          icon: "folder",
+          project,
+          sessions: [],
+        });
+      groups.set("recent", { name: t("Recent"), icon: "clock", sessions: [] });
+      for (const session of rows) {
+        const key =
+          session.pinned || pinned.has(session.id)
+            ? "pinned"
+            : "project:" + session.project_id;
+        (groups.get(key) || groups.get("recent")).sessions.push(session);
+      }
+    } else {
+      for (const session of rows) {
+        const owner =
+          state.projects
+            .filter(
+              (path) =>
+                session.cwd === path ||
+                session.cwd.startsWith(path.replace(/[\\/]$/, "") + "/"),
+            )
+            .sort((a, b) => b.length - a.length)[0] ||
+          session.cwd ||
+          "";
+        if (!groups.has(owner))
+          groups.set(owner, {
+            name: projectName(owner),
+            path: owner,
+            icon: "folder",
+            sessions: [],
+          });
+        groups.get(owner).sessions.push(session);
+      }
     }
     renderView(
       $("sessions"),
       <>
-        {[...groups].map(([owner, sessions]) => (
-          <details
-            key={owner}
-            className="project-group"
-            data-path={owner}
-            open={query ? true : expanded.get(owner) !== false}
-          >
-            <summary title={owner}>
-              <Icon name="folder" />
-              <span>{projectName(owner)}</span>
-              <Icon name="chevron" className="fold-icon" />
-            </summary>
-            {sessions.map((session) => {
-              const date = new Date(session.last);
-              return (
-                <PanelRow
-                  key={session.id}
-                  chosen={session.id === state.selected}
-                  data-id={session.id}
-                  aria-current={String(session.id === state.selected)}
-                  title={session.title || t("Untitled session")}
-                  onClick={(event) =>
-                    run(() => select(session.id), event.currentTarget)
-                  }
+        {[...groups]
+          .filter(
+            ([, group]) => group.sessions.length || (!query && group.project),
+          )
+          .map(([owner, group]) => (
+            <details
+              key={owner}
+              className="project-group"
+              data-path={owner}
+              open={query ? true : expanded.get(owner) !== false}
+            >
+              <summary title={group.path || group.name}>
+                <Icon name={group.icon} />
+                <span>{group.name}</span>
+                <Icon name="chevron" className="fold-icon" />
+              </summary>
+              {group.project && group.sessions.length === 0 && (
+                <Action
+                  action={async () => {
+                    if (state.sending) return;
+                    if (!(await resetSelection())) return;
+                    state.project = group.project.root_paths[0];
+                    state.optionsLoaded = false;
+                    renderProjects();
+                    renderSessions();
+                    setNavigation(false);
+                    await loadOptions();
+                    $("message").focus();
+                  }}
                 >
-                  <Icon name="file" />
-                  <span className="session-title">
-                    {session.title === "New session"
-                      ? t("New session")
-                      : session.title || t("Untitled session")}
-                  </span>
-                  {session.source && (
-                    <span className="session-source">
-                      {sourceLabel(session.source)}
+                  <Icon name="plus" />
+                  {t("New session")}
+                </Action>
+              )}
+              {group.sessions.map((session) => {
+                const date = new Date(session.last);
+                return (
+                  <PanelRow
+                    key={session.id}
+                    chosen={session.id === state.selected}
+                    data-id={session.id}
+                    aria-current={String(session.id === state.selected)}
+                    title={session.title || t("Untitled session")}
+                    onClick={(event) =>
+                      run(() => select(session.id), event.currentTarget)
+                    }
+                  >
+                    <Icon name="file" />
+                    <span className="session-title">
+                      {session.title === "New session"
+                        ? t("New session")
+                        : session.title || t("Untitled session")}
                     </span>
-                  )}
-                  {running(session.status) && (
-                    <i
-                      className="session-running"
-                      title={t(
-                        session.status === "waiting"
-                          ? "Waiting for you"
-                          : "Running",
-                      )}
-                    />
-                  )}
-                  {!Number.isNaN(date.valueOf()) && (
-                    <small>
-                      {date.toLocaleDateString(
-                        getLanguage() === "zh" ? "zh-CN" : getLanguage(),
-                        {
-                          month: "short",
-                          day: "numeric",
-                        },
-                      )}
-                    </small>
-                  )}
-                </PanelRow>
-              );
-            })}
-          </details>
-        ))}
+                    {session.source && (
+                      <span className="session-source">
+                        {sourceLabel(session.source)}
+                      </span>
+                    )}
+                    {running(session.status) && (
+                      <i
+                        className="session-running"
+                        title={t(
+                          session.status === "waiting"
+                            ? "Waiting for you"
+                            : "Running",
+                        )}
+                      />
+                    )}
+                    {!Number.isNaN(date.valueOf()) && (
+                      <small>
+                        {date.toLocaleDateString(
+                          getLanguage() === "zh" ? "zh-CN" : getLanguage(),
+                          {
+                            month: "short",
+                            day: "numeric",
+                          },
+                        )}
+                      </small>
+                    )}
+                  </PanelRow>
+                );
+              })}
+            </details>
+          ))}
         {!rows.length && (
           <p className="note">
             {t(query ? "No matching conversations." : "No sessions yet.")}
