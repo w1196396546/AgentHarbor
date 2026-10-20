@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/fs"
 	"net"
 	"net/http"
 	"strings"
@@ -57,8 +56,7 @@ func (s *Server) Handler() http.Handler {
 			failure(w, http.StatusUpgradeRequired, "End-to-end encryption is required; update agentTools and pair this browser again")
 		})
 	}
-	files, _ := fs.Sub(assets, "assets")
-	mux.Handle("GET /", http.FileServerFS(files))
+	mux.Handle("GET /", publicAssets())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		w.Header().Set("X-Frame-Options", "DENY")

@@ -818,6 +818,8 @@ export function startRemote() {
     api,
     detail: (...args) => detail(...args),
     ensureStream,
+    renderCurrent,
+    mergeOrdered,
   });
   const { archiveConversation, unavailableConversation, renderContext } =
     createLifecycle({

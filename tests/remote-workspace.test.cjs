@@ -779,7 +779,12 @@ async function fixture(t, engine, options = {}) {
             json: { error: state.connectError },
           });
         if (options.onConnect) options.onConnect(state, data, seen);
-        return route.fulfill({ json: { connected: true } });
+        return route.fulfill({
+          json: {
+            connected: true,
+            ...(options.connectSnapshot ? { live: state.live } : {}),
+          },
+        });
       }
       if (u.pathname.endsWith("/settings")) {
         if (options.beforeSettings)
@@ -3459,6 +3464,108 @@ for (const engine of engines) {
     );
     await f.clean();
   });
+
+  for (const newerStream of [false, true])
+    test(`${engine}: confirmed connection snapshot avoids rereading history${newerStream ? " and preserves newer live updates" : ""}`, async (t) => {
+      let release, started;
+      const held = new Promise((resolve) => (release = resolve)),
+        pending = new Promise((resolve) => (started = resolve));
+      t.after(() => release());
+      const connected = {
+        kind: "native",
+        state: "connected",
+        epoch: "confirmed-owner",
+        capabilities: { send: true, configure: true },
+      };
+      const f = await fixture(t, engine, {
+        streaming: true,
+        connectSnapshot: true,
+        state: {
+          historyItems: [
+            {
+              id: "history-before-connect",
+              type: "agentMessage",
+              text: "Original history remains visible.",
+            },
+          ],
+          live: {
+            status: "unknown",
+            items: [{ id: "live-before-connect", type: "agentMessage", text: "Earlier visible live answer remains." }],
+            requests: [],
+            owner: {
+              kind: "native",
+              state: "observing",
+              capabilities: { background_connect: true },
+            },
+          },
+        },
+        beforeConnect() {
+          started();
+          return held;
+        },
+        onConnect(state) {
+          state.live = {
+            status: "idle",
+            items: [],
+            requests: [],
+            owner: connected,
+            title: "Confirmed conversation",
+          };
+        },
+      });
+      const { page, seen } = f;
+      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await pending;
+      await page.locator("#message").fill("Continue the conversation.");
+      if (newerStream) {
+        await page.evaluate(() =>
+          window.fixtureStreams
+            .at(-1)
+            .emit({
+              items: [],
+              state: {
+                status: "idle",
+                title: "Newer streamed title",
+                owner: {
+                  kind: "native",
+                  state: "connected",
+                  epoch: "newer-stream-owner",
+                  capabilities: { send: true, configure: true },
+                },
+              },
+            }),
+        );
+      }
+      release();
+      await page.waitForFunction(
+        () =>
+          document.getElementById("connectOwner").hidden &&
+          !document.getElementById("send").disabled,
+      );
+      await page
+        .getByText("Original history remains visible.", { exact: true })
+        .waitFor();
+      await page.getByText("Earlier visible live answer remains.", { exact: true }).waitFor();
+      assert.equal(
+        seen.details.length,
+        1,
+        "a confirmed owner triggered another full history download",
+      );
+      assert.equal(
+        await page.locator("#title").innerText(),
+        newerStream ? "Newer streamed title" : "Confirmed conversation",
+      );
+      assert(
+        !/Connecting this conversation/.test(
+          await page.locator("#connectionLabel").innerText(),
+        ),
+      );
+      assert.equal(
+        seen.posts.filter((post) => post.path.endsWith("/connect")).length,
+        1,
+      );
+      await f.clean();
+    });
 
   test(`${engine}: a new background conversation opens before refreshing a slow session list`, async (t) => {
     let release, started;

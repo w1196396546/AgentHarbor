@@ -14,6 +14,8 @@ export function createOwners({
   api,
   detail,
   ensureStream,
+  renderCurrent,
+  mergeOrdered,
   getAgent,
 }) {
   function sourceLabel(source) {
@@ -194,19 +196,33 @@ export function createOwners({
     const id = state.selected,
       generation = state.generation,
       request = { controller: new AbortController() },
+      revision = state.liveRevision,
       current = () => id === state.selected && generation === state.generation;
     state.connectingOwner = request;
     state.connectOwnerFailed = false;
     renderOwner();
     updateConnection();
     try {
-      await api(
+      const result = await api(
         "threads/" + encodeURIComponent(id) + "/connect",
         { executor: "background" },
         { signal: request.controller.signal },
       );
       if (!current()) return;
-      await detail(generation);
+      if (
+        result?.connected === true &&
+        result.live &&
+        typeof result.live === "object" &&
+        !Array.isArray(result.live) &&
+        result.live.owner?.state === "connected"
+      ) {
+        if (revision === state.liveRevision) {
+          state.history = mergeOrdered(state.history, state.live.items || []);
+          state.live = result.live;
+          state.liveRevision++;
+          renderCurrent();
+        }
+      } else await detail(generation);
       if (current()) ensureStream();
     } catch (error) {
       if (id === state.selected && generation === state.generation) {
