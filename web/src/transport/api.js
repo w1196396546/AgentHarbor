@@ -38,6 +38,10 @@ export function createAPI({
       method,
       headers: {
         "X-Codex-Remote": "1",
+        ...(["device", "logout"].includes(path) &&
+        window.RemoteSecure.deviceID?.()
+          ? { "X-Remote-Device": window.RemoteSecure.deviceID() }
+          : {}),
         ...(path === "agents" ? {} : { "X-Remote-Agent": agentID }),
         ...ownerEpoch,
         ...(!multipart && body !== undefined
@@ -121,6 +125,7 @@ export function createAPI({
       }
       throw error;
     }
+    if (path === "device") window.RemoteSecure.rememberDevice?.(value);
     return value;
   }
 

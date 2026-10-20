@@ -19,6 +19,7 @@ import {
   DecisionSurface,
 } from "../components/workspace-surfaces";
 import { ThemeToggle } from "../theme";
+import { DeviceSwitcher } from "../components/DeviceSwitcher";
 
 export function Workspace() {
   return (
@@ -94,6 +95,7 @@ export function Workspace() {
             ></Button>
           </details>
           <div className="sidebar-footer">
+            <DeviceSwitcher pairRequested />
             <Button
               variant="ghost"
               id="deviceHelp"

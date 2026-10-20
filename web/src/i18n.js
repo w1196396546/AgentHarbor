@@ -49,6 +49,12 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["Computer", "电脑", "電腦", "コンピューター", "Computer"],
+  ["Switch computer", "切换电脑", "切換電腦", "コンピューターを切り替える", "Computer wechseln"],
+  ["Choose a computer", "选择电脑", "選擇電腦", "コンピューターを選択", "Computer auswählen"],
+  ["Pair another computer", "配对其他电脑", "配對其他電腦", "別のコンピューターをペアリング", "Weiteren Computer koppeln"],
+  ["Pair this browser with this computer first.", "请先将此浏览器与该电脑配对。", "請先將此瀏覽器與該電腦配對。", "先にこのコンピューターとブラウザーをペアリングしてください。", "Kopple diesen Browser zuerst mit dem Computer."],
+  ["This browser remembers 16 computers. Disconnect one before pairing another.", "此浏览器已记住 16 台电脑，请先断开其中一台再配对。", "此瀏覽器已記住 16 台電腦，請先中斷其中一台再配對。", "このブラウザーは16台のコンピューターを記憶しています。1台の接続を解除してからペアリングしてください。", "Dieser Browser kennt 16 Computer. Trenne einen, bevor du einen weiteren koppelst."],
   ["My account and devices", "我的账户与设备", "我的帳戶與裝置", "アカウントとデバイス", "Mein Konto und Geräte"],
   ["Close navigation", "关闭导航", "關閉導覽", "ナビゲーションを閉じる", "Navigation schließen"],
   ["Open navigation", "打开导航", "開啟導覽", "ナビゲーションを開く", "Navigation öffnen"],

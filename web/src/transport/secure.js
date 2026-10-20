@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const storageKey = 'codex.remote.secure.v1';
+  const storageKey = 'codex.remote.secure.v1', devicesKey = 'codex.remote.devices.v1', maxDevices = 16;
   const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
   const invalid = () => Object.assign(new Error('Encrypted connection could not be verified. Pair this browser again.'), {secureInvalid:true});
   const hex = bytes => Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
@@ -36,19 +36,75 @@
     try { return JSON.parse(decoder.decode(await crypto.subtle.decrypt(parameters(id, purpose, sequence), derived, unbase64(data)))); }
     catch { throw invalid(); }
   }
+  function validSession(value) {
+    unhex(value.id, 16); unhex(value.grant, 32); unhex(value.key, 32);
+    if (value.device_id !== undefined) unhex(value.device_id, 16);
+    if (!(Date.parse(value.expires_at) > Date.now())) throw invalid();
+    return value;
+  }
+  let currentSession;
   function session() {
     try {
-      const value = JSON.parse(localStorage.getItem(storageKey));
-      unhex(value.id, 16); unhex(value.grant, 32); unhex(value.key, 32);
-      if (!(Date.parse(value.expires_at) > Date.now())) throw invalid();
-      return value;
+      if (currentSession === undefined) currentSession = JSON.parse(localStorage.getItem(storageKey));
+      return validSession(currentSession);
     } catch { return null; }
   }
-  function clear() { localStorage.removeItem(storageKey); }
+  function remembered() {
+    let values;
+    try { values = JSON.parse(localStorage.getItem(devicesKey) || '[]'); } catch { throw invalid(); }
+    if (!Array.isArray(values) || values.length > maxDevices) throw invalid();
+    const devices = [];
+    for (const value of values) {
+      try {
+        validSession(value); unhex(value.device_id, 16);
+        if (!devices.some(device => device.device_id === value.device_id)) devices.push(value);
+      } catch {}
+    }
+    return devices;
+  }
+  const changed = () => window.dispatchEvent(new Event('remote-devices-changed'));
+  function save(value) {
+    const devices = remembered(), index = devices.findIndex(device => device.device_id === value.device_id);
+    if (index < 0 && devices.length >= maxDevices) throw new Error('This browser remembers 16 computers. Disconnect one before pairing another.');
+    if (index < 0) devices.push(value); else devices[index] = value;
+    localStorage.setItem(devicesKey, JSON.stringify(devices));
+    localStorage.setItem(storageKey, JSON.stringify(value));
+    currentSession = value;
+    changed();
+  }
+  function rememberDevice(device) {
+    const value = session();
+    if (!value || !device || !/^[a-f0-9]{32}$/.test(device.id) || value.device_id && value.device_id !== device.id) return;
+    if (value.device_id === device.id && value.name === device.name) return;
+    save({...value, device_id:device.id, name:typeof device.name === 'string' ? device.name.slice(0, 128) : ''});
+  }
+  function select(id) {
+    unhex(id, 16);
+    const value = remembered().find(device => device.device_id === id);
+    if (!value) throw new Error('Pair this browser with this computer first.');
+    localStorage.setItem(storageKey, JSON.stringify(value));
+    currentSession = value;
+    changed();
+  }
+  function clear() {
+    const selected = session();
+    if (selected?.device_id) localStorage.setItem(devicesKey, JSON.stringify(remembered().filter(device => device.device_id !== selected.device_id)));
+    localStorage.removeItem(storageKey);
+    currentSession = null;
+    changed();
+  }
   async function pair(fullCode) {
     const parts = fullCode.trim().split('.');
     if (parts.length !== 2) throw new Error('Generate a new encrypted pairing key in agentTools.');
     unhex(parts[0], 16); unhex(parts[1], 32);
+    const previous = session();
+    if (previous && !previous.device_id) {
+      const current = await fetch('/api/device', {cache:'no-store'});
+      if (current.ok) rememberDevice(await current.json());
+      else if (current.status !== 401) throw new Error('The current computer could not be verified. Try again.');
+    }
+    const devices = remembered();
+    if (!devices.some(device => device.device_id === parts[0]) && devices.length >= maxDevices) throw new Error('This browser remembers 16 computers. Disconnect one before pairing another.');
     const id = random(16), sessionKey = random(32);
     const data = await seal(parts[1], id, 'pairing', {code:parts.join('.'), name:navigator.userAgent.slice(0, 128) || 'Remote browser', session_key:sessionKey});
     const response = await fetch('/api/pair', {method:'POST', headers:{'Content-Type':'application/json', 'X-Codex-Remote':'1'}, body:JSON.stringify({device_id:parts[0], id, data}), cache:'no-store'});
@@ -58,7 +114,7 @@
     const value = await open(await key(parts[1], id, 'paired'), id, 'paired', 0, result.sealed.data);
     unhex(value.id, 16); unhex(value.grant, 32);
     if (result.id !== value.id || result.expires_at !== value.expires_at || !(Date.parse(value.expires_at) > Date.now())) throw invalid();
-    localStorage.setItem(storageKey, JSON.stringify({id:value.id, grant:value.grant, key:sessionKey, expires_at:value.expires_at}));
+    save({id:value.id, grant:value.grant, key:sessionKey, expires_at:value.expires_at, device_id:parts[0]});
     return result;
   }
   async function secureFetch(path, init = {}) {
@@ -73,7 +129,7 @@
     request.headers.forEach((value, name) => { header[name.split('-').map(part => part[0].toUpperCase() + part.slice(1)).join('-')] = [value]; });
     const id = random(16);
     const data = await seal(credentials.key, id, 'request', {grant:credentials.grant, method, url:'/api/' + path, header, body:base64(body), expires_at:Date.now() + 120000});
-    const outer = await fetch('/api/secure', {method:'POST', headers:{'Content-Type':'application/json', 'X-Codex-Remote':'1'}, body:JSON.stringify({id, data}), cache:'no-store', signal:init.signal});
+    const outer = await fetch('/api/secure', {method:'POST', headers:{'Content-Type':'application/json', 'X-Codex-Remote':'1', ...(credentials.device_id ? {'X-Remote-Device':credentials.device_id} : {})}, body:JSON.stringify({id, data}), cache:'no-store', signal:init.signal});
     if (!outer.ok) { await outer.body?.cancel(); return new Response(null, {status:outer.status}); }
     if (!outer.body || !outer.headers.get('content-type')?.toLowerCase().startsWith('application/x-ndjson')) throw invalid();
     const derived = await key(credentials.key, id, 'response'), reader = outer.body.getReader(), lines = new TextDecoder('utf-8', {fatal:true});
@@ -196,6 +252,6 @@
     })();
     return source;
   }
-  window.RemoteSecure = {pair, fetch:secureFetch, clear, available:() => !!session(), events};
+  window.RemoteSecure = {pair, fetch:secureFetch, clear, available:() => !!session(), events, deviceID:() => session()?.device_id || '', devices:() => remembered().map(({device_id, name, expires_at}) => ({device_id, name:name || '', expires_at})), select, rememberDevice};
 })();
 

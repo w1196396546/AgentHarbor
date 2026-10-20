@@ -1,0 +1,55 @@
+.device-switcher {
+  min-width: 0;
+  margin: 8px 0;
+}
+.device-switcher > label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.device-switcher-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.device-switcher .device-switcher-trigger {
+  width: 100%;
+  min-width: 0;
+  color: var(--foreground);
+  background: var(--secondary);
+  border: 1px solid var(--input);
+  border-radius: 7px;
+  font: inherit;
+  padding: 7px 9px;
+}
+.device-switcher-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.device-switcher-error {
+  color: var(--destructive);
+  font-size: 12px;
+}
+.device-pair-form {
+  display: grid;
+  gap: 10px;
+}
+.device-pair-form .dialog-actions {
+  margin-top: 8px;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .device-switcher-trigger,
+  .device-pair-form input {
+    font-size: 16px;
+  }
+}
+.device-switcher-trigger {
+  justify-content: space-between;
+}
+.device-switcher-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

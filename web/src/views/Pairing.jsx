@@ -3,6 +3,7 @@ import { Panel } from "../components/ui/panel";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { ThemeToggle } from "../theme";
+import { DeviceSwitcher } from "../components/DeviceSwitcher";
 
 export function Pairing() {
   return (
@@ -19,6 +20,7 @@ export function Pairing() {
         <p className="eyebrow">anywhereToAgent</p>
         <h1 data-t="Your computer, within reach."></h1>
         <p data-t="Scan the QR code on the remote connection page in agentTools, or enter its authorization code."></p>
+        <DeviceSwitcher />
         <form id="pairForm">
           <Label htmlFor="pairKey" data-t="Authorization code"></Label>
           <Input

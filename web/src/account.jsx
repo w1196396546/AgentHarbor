@@ -12,6 +12,8 @@ import { Button } from "./components/ui/button";
 import { Panel } from "./components/ui/panel";
 import { Label } from "./components/ui/label";
 import { Input } from "./components/ui/input";
+import { DeviceConnect } from "./components/DeviceSwitcher";
+import "./transport/secure";
 import { Tag } from "./components/ui/tag";
 import {
   Empty,
@@ -38,6 +40,9 @@ function AccountApp() {
       method: body === undefined ? "GET" : "POST",
       headers: {
         "X-Remote-Request": "1",
+        ...(window.RemoteSecure.deviceID()
+          ? { "X-Remote-Device": window.RemoteSecure.deviceID() }
+          : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -319,6 +324,7 @@ function Device({ device, busy, save }) {
         {device.revoked ? "已撤销" : device.online ? "在线" : "离线"}
       </Tag>
       <div className="account-device-actions">
+        <DeviceConnect device={device} disabled={busy} />
         <Button
           type="button"
           variant="ghost"

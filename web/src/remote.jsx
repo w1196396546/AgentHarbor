@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import "./i18n";
 import "./transport/secure";
 import "./styles/remote.css";
+import "./styles/devices.css";
 import { RemoteApp } from "./RemoteApp";
 import { startRemote } from "./controller";
 import { startSidebar } from "./sidebar";
