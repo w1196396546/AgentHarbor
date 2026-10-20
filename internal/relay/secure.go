@@ -31,7 +31,7 @@ func (s *Server) secure(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusUpgradeRequired, "Pair again with an updated agentTools client to enable end-to-end encryption")
 		return
 	}
-	cookie, _ := r.Cookie(s.cookieName())
+	cookie, _, _ := s.sessionCookie(r)
 	key := digest(cookie.Value)
 	s.mu.Lock()
 	current, authorized := s.state.Sessions[key]

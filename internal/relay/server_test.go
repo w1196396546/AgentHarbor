@@ -161,7 +161,7 @@ func pairBrowser(t *testing.T, client *http.Client, ts *httptest.Server, id stri
 		t.Fatalf("pair: %d %s", res.StatusCode, b)
 	}
 	cookies := res.Cookies()
-	if len(cookies) != 1 {
+	if len(cookies) != 2 || cookies[0].Name != "codex-remote" || cookies[1].Name != "codex-remote-"+id || cookies[0].Value != cookies[1].Value {
 		t.Fatal("missing browser cookie")
 	}
 	return cookies[0]

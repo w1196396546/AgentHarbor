@@ -166,6 +166,7 @@ func TestRelayKeepsPairingAndCommandCiphertextOpaque(t *testing.T) {
 	r.Header.Set("X-Codex-Owner-Epoch", "private owner")
 	r.Header.Set("X-Remote-Owner-Epoch", "private owner")
 	r.Header.Set("X-Remote-Agent", "private agent")
+	r.Header.Set("X-Remote-Device", id)
 	r.Header.Set("Last-Event-ID", "private event")
 	res, err := client.Do(r)
 	if err != nil {

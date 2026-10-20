@@ -27,6 +27,12 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	}
 	id := in.DeviceID
 	s.mu.Lock()
+	remembered := s.browserCookies(r)
+	if remembered[id] == nil && len(remembered) >= maxRememberedDevices {
+		s.mu.Unlock()
+		failure(w, http.StatusConflict, "This browser remembers 16 devices; disconnect one before pairing another")
+		return
+	}
 	c := s.clients[id]
 	s.mu.Unlock()
 	var peer *tunnel.Peer
@@ -110,11 +116,14 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "The client disconnected while authorizing")
 		return
 	}
-	// Re-pairing replaces this browser's old authorization after the new grant succeeds.
-	oldKey := ""
-	if old, err := r.Cookie(s.cookieName()); err == nil {
-		oldKey = digest(old.Value)
-		delete(next.Sessions, oldKey)
+	// Re-pairing replaces only this device's authorization after the new grant succeeds.
+	oldKeys := make(map[string]bool)
+	for _, old := range r.Cookies() {
+		key := digest(old.Value)
+		if session, ok := next.Sessions[key]; ok && session.DeviceID == id && (old.Name == s.cookieName() || old.Name == s.deviceCookieName(id)) {
+			delete(next.Sessions, key)
+			oldKeys[key] = true
+		}
 	}
 	if len(next.Sessions) >= maxBrowserSessions {
 		s.mu.Unlock()
@@ -122,17 +131,32 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	next.Sessions[digest(cookie)] = browserSession{ID: result.ID, DeviceID: id, Grant: result.ID, Name: name, ExpiresAt: expires, Encrypted: true}
+	var legacyCookie *http.Cookie
+	var legacySession browserSession
+	if old, err := r.Cookie(s.cookieName()); err == nil {
+		previous, ok := next.Sessions[digest(old.Value)]
+		rememberedCookie := remembered[previous.DeviceID]
+		if ok && previous.DeviceID != id && rememberedCookie != nil && rememberedCookie.Name == s.cookieName() && rememberedCookie.Value == old.Value {
+			legacyCookie, legacySession = old, previous
+		}
+	}
 	err = s.saveState(next)
 	if err == nil {
-		s.cancelRequests(oldKey)
+		for key := range oldKeys {
+			s.cancelRequests(key)
+		}
 	}
 	s.mu.Unlock()
 	if err != nil {
 		failure(w, http.StatusInternalServerError, "Unable to remember browser authorization")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: cookie, Path: "/", Secure: s.public.Scheme == "https", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: int(time.Until(expires).Seconds()), Expires: expires})
-	jsonReply(w, http.StatusOK, map[string]any{"paired": true, "id": result.ID, "sealed": result.Sealed, "expires_at": expires})
+	if legacyCookie != nil {
+		s.setSessionCookie(w, s.deviceCookieName(legacySession.DeviceID), legacyCookie.Value, legacySession.ExpiresAt)
+	}
+	s.setSessionCookie(w, s.cookieName(), cookie, expires)
+	s.setSessionCookie(w, s.deviceCookieName(id), cookie, expires)
+	jsonReply(w, http.StatusOK, map[string]any{"paired": true, "device_id": id, "id": result.ID, "sealed": result.Sealed, "expires_at": expires})
 }
 
 // Pair replies are small control messages, never streamed into unbounded memory.
