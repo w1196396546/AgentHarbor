@@ -33,6 +33,7 @@ export function createSessions({
   resizeComposer,
   getAgent,
 }) {
+  let listRequests = 0;
   function setNavigation(open) {
     document.body.classList.toggle("nav-open", open);
     $("navBackdrop").hidden = !open;
@@ -52,40 +53,55 @@ export function createSessions({
     $("workspace").hidden = false;
     $("logout").hidden = false;
   }
-  async function list(append = false) {
-    const seq = ++state.listSeq,
-      project = state.listProject;
-    const value = await api(
-      "sessions?" +
-        new URLSearchParams({
-          project,
-          offset: String(append ? state.next : 0),
-        }),
-    );
-    if (seq !== state.listSeq || project !== state.listProject) return;
-    state.projects = value.projects || [];
-    state.sidebarProjects = value.sidebar_projects || null;
-    state.pinnedIDs = value.pinned_ids || [];
-    state.sessions = append
-      ? [...state.sessions, ...value.sessions]
-      : value.sessions;
-    const archived = new Set(value.archived_ids || []);
-    state.sessions = state.sessions.filter(
-      (session) => !archived.has(session.id),
-    );
-    if (archived.has(state.selected)) archiveConversation(state.selected);
-    if (value.history_unavailable && state.selected)
-      unavailableConversation(value.history_warning);
-    state.next = value.next;
-    $("more").hidden = !value.has_more;
-    if (!state.project && state.projects.length === 1)
-      state.project = state.projects[0];
-    showWorkspace();
-    renderProjects();
-    renderSessions();
-    updateControls();
-    if (!state.optionsLoaded) await loadOptions();
-    if (value.history_warning) notice(value.history_warning);
+  async function list(append = false, refresh = false) {
+    if (refresh && listRequests) return;
+    listRequests++;
+    try {
+      const seq = ++state.listSeq,
+        project = state.listProject,
+        loaded = refresh ? state.next || state.sessions.length : 0;
+      let value = await api(
+        "sessions?" +
+          new URLSearchParams({
+            project,
+            offset: String(append ? state.next : 0),
+          }),
+      );
+      if (seq !== state.listSeq || project !== state.listProject) return;
+      const rows = [...value.sessions];
+      while (refresh && value.has_more && value.next < loaded) {
+        const offset = value.next;
+        value = await api(
+          "sessions?" + new URLSearchParams({ project, offset: String(offset) }),
+        );
+        if (seq !== state.listSeq || project !== state.listProject) return;
+        rows.push(...value.sessions);
+        if (!(value.next > offset)) break;
+      }
+      state.projects = value.projects || [];
+      state.sidebarProjects = value.sidebar_projects || null;
+      state.pinnedIDs = value.pinned_ids || [];
+      state.sessions = append ? [...state.sessions, ...rows] : rows;
+      const archived = new Set(value.archived_ids || []);
+      state.sessions = state.sessions.filter(
+        (session) => !archived.has(session.id),
+      );
+      if (archived.has(state.selected)) archiveConversation(state.selected);
+      if (value.history_unavailable && state.selected)
+        unavailableConversation(value.history_warning);
+      state.next = value.next;
+      $("more").hidden = !value.has_more;
+      if (!state.project && state.projects.length === 1)
+        state.project = state.projects[0];
+      showWorkspace();
+      renderProjects();
+      renderSessions();
+      updateControls();
+      if (!refresh && !state.optionsLoaded) await loadOptions();
+      if (!refresh && value.history_warning) notice(value.history_warning);
+    } finally {
+      listRequests--;
+    }
   }
   function renderProjects() {
     const current = state.listProject;
@@ -184,93 +200,117 @@ export function createSessions({
         groups.get(owner).sessions.push(session);
       }
     }
+    const visibleGroups = [...groups].filter(
+      ([, group]) => group.sessions.length || (!query && group.project),
+    );
+    const projectGroups = visibleGroups.filter(
+      ([, group]) => group.icon === "folder",
+    );
+    const renderGroup = ([owner, group]) => (
+      <details
+        key={owner}
+        className="project-group"
+        data-path={owner}
+        open={query ? true : expanded.get(owner) !== false}
+      >
+        <summary title={group.path || group.name}>
+          <Icon name={group.icon} />
+          <span>{group.name}</span>
+          <Icon name="chevron" className="fold-icon" />
+        </summary>
+        {group.project && group.sessions.length === 0 && (
+          <Action
+            action={async () => {
+              if (state.sending) return;
+              if (!(await resetSelection())) return;
+              state.project = group.project.root_paths[0];
+              state.optionsLoaded = false;
+              renderProjects();
+              renderSessions();
+              setNavigation(false);
+              await loadOptions();
+              $("message").focus();
+            }}
+          >
+            <Icon name="plus" />
+            {t("New session")}
+          </Action>
+        )}
+        {group.sessions.map((session) => {
+          const date = new Date(session.last);
+          return (
+            <PanelRow
+              key={session.id}
+              chosen={session.id === state.selected}
+              data-id={session.id}
+              aria-current={String(session.id === state.selected)}
+              title={session.title || t("Untitled session")}
+              onClick={(event) =>
+                run(() => select(session.id), event.currentTarget)
+              }
+            >
+              <Icon name="file" />
+              <span className="session-title">
+                {session.title === "New session"
+                  ? t("New session")
+                  : session.title || t("Untitled session")}
+              </span>
+              {session.source && (
+                <span className="session-source">
+                  {sourceLabel(session.source)}
+                </span>
+              )}
+              {running(session.status) && (
+                <i
+                  className="session-running"
+                  title={t(
+                    session.status === "waiting"
+                      ? "Waiting for you"
+                      : "Running",
+                  )}
+                />
+              )}
+              {!Number.isNaN(date.valueOf()) && (
+                <small>
+                  {date.toLocaleDateString(
+                    getLanguage() === "zh" ? "zh-CN" : getLanguage(),
+                    {
+                      month: "short",
+                      day: "numeric",
+                    },
+                  )}
+                </small>
+              )}
+            </PanelRow>
+          );
+        })}
+      </details>
+    );
     renderView(
       $("sessions"),
       <>
-        {[...groups]
-          .filter(
-            ([, group]) => group.sessions.length || (!query && group.project),
-          )
-          .map(([owner, group]) => (
-            <details
-              key={owner}
-              className="project-group"
-              data-path={owner}
-              open={query ? true : expanded.get(owner) !== false}
-            >
-              <summary title={group.path || group.name}>
-                <Icon name={group.icon} />
-                <span>{group.name}</span>
-                <Icon name="chevron" className="fold-icon" />
-              </summary>
-              {group.project && group.sessions.length === 0 && (
-                <Action
-                  action={async () => {
-                    if (state.sending) return;
-                    if (!(await resetSelection())) return;
-                    state.project = group.project.root_paths[0];
-                    state.optionsLoaded = false;
-                    renderProjects();
-                    renderSessions();
-                    setNavigation(false);
-                    await loadOptions();
-                    $("message").focus();
-                  }}
-                >
-                  <Icon name="plus" />
-                  {t("New session")}
-                </Action>
-              )}
-              {group.sessions.map((session) => {
-                const date = new Date(session.last);
-                return (
-                  <PanelRow
-                    key={session.id}
-                    chosen={session.id === state.selected}
-                    data-id={session.id}
-                    aria-current={String(session.id === state.selected)}
-                    title={session.title || t("Untitled session")}
-                    onClick={(event) =>
-                      run(() => select(session.id), event.currentTarget)
-                    }
-                  >
-                    <Icon name="file" />
-                    <span className="session-title">
-                      {session.title === "New session"
-                        ? t("New session")
-                        : session.title || t("Untitled session")}
-                    </span>
-                    {session.source && (
-                      <span className="session-source">
-                        {sourceLabel(session.source)}
-                      </span>
-                    )}
-                    {running(session.status) && (
-                      <i
-                        className="session-running"
-                        title={t(
-                          session.status === "waiting"
-                            ? "Waiting for you"
-                            : "Running",
-                        )}
-                      />
-                    )}
-                    {!Number.isNaN(date.valueOf()) && (
-                      <small>
-                        {date.toLocaleDateString(
-                          getLanguage() === "zh" ? "zh-CN" : getLanguage(),
-                          {
-                            month: "short",
-                            day: "numeric",
-                          },
-                        )}
-                      </small>
-                    )}
-                  </PanelRow>
-                );
-              })}
-            </details>
-          ))}
+        {visibleGroups
+          .filter(([, group]) => group.icon === "pin")
+          .map(renderGroup)}
+        {projectGroups.length > 0 && (
+          <details
+            className="project-group project-collection"
+            data-path="all-projects"
+            open={query ? true : expanded.get("all-projects") !== false}
+          >
+            <summary>
+              <Icon name="folder" />
+              <span>{t("Projects")}</span>
+              <Icon name="chevron" className="fold-icon" />
+            </summary>
+            <div className="project-collection-items">
+              {projectGroups.map(renderGroup)}
+            </div>
+          </details>
+        )}
+        {visibleGroups
+          .filter(([, group]) => group.icon === "clock")
+          .map(renderGroup)}
         {!rows.length && (
           <p className="note">
             {t(query ? "No matching conversations." : "No sessions yet.")}

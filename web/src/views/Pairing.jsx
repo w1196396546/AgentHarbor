@@ -48,11 +48,6 @@ export function Pairing() {
           href="/account"
           data-t="My account and devices"
         ></a>
-        <a
-          className="pair-admin"
-          href="/admin/"
-          data-t="Relay administration"
-        ></a>
       </Panel>
     </>
   );

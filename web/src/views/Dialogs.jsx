@@ -1,3 +1,4 @@
+import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
@@ -6,6 +7,47 @@ import { Modal, MenuSurface } from "../components/workspace-surfaces";
 export function Dialogs() {
   return (
     <>
+      <Modal
+        id="subagentsDialog"
+        className="subagents-dialog"
+        aria-labelledby="subagentsTitle"
+      >
+        <div className="dialog-heading">
+          <Button
+            variant="ghost"
+            id="subagentsBack"
+            className="icon-button"
+            type="button"
+            data-label="Back to agents"
+            hidden
+          >
+            <Icon name="back" />
+          </Button>
+          <h2 id="subagentsTitle" data-t="Agents"></h2>
+          <Button
+            variant="ghost"
+            id="closeSubagents"
+            className="icon-button"
+            type="button"
+            data-label="Close dialog"
+          >
+            <Icon name="close" />
+          </Button>
+        </div>
+        <p id="subagentsStatus" className="note" role="status"></p>
+        <div id="subagentsList" className="subagents-list"></div>
+        <div id="subagentConversation" className="subagent-conversation" hidden>
+          <Button
+            variant="ghost"
+            id="subagentOlder"
+            className="subtle"
+            type="button"
+            data-t="Load older conversation"
+            hidden
+          ></Button>
+          <div id="subagentMessages"></div>
+        </div>
+      </Modal>
       <Modal id="deviceDialog" aria-labelledby="deviceDialogTitle">
         <div className="dialog-heading">
           <h2 id="deviceDialogTitle" data-t="Connected computer"></h2>
@@ -16,7 +58,9 @@ export function Dialogs() {
             type="button"
             data-label="Close dialog"
           >
-            <span data-icon="close"></span>
+            <span data-icon="close">
+              <Icon name="close" />
+            </span>
           </Button>
         </div>
         <p id="deviceDetails"></p>
@@ -24,7 +68,6 @@ export function Dialogs() {
           <a href="/account" data-t="My account and devices"></a>
         </p>
         <p data-t="Manage shared projects and authorized browsers on the remote connection page in agentTools."></p>
-        <p data-t="Relay administration is separate and does not grant access to this computer."></p>
       </Modal>
       <section
         data-slot="popover-content"
@@ -47,7 +90,9 @@ export function Dialogs() {
             type="button"
             data-label="Reset reasoning effort"
           >
-            <span data-icon="refresh"></span>
+            <span data-icon="refresh">
+              <Icon name="refresh" />
+            </span>
           </Button>
           <Button
             variant="ghost"
@@ -56,7 +101,9 @@ export function Dialogs() {
             type="button"
             data-label="Close dialog"
           >
-            <span data-icon="close"></span>
+            <span data-icon="close">
+              <Icon name="close" />
+            </span>
           </Button>
         </div>
         <div className="reasoning-current">
@@ -73,7 +120,9 @@ export function Dialogs() {
             aria-haspopup="menu"
           >
             <span id="reasoningModelName" data-t="Configured model"></span>
-            <span data-icon="chevron"></span>
+            <span data-icon="chevron">
+              <Icon name="chevron" />
+            </span>
           </Button>
         </div>
         <div className="reasoning-slider">
@@ -117,7 +166,9 @@ export function Dialogs() {
             type="button"
             data-label="Close dialog"
           >
-            <span data-icon="close"></span>
+            <span data-icon="close">
+              <Icon name="close" />
+            </span>
           </Button>
         </div>
         <p id="contextUsageSummary" className="context-summary"></p>
@@ -126,7 +177,9 @@ export function Dialogs() {
       <MenuSurface id="menu" className="floating-menu" hidden />
       <Modal id="requestDialog" aria-labelledby="requestTitle">
         <div className="dialog-heading">
-          <span className="request-icon" data-icon="shield"></span>
+          <span className="request-icon" data-icon="shield">
+            <Icon name="shield" />
+          </span>
           <h2 id="requestTitle"></h2>
           <Button
             variant="ghost"
@@ -135,14 +188,18 @@ export function Dialogs() {
             type="button"
             data-label="Close dialog"
           >
-            <span data-icon="close"></span>
+            <span data-icon="close">
+              <Icon name="close" />
+            </span>
           </Button>
         </div>
         <div id="requests"></div>
       </Modal>
       <Modal id="permissionDialog" aria-labelledby="permissionTitle">
         <div className="dialog-heading">
-          <span className="request-icon" data-icon="shield"></span>
+          <span className="request-icon" data-icon="shield">
+            <Icon name="shield" />
+          </span>
           <h2 id="permissionTitle" data-t="Allow full access?"></h2>
         </div>
         <p data-t="Codex can modify files anywhere on this computer and use the network. Only enable this for tasks you trust."></p>
@@ -170,7 +227,9 @@ export function Dialogs() {
       >
         <form id="revisePlanForm">
           <div className="dialog-heading">
-            <span className="request-icon" data-icon="plan"></span>
+            <span className="request-icon" data-icon="plan">
+              <Icon name="plan" />
+            </span>
             <h2
               id="revisePlanTitle"
               data-t="What would you like to add or change?"
@@ -212,7 +271,9 @@ export function Dialogs() {
       </Modal>
       <Modal id="executePlanDialog" aria-labelledby="executePlanTitle">
         <div className="dialog-heading">
-          <span className="request-icon" data-icon="plan"></span>
+          <span className="request-icon" data-icon="plan">
+            <Icon name="plan" />
+          </span>
           <h2 id="executePlanTitle" data-t="Execute this plan?"></h2>
         </div>
         <p data-t="Codex will switch to implementation mode and follow this plan with the selected permissions."></p>
@@ -236,7 +297,9 @@ export function Dialogs() {
       <Modal id="queueEditDialog" aria-labelledby="queueEditTitle">
         <form id="queueEditForm">
           <div className="dialog-heading">
-            <span className="request-icon" data-icon="clock"></span>
+            <span className="request-icon" data-icon="clock">
+              <Icon name="clock" />
+            </span>
             <h2 id="queueEditTitle" data-t="Edit queued message"></h2>
           </div>
           <Label

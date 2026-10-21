@@ -8,6 +8,7 @@ import { createDevices } from "./features/devices";
 import { createComposer } from "./features/composer";
 import { createMarkdown } from "./features/markdown";
 import { createConversation } from "./features/conversation";
+import { createSubagents } from "./features/subagents";
 import { createFiles } from "./features/files";
 import { createQueue } from "./features/queue";
 import { createApprovals } from "./features/approvals";
@@ -399,6 +400,7 @@ export function startRemote() {
     renderOwner();
     renderContext();
     renderReasoning();
+    syncSubagents();
   }
   async function detail(generation) {
     clearTimeout(state.timer);
@@ -571,6 +573,16 @@ export function startRemote() {
     openChanges: (...args) => openChanges(...args),
     projectName: (...args) => projectName(...args),
   });
+  const { syncSubagents, resetSubagents } = createSubagents({
+    state,
+    $,
+    t,
+    getAgent,
+    api: (...args) => api(...args),
+    run: (...args) => run(...args),
+    Action: (...args) => Action(...args),
+    projectName: (...args) => projectName(...args),
+  });
   const { loadProjectFiles, openProjectFile, closeFilePreview } = createFiles({
     getAgent,
     state,
@@ -717,6 +729,7 @@ export function startRemote() {
     closeFilePreview: (...args) => closeFilePreview(...args),
     loadProjectFiles: (...args) => loadProjectFiles(...args),
     resetQueue: (...args) => resetQueue(...args),
+    resetSubagents: (...args) => resetSubagents(...args),
     api: (...args) => api(...args),
     notice,
     ownerCan: (...args) => ownerCan(...args),

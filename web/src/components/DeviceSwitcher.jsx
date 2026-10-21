@@ -15,6 +15,9 @@ export function DeviceSwitcher({ pairRequested = false }) {
   const id = useId(),
     dialog = useRef(),
     [devices, setDevices] = useState([]),
+    [statuses, setStatuses] = useState({}),
+    [connection, setConnection] = useState("Checking…"),
+    checks = useRef(),
     [open, setOpen] = useState(
       () =>
         pairRequested &&
@@ -43,6 +46,68 @@ export function DeviceSwitcher({ pairRequested = false }) {
     };
   }, []);
   useEffect(() => {
+    const update = (event) => {
+      const device = event.detail;
+      if (device?.id) {
+        setStatuses((previous) => ({
+          ...previous,
+          [device.id]: device.online,
+        }));
+        if (device.connection) setConnection(device.connection);
+      }
+    };
+    window.addEventListener("remote-device-status", update);
+    return () => {
+      window.removeEventListener("remote-device-status", update);
+      checks.current?.abort();
+    };
+  }, []);
+  async function refreshStatuses() {
+    checks.current?.abort();
+    const controller = new AbortController();
+    checks.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    setStatuses((previous) =>
+      Object.fromEntries(
+        devices.map((device) => [
+          device.device_id,
+          device.device_id === window.RemoteSecure.deviceID()
+            ? previous[device.device_id]
+            : undefined,
+        ]),
+      ),
+    );
+    await Promise.allSettled(
+      devices.map(async (device) => {
+        try {
+          const response = await fetch("/api/device", {
+            headers: { "X-Remote-Device": device.device_id },
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!response.ok) return;
+          const value = await response.json();
+          if (
+            controller.signal.aborted ||
+            value.id !== device.device_id ||
+            typeof value.online !== "boolean"
+          )
+            return;
+          setStatuses((previous) => ({
+            ...previous,
+            [device.device_id]: value.online === true,
+          }));
+        } catch {}
+      }),
+    );
+    clearTimeout(timeout);
+  }
+  const selected = devices.find(
+      (device) => device.device_id === window.RemoteSecure.deviceID(),
+    ),
+    statusText = (online) =>
+      online === true ? "Online" : online === false ? "Offline" : "Checking…";
+  useEffect(() => {
     if (open && !dialog.current.open) dialog.current.showModal();
     else if (!open && dialog.current.open) dialog.current.close();
   }, [open]);
@@ -53,7 +118,12 @@ export function DeviceSwitcher({ pairRequested = false }) {
         <span data-t="Computer">{t("Computer")}</span>
       </Label>
       <div className="device-switcher-controls">
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(isOpen) => {
+            if (isOpen) refreshStatuses();
+            else checks.current?.abort();
+          }}
+        >
           <DropdownMenuTrigger
             render={
               <Button
@@ -65,17 +135,25 @@ export function DeviceSwitcher({ pairRequested = false }) {
               />
             }
           >
-            <span>
-              {devices.find(
-                (device) => device.device_id === window.RemoteSecure.deviceID(),
-              )?.name ||
-                devices
-                  .find(
-                    (device) =>
-                      device.device_id === window.RemoteSecure.deviceID(),
-                  )
-                  ?.device_id.slice(0, 8) ||
-                t("Choose a computer")}
+            <span className="device-switcher-selection">
+              <span className="device-switcher-name">
+                <i
+                  className="device-online-dot"
+                  data-online={String(statuses[selected?.device_id])}
+                  aria-hidden="true"
+                />
+                <span id={pairRequested ? "deviceName" : undefined}>
+                  {selected?.name ||
+                    selected?.device_id.slice(0, 8) ||
+                    t("Choose a computer")}
+                </span>
+              </span>
+              <span
+                id={pairRequested ? "connectionLabel" : undefined}
+                data-t={connection}
+              >
+                {t(connection)}
+              </span>
             </span>
             <ChevronDown size={14} />
           </DropdownMenuTrigger>
@@ -83,6 +161,7 @@ export function DeviceSwitcher({ pairRequested = false }) {
             {devices.map((device) => (
               <DropdownMenuItem
                 key={device.device_id}
+                className="device-switcher-option"
                 onClick={() => {
                   try {
                     window.RemoteSecure.select(device.device_id);
@@ -92,18 +171,39 @@ export function DeviceSwitcher({ pairRequested = false }) {
                   }
                 }}
               >
-                <span>{device.name || device.device_id.slice(0, 8)}</span>
+                <i
+                  className="device-online-dot"
+                  data-online={String(statuses[device.device_id])}
+                  aria-hidden="true"
+                />
+                <span className="device-switcher-option-name">
+                  {device.name || device.device_id.slice(0, 8)}
+                </span>
+                <span
+                  className="device-switcher-option-status"
+                  data-t={statusText(statuses[device.device_id])}
+                >
+                  {t(statusText(statuses[device.device_id]))}
+                </span>
                 {window.RemoteSecure.deviceID() === device.device_id && (
                   <Check size={14} />
                 )}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuItem
+              onClick={() =>
+                document.getElementById("deviceDialog").showModal()
+              }
+            >
+              {t("Connected computer")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button
           type="button"
           variant="ghost"
           size="icon"
+          className="icon-button"
           aria-label={t("Pair another computer")}
           onClick={() => {
             setError("");

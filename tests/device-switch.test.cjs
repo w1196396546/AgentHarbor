@@ -265,6 +265,7 @@ for (const engine of engines)
       const selected = "11".repeat(16),
         other = "aa".repeat(16),
         expires_at = "2099-01-01T00:00:00Z";
+      let menuOtherOnline = true;
       await page.addInitScript(
         ({ selected, other, expires_at }) => {
           if (localStorage.getItem("fixture.initialized")) return;
@@ -305,7 +306,9 @@ for (const engine of engines)
                 request.headers()["x-remote-device"] === selected
                   ? "Office Mac"
                   : "Home PC",
-              online: false,
+              online:
+                request.headers()["x-remote-device"] === other &&
+                menuOtherOnline,
             },
           });
         const file =
@@ -329,7 +332,32 @@ for (const engine of engines)
         .getByRole("button", { name: "Switch computer", exact: true })
         .click();
       await page
-        .getByRole("menuitem", { name: "Home PC", exact: true })
+        .getByRole("menuitem", { name: "Home PC Online", exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("menuitem", { name: "Home PC Online", exact: true })
+          .locator('.device-online-dot[data-online="true"]')
+          .count(),
+        1,
+      );
+      assert.equal(
+        await page
+          .getByRole("menuitem", { name: "Office Mac Offline", exact: true })
+          .locator('.device-online-dot[data-online="false"]')
+          .count(),
+        1,
+      );
+      assert.equal(
+        await page.evaluate(() => window.RemoteSecure.deviceID()),
+        selected,
+      );
+      assert.equal(await page.locator("#deviceName").count(), 1);
+      assert.equal(await page.locator("#deviceHelp").count(), 0);
+      assert.equal(await page.locator('a[href^="/admin"]').count(), 0);
+      menuOtherOnline = false;
+      await page
+        .getByRole("menuitem", { name: "Home PC Online", exact: true })
         .click();
       await page.waitForFunction(
         (id) => window.RemoteSecure?.deviceID() === id,

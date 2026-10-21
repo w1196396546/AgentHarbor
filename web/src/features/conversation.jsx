@@ -15,6 +15,7 @@ export function createConversation({
   openChanges,
   projectName,
   getAgent,
+  readOnly = false,
 }) {
   function mergeOrdered(existing, incoming, prepend = false, beforeID = "") {
     if (!incoming.length) return existing;
@@ -325,16 +326,22 @@ export function createConversation({
           kind="file-change"
           open
         >
-          {changes.map((change, index) => (
-            <Action
-              key={index}
-              className="changed-file-button"
-              action={() => openChanges(change.path, item.id + "|" + index)}
-            >
-              <span>{change.path}</span>
-              <DiffStats change={change} />
-            </Action>
-          ))}
+          {changes.map((change, index) =>
+            readOnly ? (
+              <pre key={index} className="output-json">
+                {change.path + "\n" + displayDiff(change).text}
+              </pre>
+            ) : (
+              <Action
+                key={index}
+                className="changed-file-button"
+                action={() => openChanges(change.path, item.id + "|" + index)}
+              >
+                <span>{change.path}</span>
+                <DiffStats change={change} />
+              </Action>
+            ),
+          )}
           {!changes.length && <pre className="output-json">{text}</pre>}
         </Activity>
       );

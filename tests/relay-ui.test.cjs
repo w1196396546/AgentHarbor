@@ -50,7 +50,7 @@ for (const engine of engines) {
     assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),true,'workspace toggle must follow the pairing theme');
     await page.reload();await page.locator('#deviceOffline:visible').waitFor();assert.equal(pairs,1,'offline reload lost browser authorization');
     online=true;await page.locator('#retryDevice').click();await page.locator('#deviceOffline').waitFor({state:'hidden'});
-    await page.locator('#deviceHelp').click();await page.locator('#deviceDialog[open]').waitFor();assert.match(await page.locator('#deviceDialog').innerText(),/agentTools/);await page.locator('#closeDeviceDialog').click();
+    await page.locator('#workspace .device-switcher-trigger').click();await page.locator('[data-slot=dropdown-menu-item]').filter({hasText:'已授权电脑'}).click();await page.locator('#deviceDialog[open]').waitFor();assert.match(await page.locator('#deviceDialog').innerText(),/agentTools/);await page.locator('#closeDeviceDialog').click();
     online=false;await page.locator('#refresh').click();await page.locator('#deviceOffline:visible').waitFor();
     assert.equal(await page.locator('#workspace').isVisible(),true);assert.equal(pairs,1);
     assert.match(await page.locator('#sessions').innerText(),/Private previous history/);

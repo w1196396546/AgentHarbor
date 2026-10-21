@@ -10,8 +10,9 @@ const assetDir =
 const engines = process.env.BROWSER
   ? [process.env.BROWSER]
   : ["chromium", "webkit"];
+const username = "FullCupUserWithALongUnbrokenAccountNameForMobileScreens";
 for (const engine of engines)
-  for (const width of [390, 1280])
+  for (const width of [320, 390, 1280])
     test(`account ${engine} ${width}px: FullCupAI sign-in and multiple devices`, async (t) => {
       const browser = await { chromium, webkit }[engine].launch();
       t.after(() => browser.close());
@@ -77,10 +78,11 @@ for (const engine of engines)
           return reply(200, {
             user: {
               id: 27,
-              username: "FullCup User",
+              username,
               email: "person@example.test",
             },
             devices,
+            current_device: { id: "c".repeat(32), user_id: 0 },
           });
         }
         const file =
@@ -109,7 +111,7 @@ for (const engine of engines)
       await page.getByRole("button", { name: "登录", exact: true }).click();
       await page.getByLabel("动态验证码", { exact: true }).fill("123456");
       await page.getByRole("button", { name: "验证并登录" }).click();
-      await page.getByText("FullCup User", { exact: true }).waitFor();
+      await page.getByText(username, { exact: true }).waitFor();
       assert.equal(await page.locator(".relay-device").count(), 2);
       assert.equal(
         await page
@@ -124,6 +126,31 @@ for (const engine of engines)
         true,
         "account horizontal overflow",
       );
+      if (width < 760) {
+        const controls = await page
+          .locator("button:visible")
+          .evaluateAll((buttons) =>
+            buttons.map((button) => {
+              const bounds = button.getBoundingClientRect();
+              return {
+                label: button.textContent || button.getAttribute("aria-label"),
+                left: bounds.left,
+                right: bounds.right,
+                height: bounds.height,
+              };
+            }),
+          );
+        for (const control of controls) {
+          assert(
+            control.left >= 0 && control.right <= width,
+            `${control.label} is outside the mobile viewport`,
+          );
+          assert(
+            control.height >= 44,
+            `${control.label} has a small mobile touch target`,
+          );
+        }
+      }
       if (width === 1280)
         assert(
           (await page.locator(".admin-content").boundingBox()).width > 700,

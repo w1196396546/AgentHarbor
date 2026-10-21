@@ -1,0 +1,79 @@
+.subagents-bar {
+  margin-bottom: 8px;
+}
+.subagents-chip {
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12px;
+}
+.subagents-chip .icon {
+  width: 14px;
+  height: 14px;
+}
+#subagentsCount {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.subagents-dialog {
+  width: min(780px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(800px, calc(100dvh - 40px));
+  padding: 20px;
+  overflow-y: auto;
+}
+.subagents-dialog .dialog-heading {
+  gap: 8px;
+}
+.subagents-dialog .dialog-heading h2 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.subagents-list {
+  display: grid;
+  gap: 6px;
+}
+.subagent-row {
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  gap: 10px;
+  padding: 10px 12px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+.subagent-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.subagent-status {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.subagent-row[data-status="inProgress"] .subagent-status {
+  color: var(--success);
+}
+.subagent-conversation {
+  padding-top: 8px;
+}
+.subagent-conversation .message {
+  min-width: 0;
+}
+.subagent-conversation .user-text {
+  white-space: pre-wrap;
+}
+@media (max-width: 640px) {
+  .subagents-dialog {
+    padding: 14px;
+  }
+  .subagents-chip {
+    min-height: 40px;
+  }
+}

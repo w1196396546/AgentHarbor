@@ -37,6 +37,12 @@ export function createDevices({
                     : state.streamMode === "retrying"
                       ? "Reconnecting live updates…"
                       : "Live stream unavailable; refreshing periodically.";
+    if (state.device)
+      window.dispatchEvent(
+        new CustomEvent("remote-device-status", {
+          detail: { ...state.device, connection: key },
+        }),
+      );
     $("connectionLabel").textContent = t(key);
     $("connectionLabel").parentElement.dataset.state =
       state.device?.online === false
@@ -46,6 +52,9 @@ export function createDevices({
           : state.streamMode;
   }
   function renderDevice() {
+    window.dispatchEvent(
+      new CustomEvent("remote-device-status", { detail: state.device }),
+    );
     $("deviceName").textContent = state.device?.name || t("Connected computer");
     $("deviceName").title = state.device?.id || "";
     $("deviceOffline").hidden = state.device?.online !== false;
@@ -119,6 +128,7 @@ export function createDevices({
         await list();
         if (state.selected) await detail(state.generation);
       } else if (!value.online) setDeviceOnline(false);
+      else if (!document.hidden) await list(false, true).catch(() => {});
     } catch (e) {
       if (state.device) {
         setDeviceOnline(false);

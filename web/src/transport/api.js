@@ -100,6 +100,7 @@ export function createAPI({
           : new URLSearchParams(path.split("?")[1]).get("thread");
       error.status = res.status;
       if (
+        !options.observation &&
         generation === state.generation &&
         res.status === 410 &&
         value.archived === true &&
@@ -107,6 +108,7 @@ export function createAPI({
       )
         archiveConversation(id);
       else if (
+        !options.observation &&
         generation === state.generation &&
         value.history_unavailable === true &&
         id &&

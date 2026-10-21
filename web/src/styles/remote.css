@@ -4,4 +4,5 @@
 @import "./solid-glass.css";
 @import "./workspace.css" layer(legacy);
 @import "./remote-glass.css";
+@import "./subagents.css";
 @source "../";

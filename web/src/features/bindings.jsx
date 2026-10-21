@@ -351,10 +351,6 @@ export function bindWorkspace({
       showPair();
     });
   $("retryDevice").onclick = () => run(checkDevice, $("retryDevice"));
-  $("deviceHelp").onclick = () => {
-    renderDevice();
-    $("deviceDialog").showModal();
-  };
   $("closeDeviceDialog").onclick = () => $("deviceDialog").close();
   $("language").onclick = () =>
     showMenu($("language"), [
@@ -449,10 +445,16 @@ export function bindWorkspace({
     }
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.selected) {
-      if (state.catalog.capabilities?.streaming) ensureStream();
-      else poll(state.generation);
+    if (!document.hidden) {
+      if (state.device) checkDevice();
+      if (state.selected) {
+        if (state.catalog.capabilities?.streaming) ensureStream();
+        else poll(state.generation);
+      }
     }
+  });
+  window.addEventListener("focus", () => {
+    if (state.device) checkDevice();
   });
   window.addEventListener("pagehide", () => {
     closeStream();
@@ -460,6 +462,7 @@ export function bindWorkspace({
     clearTimeout(state.deviceTimer);
   });
   window.addEventListener("pageshow", (event) => {
+    if (event.persisted && state.device) checkDevice();
     if (event.persisted && state.selected)
       run(async () => {
         await detail(state.generation);

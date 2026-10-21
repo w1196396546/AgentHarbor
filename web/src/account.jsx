@@ -5,7 +5,6 @@ import {
   LogOut,
   Monitor,
   RefreshCw,
-  ShieldCheck,
   Unplug,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
@@ -277,10 +276,6 @@ function AccountApp() {
             <a href="/" className="back-chat">
               <ArrowLeft size={14} />
               返回远程会话
-            </a>
-            <a href="/admin/" className="back-chat">
-              <ShieldCheck size={14} />
-              管理员
             </a>
           </footer>
         </div>

@@ -49,6 +49,15 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["Agents", "智能体", "智慧代理", "エージェント", "Agenten"],
+  ["Back to agents", "返回智能体列表", "返回智慧代理清單", "エージェント一覧に戻る", "Zurück zu den Agenten"],
+  ["Loading agents…", "正在加载智能体…", "正在載入智慧代理…", "エージェントを読み込み中…", "Agenten werden geladen…"],
+  ["Loading conversation…", "正在加载对话…", "正在載入對話…", "会話を読み込み中…", "Unterhaltung wird geladen…"],
+  ["No agents in this conversation.", "此对话暂无智能体。", "此對話尚無智慧代理。", "この会話にはエージェントがありません。", "Keine Agenten in dieser Unterhaltung."],
+  ["Unable to load agents.", "无法加载智能体。", "無法載入智慧代理。", "エージェントを読み込めません。", "Agenten konnten nicht geladen werden."],
+  ["Unable to load this agent conversation.", "无法加载该智能体的对话。", "無法載入此智慧代理的對話。", "このエージェントの会話を読み込めません。", "Die Unterhaltung dieses Agenten konnte nicht geladen werden."],
+  ["Stopped", "已停止", "已停止", "停止済み", "Gestoppt"],
+  ["Unavailable", "不可用", "無法使用", "利用不可", "Nicht verfügbar"],
   ["Computer", "电脑", "電腦", "コンピューター", "Computer"],
   ["Switch computer", "切换电脑", "切換電腦", "コンピューターを切り替える", "Computer wechseln"],
   ["Choose a computer", "选择电脑", "選擇電腦", "コンピューターを選択", "Computer auswählen"],
@@ -261,6 +270,9 @@ for (const [key, zh, tw, ja, de] of [
  ['Authorization code is invalid or expired.', '授权码无效或已过期，请在 agentTools 中重新生成。', '授權碼無效或已過期，請在 agentTools 中重新產生。', '認証コードが無効または期限切れです。agentTools で再生成してください。', 'Der Autorisierungscode ist ungültig oder abgelaufen. Erstelle ihn erneut in agentTools.'],
  ['This browser stays authorized for 30 days. You can revoke it at any time in agentTools.', '授权会在此浏览器保留 30 天，你可以随时在 agentTools 中撤销。', '此瀏覽器的授權保留 30 天，可隨時在 agentTools 中撤銷。', 'このブラウザーの認証は 30 日間保持され、agentTools でいつでも取り消せます。', 'Dieser Browser bleibt 30 Tage autorisiert. Du kannst ihn jederzeit in agentTools widerrufen.'],
  ['Relay administration', '中转服务管理', '中繼服務管理', '中継サービス管理', 'Relay-Verwaltung'],
+ ['Online', '在线', '線上', 'オンライン', 'Online'],
+ ['Offline', '离线', '離線', 'オフライン', 'Offline'],
+ ['Checking…', '正在检查…', '正在檢查…', '確認中…', 'Wird geprüft…'],
  ['Your computer is offline', '电脑当前离线', '電腦目前離線', 'コンピューターはオフラインです', 'Dein Computer ist offline'],
  ['Keep agentTools open and remote connection enabled. This browser will reconnect automatically.', '请保持 agentTools 运行并开启远程连接，网页会自动重连。', '請保持 agentTools 執行並開啟遠端連線，網頁將自動重新連線。', 'agentTools を起動し、リモート接続を有効にしてください。自動的に再接続します。', 'Lass agentTools mit aktiviertem Fernzugriff geöffnet. Die Verbindung wird automatisch wiederhergestellt.'],
  ['Retry connection', '重新连接', '重新連線', '再接続', 'Erneut verbinden'],
@@ -419,6 +431,7 @@ for(const code of ['zh','zh-TW','ja','de']){
 
 for (const [key, zh, tw, ja, de] of [
   ['Resize sidebar', '调整侧边栏宽度', '調整側邊欄寬度', 'サイドバーの幅を調整', 'Breite der Seitenleiste ändern'],
+  ['Resize right panel', '调整右侧面板宽度', '調整右側面板寬度', '右パネルの幅を調整', 'Breite des rechten Bereichs ändern'],
   ['Collapse sidebar', '收起侧边栏', '收合側邊欄', 'サイドバーを折りたたむ', 'Seitenleiste einklappen'],
   ['Expand sidebar', '展开侧边栏', '展開側邊欄', 'サイドバーを展開', 'Seitenleiste ausklappen'],
   ['Use arrow keys to resize. Home for minimum width, End for maximum width.', '使用左右方向键调整宽度。Home 调到最窄，End 调到最宽。', '使用左右方向鍵調整寬度。Home 調到最窄，End 調到最寬。', '左右の矢印キーで幅を調整。Home で最小、End で最大にします。', 'Mit den Pfeiltasten die Breite ändern. Home für die minimale, End für die maximale Breite.']

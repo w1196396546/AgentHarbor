@@ -58,9 +58,10 @@ button:disabled {
   width: 32px;
   height: 32px;
   padding: 6px;
-  border: 0;
+  border: 1px solid var(--input);
   border-radius: 6px;
-  color: var(--muted-foreground);
+  background: var(--glass-control);
+  color: var(--foreground);
 }
 .icon-button:hover {
   color: var(--foreground);
@@ -222,6 +223,15 @@ button.subtle {
   color: var(--muted-foreground);
   padding: 6px 9px;
 }
+.project-collection-items {
+  padding-inline-start: 8px;
+}
+.project-collection:not([open]) > .project-collection-items {
+  display: none;
+}
+.project-collection-items > .project-group {
+  margin-top: 4px;
+}
 #sessions button {
   min-height: 31px;
   height: auto;
@@ -265,6 +275,12 @@ button.subtle {
 .sidebar-footer > div:last-child {
   flex-wrap: wrap;
   gap: 3px;
+}
+.sidebar-footer > .device-switcher {
+  display: block;
+}
+.sidebar-footer .settings-link {
+  flex: 1 0 100%;
 }
 .sidebar-footer .settings-link,
 #language {
@@ -784,9 +800,9 @@ button.subtle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid var(--input);
   border-radius: 7px;
-  background: transparent;
+  background: var(--secondary);
   color: var(--foreground);
   width: 32px;
   height: 32px;
@@ -872,13 +888,33 @@ button.subtle {
 }
 /* Inspector, file rows and diff previews use the thin panel material. */
 #workspace.has-changes {
-  grid-template-columns: var(--sidebar-column) minmax(0, 1fr) 280px;
+  grid-template-columns: var(--sidebar-column) minmax(0, 1fr) calc(var(--inspector-width, 280px) + 15px);
+}
+
+#changesResize {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 10;
+}
+#changesResize::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+}
+#changesResize:hover::after,
+#changesResize:focus-visible::after,
+body.inspector-resizing #changesResize::after {
+  background: var(--ring);
 }
 .changes-panel {
   width: auto;
   margin: 14px 15px 14px 0;
   border: 0;
-  background: var(--panel);
+  background: var(--background);
   color: var(--foreground);
   border-radius: 12px;
   box-shadow:
@@ -936,7 +972,7 @@ button.subtle {
 }
 #filePreview {
   inset: 43px 0 0;
-  background: var(--panel);
+  background: var(--background);
   color: var(--foreground);
 }
 .file-preview-heading {
@@ -1283,7 +1319,7 @@ button.subtle {
     grid-template-columns: var(--sidebar-column) minmax(0, 1fr);
   }
   #workspace.has-changes .changes-panel {
-    width: 340px;
+    width: var(--inspector-width, 340px);
     top: 0;
     right: 0;
     bottom: 0;
@@ -1297,7 +1333,8 @@ button.subtle {
 }
 @media (max-width: 760px) {
   #desktopSidebarToggle,
-  #sidebarResize {
+  #sidebarResize,
+  #changesResize {
     display: none;
   }
   #sidebarToggle {
@@ -1314,8 +1351,9 @@ button.subtle {
   }
   #sidebar {
     border-radius: 0;
-    padding-top: 20px;
-    background: var(--sidebar);
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--background);
   }
   .main-shell {
     width: 100%;
@@ -1366,8 +1404,14 @@ button.subtle {
   }
   .composer-chip {
     font-size: 10px;
-    padding-inline: 3px;
+    padding-inline: 5px;
     gap: 3px;
+    border: 1px solid var(--input);
+    background: var(--glass-control);
+  }
+  .composer-left,
+  .composer-right {
+    gap: 4px;
   }
   .composer-chip#model {
     max-width: 112px;

@@ -15,6 +15,7 @@ export function createWorkspace({
   closeFilePreview,
   loadProjectFiles,
   resetQueue,
+  resetSubagents,
   api,
   notice,
   ownerCan,
@@ -220,6 +221,7 @@ export function createWorkspace({
     $("changesToggle").setAttribute("aria-expanded", "false");
   }
   function resetSideData() {
+    resetSubagents();
     if ($("revisePlanDialog").open) $("revisePlanDialog").close();
     $("revisePlanDialog").dataset.planId = "";
     $("planFeedback").value = "";

@@ -6,7 +6,9 @@ const { test } = require("node:test");
 const { chromium, webkit } = require("playwright");
 const { encryptedFixture, pairCode } = require("./e2ee-fixture.cjs");
 
-const assets = path.resolve(__dirname, "../internal/relay/assets");
+const assets =
+  process.env.REMOTE_ASSET_DIR ||
+  path.resolve(__dirname, "../internal/relay/assets");
 const engines = process.env.BROWSER
   ? [process.env.BROWSER]
   : ["chromium", "webkit"];
@@ -991,7 +993,166 @@ async function screenshot(page, name) {
   });
 }
 
+async function visibleActionIcons(page) {
+  const controls = await page
+    .locator(".icon-button:visible, .send-button:visible, .stop-button:visible")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const svg = node.querySelector("svg"),
+          bounds = svg?.getBoundingClientRect();
+        let opacity = 1;
+        for (let parent = svg; parent; parent = parent.parentElement)
+          opacity *= Number(getComputedStyle(parent).opacity);
+        const painted = [
+          ...(svg?.querySelectorAll("path, circle, rect, line, polyline") ||
+            []),
+        ].some((shape) => {
+          const style = getComputedStyle(shape),
+            box = shape.getBBox();
+          return (
+            style.visibility === "visible" &&
+            Number(style.opacity) > 0 &&
+            (box.width > 0 || box.height > 0) &&
+            ((style.stroke !== "none" && parseFloat(style.strokeWidth) > 0) ||
+              style.fill !== "none")
+          );
+        });
+        return {
+          label: node.id || node.getAttribute("aria-label"),
+          visible:
+            !!bounds &&
+            bounds.width >= 8 &&
+            bounds.height >= 8 &&
+            opacity > 0 &&
+            painted,
+        };
+      }),
+    );
+  assert(controls.length > 0, "no visible action controls checked");
+  assert.deepEqual(
+    controls.filter((control) => !control.visible),
+    [],
+    "action controls must paint a visible icon, not just an outline or hidden SVG",
+  );
+}
+
 for (const engine of engines) {
+  test(`${engine}: phone controls render icons and overlay surfaces cover conversation text`, async (t) => {
+    const f = await fixture(t, engine, {
+      width: 390,
+      height: 844,
+      mobile: true,
+      locale: "zh-CN",
+      state: { historyItems: richItems() },
+    });
+    const { page } = f;
+    const missing = await page
+      .locator("[data-icon]")
+      .evaluateAll((nodes) =>
+        nodes
+          .filter(
+            (node) =>
+              !node.querySelector(
+                "svg path, svg circle, svg rect, svg line, svg polyline",
+              ),
+          )
+          .map((node) => `${node.closest("[id]")?.id}:${node.dataset.icon}`),
+      );
+    assert.deepEqual(
+      missing,
+      [],
+      "static action icons must have visible SVG geometry",
+    );
+    async function opaque(selector) {
+      const alpha = await page.locator(selector).evaluate((node) => {
+        const context = document.createElement("canvas").getContext("2d");
+        context.fillStyle = getComputedStyle(node).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+        return context.getImageData(0, 0, 1, 1).data[3];
+      });
+      assert.equal(alpha, 255, selector + " must not show underlying text");
+    }
+    for (const theme of ["dark", "light"]) {
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.locator("#sidebarToggle").click();
+        await page.waitForFunction(
+          () =>
+            document.getElementById("sidebar").getBoundingClientRect().left >=
+            -1,
+        );
+        await opaque("#sidebar");
+        await screenshot(
+          page,
+          `mobile-sidebar-${theme}-${engine}-${width}.png`,
+        );
+        await page
+          .locator("#navBackdrop")
+          .click({ position: { x: width - 10, y: 100 } });
+        if (
+          !(await page.locator("#title").innerText()).includes("Build checkout")
+        ) {
+          await page.locator("#sidebarToggle").click();
+          await page.locator('#sessions button[data-id="remote-rich"]').click();
+          await page.locator("#history .markdown h1").waitFor();
+        }
+        await page.locator("#message").fill("保留这段草稿");
+        await visibleActionIcons(page);
+        for (const id of [
+          "sidebarToggle",
+          "filesToggle",
+          "attach",
+          "send",
+          "permission",
+          "mode",
+          "model",
+          "effort",
+        ]) {
+          const control = await page.locator("#" + id).evaluate((node) => {
+            const style = getComputedStyle(node),
+              rect = node.getBoundingClientRect();
+            return {
+              border: parseFloat(style.borderTopWidth),
+              color: style.color,
+              width: rect.width,
+              right: rect.right,
+            };
+          });
+          assert(control.border > 0, id + " must have a visible outline");
+          assert(
+            control.width >= 24 && control.right <= width + 1,
+            id + " must remain inside the phone viewport",
+          );
+        }
+        await page.locator("#changesToggle").click();
+        await page.locator("#changesPanel:visible").waitFor();
+        await opaque("#changesPanel");
+        await page.locator("#filesTab").click();
+        await page.locator("#fileList .file-list-button").first().click();
+        await page.locator("#filePreview:visible").waitFor();
+        await visibleActionIcons(page);
+        await opaque("#filePreview");
+        await page.locator("#closeChanges").click();
+        await screenshot(
+          page,
+          `mobile-controls-${theme}-${engine}-${width}.png`,
+        );
+        assert.equal(
+          await page.locator("#message").inputValue(),
+          "保留这段草稿",
+        );
+      }
+      if (theme === "dark") {
+        await page.locator("#sidebarToggle").click();
+        await page.locator("#workspace .theme-toggle").click();
+        await page
+          .locator("#navBackdrop")
+          .click({ position: { x: 380, y: 100 } });
+      }
+    }
+    await f.clean();
+  });
+
   test(`${engine}: agent descriptor selects generic UI and is sent with requests`, async (t) => {
     const f = await fixture(t, engine, {
       agents: {
@@ -1182,6 +1343,7 @@ for (const engine of engines) {
           "conversation search needs its localized accessible name",
         );
         await page.locator('#sessions button[data-id="remote-rich"]').click();
+        await visibleActionIcons(page);
         const viewport = await page
           .locator('meta[name="viewport"]')
           .getAttribute("content");

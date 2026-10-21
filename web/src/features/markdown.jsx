@@ -8,7 +8,13 @@ import {
   TableCell,
 } from "../components/ui/table";
 
-export function createMarkdown({ run, openProjectFile, t, Action }) {
+export function createMarkdown({
+  run,
+  openProjectFile,
+  t,
+  Action,
+  readOnly = false,
+}) {
   function safeURL(text) {
     try {
       const u = new URL(text, location.origin);
@@ -69,7 +75,9 @@ export function createMarkdown({ run, openProjectFile, t, Action }) {
           url = file ? null : safeURL(target),
           label = value.slice(1, split);
         nodes.push(
-          file ? (
+          file && readOnly ? (
+            <span key={key}>{label}</span>
+          ) : file ? (
             <a
               key={key}
               href="#"

@@ -111,15 +111,27 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 仅读取原生历史不等于接管执行进程；可控制状态须由本机确认实际 owner 和能力。上游不发送的增量、隐藏推理及私有功能不能由中转恢复。
 
+## 子智能体观测
+
+连接端声明 `options.capabilities.subagents: true` 时，网页读取加密 `GET /api/threads/{id}/agents`。父会话有子智能体或明确的子智能体调用记录时，在输入框上方显示“智能体”气泡；点击列出名称及可确认状态，再点击名称打开只读对话。列表和详情沿用本地组件、工具/思考展示及五语言翻译，支持手机布局和加载更早历史，不改变父会话选择、草稿、附件或 owner。未声明能力的旧连接端不请求该接口。
+
+列表返回 `{agents:[{id,name,role,parent_id,status,cwd,last}]}`；详情使用加密 `GET /api/threads/{id}/agents/{agentID}?cursor=`，返回 `session`、`history` / `history_items`、`history_next_cursor`、`history_has_more`、`read_only: true`，富历史降级时可能附带 `history_error`。执行中或弹窗打开时每 2.5 秒串行轮询，隐藏页面暂缓读取，切换父会话、设备、Agent 或关闭详情时取消/隔离迟到响应。子会话读取失败只影响观测区域，不把子会话的归档错误应用到父会话。
+
+父子关系、项目授权和归档校验完全由 agentTools 执行，普通会话列表也由连接端过滤子智能体；中转不读取明文关系或会话内容。观测请求不连接、恢复、发送、引导或停止子智能体，详细对话不提供父会话的文件操作。状态没有权威证据时显示未知，原生 `closed` 只显示已停止，不推测完成或失败。本次回归使用本地 fake 客户端和加密浏览器夹具，不能代替真实 App 子智能体、公网和手机实机验收。
+
 ## 服务端配置和持久化
 
 `cmd/anywhereToAgent` 启动网页/中转监听及独立管理监听。`internal/relay` 维护服务端，`internal/transport/tunnel` 定义传输协议。网页资源嵌入二进制。配置只有 `public_url`、`listen_address`、`data_dir` 和 `registration_enabled`，不包含 Codex 程序、Codex home、共享根目录、SSH 或模型凭证。
 
 私有数据目录保存 `relay-state.json` 和 `admin-token`；示例将管理员提供的配置文件也存为该目录的 `config.json`，只有显式指定 `--config` 才加载它，服务不会自动重写配置文件。`relay-state.json` 保存设备凭证哈希、浏览器授权映射、FullCupAI 用户资料、设备用户关联/别名及账户会话哈希，权限 0600；会话映射及用户资料仍须私有保护；不含平台凭证、原始授权 token 或加密密钥。原状态无需迁移文件即可载入，新增字段之后旧二进制因严格解析会拒绝读取；回滚应使用同时备份的旧状态，并知悉备份后撤销/新增的授权差异，不能静默删除新字段。`admin-token` 是独立管理凭证，也为 0600。解析失败不能当作空授权列表覆盖原状态，应报告错误并保留原文件。
 
+普通聊天与账户页面不显示中转管理入口，管理员仍通过原 `/admin/` 地址和独立管理凭证进入。设备选择与当前连接状态合并为一个区域；列表按各设备已有浏览器授权读取在线状态，在线绿色、离线红色，无法确认时灰色，不更改当前设备选择或凭据。
+
 管理监听默认 `127.0.0.1:9090`，服务器网页监听默认 `127.0.0.1:8080`。反向代理须保留原始 Host；写请求校验 Origin 和专用请求头。服务端管理权限仅管理中转实例，不授予任何客户端的 shell 或项目访问。
 
 ## 维护与验证
+
+左右面板共用指针捕获和键盘调宽逻辑；右侧文件/更改面板从左边缘向左拖动增宽，宽度按浏览器单独记忆。Home/End 与方向键可调宽，Escape 取消当次拖动；桌面两侧上限保留会话正文空间，窄屏抽屉受视口限制，手机隐藏调宽手柄。
 
 远程聊天页使用 React 19 与 Solid Glass。`web/src/remote.jsx` 启动应用；`RemoteApp.jsx` 组合 `views/Pairing.jsx`、`Workspace.jsx` 和 `Dialogs.jsx`。`controller.jsx` 保留共享控制器状态和 feature 装配；`features/` 按会话、owner、生命周期、设备、消息、事件流、队列、设置、审批、附件、建议、文件及计划拆分，`features/bindings.jsx` 管理 DOM 事件，`render.jsx` 同步提交 React 动态区域。加密 HTTP、取消与 owner 代际请求位于 `transport/api.js`，加密与续传实现位于 `transport/secure.js`；经 `RemoteSecure.fetch/events` 的 API、文件、附件和 SSE 请求都在密文内固定当前 `X-Remote-Agent`，owner 控制同时发送 `X-Remote-Owner-Epoch` 和兼容用的 `X-Codex-Owner-Epoch`。Agent descriptor 从加密 `GET /api/agents` 读取；每会话选项的 `agent` 须与当前 active Agent 一致。`agents/registry.js` 选择适配器，`agents/codex.js` 集中 Codex 的模型与 reasoning effort、权限、审批类型、来源标签、历史内容和桌面 deeplink 语义；未知 descriptor 使用不含 Codex deeplink 和权限推测的通用展示适配器。Agent 切换会取消旧请求和事件流、清除会话/owner/队列状态，并按 Agent 隔离草稿，避免相同会话 ID 被投到新执行端。Agent 执行仍由本机连接端负责，中转不解释或持有密文内的 Agent 字段。管理后台 `admin.jsx` 使用独立 React 状态与管理认证。Solid Glass 上游源码和 MIT 声明随项目保存，所有 JS/CSS 由 Vite 本地打包进 Go 资源，无 CDN、外部字体请求或额外运行服务。公共固定路径 JS/CSS 在进程内预压缩，支持 gzip、基于内容的弱 ETag 及每次使用前重验证，未变化返回 304；HTML、账户/配对 API、密文请求和会话数据仍为 `no-store`，不进入此静态缓存。深浅外观可切换，偏好仅存在本地浏览器。手机宽度（不超过 760px）或粗指针设备上的文本输入控件至少 16px，避免 iOS 聚焦自动放大；viewport 继续允许用户缩放，不设置 `maximum-scale` 或 `user-scalable=no`。移动布局与焦点回归在 Chromium/WebKit 及支持语言中验证，仍需 iPhone 实机键盘验收。
 
@@ -145,7 +157,9 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 详情、options 并行获取，完整模型/工具目录不阻塞历史、后台连接或已有 SSE。选择变化、归档及退出取消旧请求；迟到的详情/连接/事件不能覆盖新选择。刷新、轮询和 SSE 只读跟随，不恢复所有历史或重发消息。后台连接成功可附带已确认的 `live` 快照（与 SSE 相同的 owner、epoch、选项和队列形状），网页直接应用并恢复控制，不为解除连接提示再下载整份历史；已有更新的 SSE 状态优先。旧客户端仅返回 `connected` 时仍读取详情确认，不推测控制权限。
 
-侧栏读取加密 sessions 响应的 sidebar_projects（id、name、root_paths）、pinned_ids 及会话行 project_id / pinned，按原生顺序显示置顶、本机项目和最近会话；空项目仍可从侧栏选择后新建，项目名称来自 App 元数据。已加载的每个会话只出现一次，搜索和项目筛选继续生效，缺少新字段的旧客户端保留路径分组。项目/置顶状态由 agentTools 只读原生 App 状态与 SQLite 目录得到，不在中转持久化，也不借网页修改官方 App 数据。
+侧栏读取加密 sessions 响应的 sidebar_projects（id、name、root_paths）、pinned_ids 及会话行 project_id / pinned，按原生顺序显示置顶、本机项目和最近会话；空项目仍可从侧栏选择后新建，项目名称来自 App 元数据。已加载的每个会话只出现一次，搜索和项目筛选继续生效，缺少新字段的旧客户端保留路径分组。项目/置顶状态由 agentTools 只读原生 App 状态与 SQLite 目录得到，不在中转持久化，也不借网页修改官方 App 数据。项目统一放在可折叠的“项目”分组内，各项目保留独立折叠状态；折叠总分组再展开不会重置单个项目，列表刷新也保留当前折叠状态，搜索时展开匹配结果。
+
+网页在线且可见时复用 10 秒设备检查刷新会话目录，返回前台或从页面缓存恢复时立即检查并刷新；不依赖当前选中会话的事件流。后台刷新沿用现有加密 sessions 接口，保留已加载页数、项目筛选、搜索、分组折叠与草稿，不重新获取 options 或连接会话；已有列表请求期间跳过周期刷新，迟到结果仍按序号与项目丢弃，读取失败保留原列表。
 
 现代历史目录从当前最高版本官方 SQLite 索引读取，按 ID 定点查找，无需逐条解码全部 rollout 或逐页等待 `thread/list`。详情优先有界 rich history，成功时不同时传整份 legacy 正文；更早内容经游标分页。旧版缺少目录字段时兼容回退，读错误标记 `history_unavailable`，不视作空目录。
 
@@ -162,3 +176,5 @@ macOS 可选共享启动及 `executor: "native"` 旧路径仍保留兼容，不�
 旧深链接路径的历史验收不证明后台新路径；原记录仍保留在客户端 `output/history-auto-connect-20261018/`。本次验证应分别报告隔离本机官方 app-server 零轮创建/恢复、两端回归、真实模型轮次、移动端及公网部署；未执行项目不得写成已验证。
 
 前端完整采用 Solid Glass 的 Message/Bubble、Composer、Panel、AskCard、Tool Steps、表单、附件、表格与空状态结构，统一 Lucide 图标；侧栏、菜单和原生 dialog 通过本地适配保持既有焦点及取消行为。页面布局遵循官方 Agent Workspace 的阅读列、侧栏与浮动检查面板结构。样式层级将旧行为尺寸置于 legacy 层，新外观及响应式布局集中于 remote-glass.css。设计对照及受限范围记录于根目录 design-qa.md。
+
+固定操作图标由 [`Workspace.jsx`](../web/src/views/Workspace.jsx) 与 [`Dialogs.jsx`](../web/src/views/Dialogs.jsx) 直接使用共享 `RemoteIcon` 渲染，不依赖翻译或连接初始化补画；[`controller.jsx`](../web/src/controller.jsx) 只更新随当前适配器变化的 Agent 标识。手机抽屉侧栏、文件/更改面板及文件预览使用不透明背景，避免覆盖正文时透字；图标按钮、发送/停止及手机输入设置按钮保留底色与边线。账户/管理页长名称可换行，账户工具栏可折行，手机按钮至少 44px 高。回归位于 [`remote-workspace.test.cjs`](../tests/remote-workspace.test.cjs) 和 [`account.test.cjs`](../tests/account.test.cjs)，覆盖两浏览器、深浅主题、320/390px、静态 SVG 及其实际绘制/尺寸/父级透明度、浮层不透明度及按钮边界；真实 iPhone Safari 的键盘与安全区仍需实机验收。

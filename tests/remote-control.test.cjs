@@ -240,7 +240,9 @@ for (const engine of engines)
           "anywhereToAgent",
         );
         assert.equal(
-          await page.locator(".settings-link").getAttribute("href"),
+          await page
+            .locator('.settings-link[href="/admin"]')
+            .getAttribute("href"),
           "/admin",
         );
         assert.equal(
