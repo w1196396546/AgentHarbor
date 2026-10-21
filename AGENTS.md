@@ -1,17 +1,78 @@
-# Coding notes
+# anywhereToAgent 开发与维护约定
 
-This independent project, anywhereToAgent, is the public relay, web UI and server administration for agentTools.
-The desktop client, agent registry and execution adapters live in agentTools/internal/remoteclient. Codex is the current adapter. Never run an agent,
-read a desktop Codex home, or configure model credentials and project roots on this server.
-Read docs/architecture.md before changing runtime or authorization contracts.
-Clients issue pairing codes and browser grants; the relay cannot approve its own client access.
-Preserve Host/Origin validation, client-side grant validation, streaming and revocation.
-Test changed behavior with isolated configuration and local fake clients. No secret values in
-source, logs, fixtures or deployment examples. Never overwrite unrelated runtime state.
+## 项目边界
 
-The Go module is `anywheretoagent`, with `cmd/anywhereToAgent` as the executable.
-`internal/relay` owns routing, pairing, private state and administration;
-`internal/transport/tunnel` carries opaque bounded HTTP streams. Agent discovery
-and selection belong inside the encrypted client API, never in public device metadata.
-Keep legacy cookie names and request-header aliases compatible, and preserve existing
-`codex-remote` data directories when upgrading an installation.
+- 本仓库是 agentTools 的独立公网中继、远程 Web UI 和服务端管理。Go module 为 `anywheretoagent`，程序入口为 `cmd/anywhereToAgent`，二进制名为 `anywhereToAgent`。
+- 桌面连接端、Agent 注册表和执行适配器属于 **agentTools 仓库的 `internal/remoteclient`**；当前适配器为 Codex。涉及两端协议时明确各仓库的改动与验证，不把客户端代码搬到中继。
+- 中继服务器不运行 Agent、不读取桌面 Codex home、不配置模型凭证或用户项目根目录，不挂载用户项目。
+- 修改运行、授权、加密或持久化契约前先读 [docs/architecture.md](docs/architecture.md)；部署前读 [docs/deploy.md](docs/deploy.md)。前端约定见 [web/README.md](web/README.md)。
+
+## 代码位置与改动范围
+
+| 路径 | 职责 |
+| --- | --- |
+| `cmd/anywhereToAgent/` | 配置、监听、进程生命周期及旧数据目录兼容 |
+| `internal/relay/` | 路由、设备、配对、私有状态、账户与独立管理认证 |
+| `internal/transport/tunnel/` | 不解析业务内容的有界 HTTP 流、背压与取消 |
+| `web/src/views/`、`components/` | 页面及共享 UI；优先复用 `components/ui/` 和 `RemoteIcon` |
+| `web/src/features/` | 会话、设备、队列、审批、文件与生命周期等交互 |
+| `web/src/transport/`、`agents/` | 加密 API 与网页 Agent 适配 |
+| `internal/relay/assets/` | 构建生成并嵌入 Go 的静态资源，不直接手改生成文件 |
+| `tests/` | Node / Playwright 测试与隔离的假客户端夹具 |
+| `deployment/` | 配置、反向代理、系统服务模板，不代表线上实际配置 |
+
+改动前检查 `git status` 和相关调用方，保留无关未提交内容。优先修复共享实现，复用现有组件与依赖，避免顺手重构。修改协议时检查发送方、接收方、浏览器、测试夹具及文档；未完成另一端适配时明确说明。
+
+## 不可破坏的安全与兼容边界
+
+- 配对码和浏览器授权由客户端签发、校验和撤销；中继不能批准自己的客户端访问。设备 ID、账户登录和管理员登录都不等于客户端访问授权。
+- 保留 Host / Origin、专用请求头、客户端 grant 校验、过期、重放保护和撤销；不能通过关闭 TLS 或来源校验解决连接问题。
+- 会话、文件、附件及事件走现有端到端加密入口；Agent 发现与选择属于加密客户端 API，不得放进公开设备元数据。不得恢复旧明文接口或自动降级。
+- 保留流式输出、取消传播、背压、大小/并发限制及设备与 owner 代际隔离；迟到响应不能覆盖新选择，断线不能视作任务完成，不自动重发结果不确定的操作。
+- 保留旧 cookie 名称、请求头别名和 `codex-remote` 数据目录兼容。状态读取/校验失败须报错并保留原文件，不能当成空状态覆盖。
+- 密钥、配对码、原始 token、密码及用户会话内容不得写入源码、日志、夹具、部署示例或交付记录。测试只用虚构凭证和隔离状态。
+- React 动态区域沿用 `renderView` / `clearView` 生命周期，避免直接替换 DOM 造成组件未卸载；保留焦点、键盘操作、草稿、附件、移动端布局和现有语言支持。
+
+## 构建与验证
+
+需要 Go 1.26.8+、Node.js 22.12+；从仓库根目录执行，命令以 `Makefile` 和 `package.json` 为准。
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm ci` | 按锁文件安装前端与测试依赖 |
+| `npm run typecheck` | 前端类型检查 |
+| `make frontend` | 构建 remote / admin / account 静态资源 |
+| `make build` | 构建前端，再编译嵌入资源的 Go 二进制 |
+| `make test` / `make test-race` | Go 行为测试 / race 检查 |
+| `make vet` | Go 静态检查 |
+| `npx playwright install chromium webkit` | 首次安装浏览器测试运行时 |
+| `make test-ui` | 先构建资源，再运行 Node / 浏览器回归 |
+| `BROWSER=chromium make test-ui` | 仅运行 Chromium 浏览器用例及普通 Node 测试 |
+
+- 按改动范围验证：文档只检查内容、路径和差异；非平凡逻辑补有意义的回归，安全/协议改动覆盖失败路径。用户明确限制测试时遵守并报告未验证项。
+- 测试使用临时配置、隔离 HOME 和本地 fake clients，不使用真实桌面授权、生产设备或真实模型任务作自动夹具。
+- 前端源码变化后同步重建受版本控制的 `internal/relay/assets/`；上线还需重新编译并部署 Go 二进制。只构建 JS/CSS 不会更新运行中的中继。
+- UI 改动关注 Chromium / WebKit、深浅主题与窄屏；模拟浏览器通过不等于真实手机键盘、Windows 客户端或公网链路验收。
+
+## 中继服务器与运维
+
+当前中继服务器使用本机 SSH 配置中的 Host 别名 **`备用服务器`**：
+
+```sh
+ssh '备用服务器'
+# 本地查看解析后的 SSH 配置，不连接远端：
+ssh -G '备用服务器'
+```
+
+不要猜 IP、登录用户、密钥路径、部署目录、服务单元名或实际端口；优先复用 SSH 别名。该别名属于维护环境，不要求普通用户配置 SSH，也不是程序配置字段。
+
+- 仅修改文档或本地代码不隐含部署、重启或修改生产状态。用户要求部署/维护时，在其授权范围内完成，不重复索要已给出的授权。
+- 远端操作前核实目标进程、启动参数、实际数据目录、服务管理方式、代理及端口；模板默认值不能当作线上事实。
+- 更新前备份本服务二进制、配置和私有状态，保留原数据目录及文件权限；采用一致性备份，避免两份实例同时写同一状态目录。只操作本服务，不覆盖共享代理配置或重启无关服务。
+- 回滚需考虑状态 schema 兼容；旧二进制可能无法读取新状态。恢复旧状态可能恢复已撤销授权或丢失新授权，不能无提示地覆盖当前状态。
+- 管理监听默认仅回环，确认为默认端口后可用 `ssh -N -L 19090:127.0.0.1:9090 '备用服务器'`，在本机打开 `http://127.0.0.1:19090/admin/`。管理凭证不得输出到聊天或提交到 Git。
+- 部署后分别报告进程/健康检查、静态资源与实际配对/流式链路结果。`/healthz` 成功仅证明 HTTP 服务可达，未做真实客户端验收不能宣称端到端可用。
+
+## 交付
+
+说明改了什么、验证了什么、是否部署以及尚未验证的限制。新增参数、运行依赖、使用流程或安全边界时同步 README 和对应文档；保留第三方许可声明。

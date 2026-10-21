@@ -2,6 +2,12 @@
 
 anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远程网页和服务端管理页。agentTools 内置连接端、Agent 注册表与执行适配器，目前提供 Codex 适配器。两者通过 WebSocket 协议通信，分别构建和部署；服务器不导入 agentTools 的网关、账号或本机进程代码。
 
+## 阅读范围与验证记录
+
+本文描述两端当前的职责和协议；客户端实现位于 agentTools，修改跨端契约需同时核对两端代码。文中带日期、版本号或测试数量的段落是对应改动的历史记录，不代表当前 checkout、生产环境或所有平台已重新验收。
+
+部署操作见 [deploy.md](deploy.md)，前端结构见 [web/README.md](../web/README.md)。专项历史结果见 [共享 App 提问兼容记录](shared-questions-qa.md) 和 [设计 QA](../design-qa.md)；发布时应另记录实际提交、检查范围、失败项和未验证项，不能累计引用历史通过数作为本次验收结果。
+
 ## 职责
 
 | 部件 | 负责 | 数据所在位置 |
@@ -167,7 +173,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 归档仍每次检查：列表 `archived_ids` 是明确证据；详情和控制返回 410、`archived: true`；流发 `archived` 并结束，不停止外部任务。归档元数据不可读时禁用控制，显式刷新成功后才恢复。活跃流最多每秒检查一次，空闲流约 12 秒内检查。共享根目录、Host/Origin、客户端授权与撤销继续由既有边界校验。
 
-`live.owner` 提供 kind/state/epoch/capabilities。后台 owner 使用 kind `background`；控制携 `X-Codex-Owner-Epoch`，中转白名单透传，最终由本机检查。归属变化或操作不确定时不自动重发。连接端通过现有本机 IPC 发布自有后台 owner，桌面可按同 ID 跟随；IPC 未提供跨应用原子 claim，另一个绕过 owner 发现的独立 CLI 同时恢复同 ID 不在保证范围内。
+`live.owner` 提供 kind/state/epoch/capabilities。后台 owner 使用 kind `background`；控制在加密请求内携 `X-Remote-Owner-Epoch` 及兼容别名 `X-Codex-Owner-Epoch`，由本机解密并检查。中转只路由密文，重建外层请求头，不透传浏览器明文 owner 头。归属变化或操作不确定时不自动重发。连接端通过现有本机 IPC 发布自有后台 owner，桌面可按同 ID 跟随；IPC 未提供跨应用原子 claim，另一个绕过 owner 发现的独立 CLI 同时恢复同 ID 不在保证范围内。
 
 后台使用本机 Codex 配置；已有原 owner 继续使用它的环境、工具和权限。App 注入的私有工具、开发者指令及 UI 上下文不保证在独立 app-server 中可用。普通发送继承实际会话设置，只应用明确选择的更改，不替用户降级自定义权限。只有用户明确发送才开始轮次；引导、停止、审批及队列保留轮次和 owner 约束。上下文窗口与压缩状态、真实标题通过详情和 SSE 同步，不伪造桌面状态。
 

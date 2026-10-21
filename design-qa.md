@@ -1,6 +1,25 @@
 # Solid Glass frontend design QA
 
-Final result: passed for the implemented product surfaces. This is a complete React/Solid Glass presentation rebuild of the existing relay UI, not a pixel-identical copy of the example application's data or unsupported features.
+Historical result: passed for the product surfaces inspected during this design change. This is a complete React/Solid Glass presentation rebuild of the existing relay UI, not a pixel-identical copy of the example application's data or unsupported features.
+
+## Record scope
+
+This is a historical design QA report, not current-branch or production sign-off.
+The original report did not record an exact execution date or tested repository
+commit; both remain unverified. The upstream Solid Glass snapshot date in
+[web/README.md](web/README.md) is not the test execution date.
+Documentation was clarified on 2026-10-21 without rerunning the checks below.
+
+The recorded 220 passing browser tests apply only to that run. Later
+[question compatibility QA](docs/shared-questions-qa.md) records a separate run
+with failures; neither report establishes today's full-suite status. Preserve
+both records rather than rewriting historical results.
+
+Paths below identify the original local evidence. Temporary clipboard files and
+ignored `output/` artifacts may no longer exist and are not portable repository
+attachments. Their availability was not revalidated in this documentation update.
+For a new acceptance run, record the tested commit (and any local changes), date,
+commands, browser versions, results and a retained, sanitized evidence location.
 
 ## Visual evidence
 
