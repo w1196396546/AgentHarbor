@@ -156,7 +156,8 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setSessionCookie(w, s.cookieName(), cookie, expires)
 	s.setSessionCookie(w, s.deviceCookieName(id), cookie, expires)
-	jsonReply(w, http.StatusOK, map[string]any{"paired": true, "device_id": id, "id": result.ID, "sealed": result.Sealed, "expires_at": expires})
+	// Keep the client expiry identical to its authenticated reply; cap only relay state and cookies.
+	jsonReply(w, http.StatusOK, map[string]any{"paired": true, "device_id": id, "id": result.ID, "sealed": result.Sealed, "expires_at": result.ExpiresAt})
 }
 
 // Pair replies are small control messages, never streamed into unbounded memory.

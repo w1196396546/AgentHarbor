@@ -73,6 +73,8 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 
 授权码单次使用，重新生成会使先前未使用的码失效。客户端明确断开连接不等于撤销所有长期浏览器授权；再次连接后，仍有效且未撤销的授权可以恢复使用。删除客户端身份或清除授权状态会使旧授权失效。不要在客户端不在线时仅由服务器批准新浏览器。
 
+配对应答的 `expires_at` 保留电脑签发的原值，与 `sealed` 内经过认证的到期时间一致；中转会话和 HttpOnly cookie 独立采用该期限与服务器当前时间加 30 天两者的较早值。电脑时钟略快时不会因中转截短期限而误报加密验证失败，网页仍拒绝元数据不一致、过期或篡改的配对应答。
+
 同一浏览器可记住最多 16 台电脑的独立 E2EE 授权。每次成功配对同时设置原有通用 HttpOnly cookie 和带公开设备 ID 后缀的独立 HttpOnly cookie；第二台配对保留第一台授权，重新配对只替换同一台电脑的旧授权并取消其旧流。浏览器以 `X-Remote-Device` 选择设备，服务端只接受单个 32 位小写十六进制 ID，并要求对应 cookie 映射的设备完全匹配；设备 ID 或账户登录自身不授予访问。未携带选择头时沿用原通用 cookie，旧浏览器仅有通用 cookie 时也只能选择该 cookie 已授权的设备；首次配对另一台时原授权补存为独立 cookie。退出只撤销选中设备授权和其活动请求，保留其它设备；独立 cookie 与对应的通用 cookie 一起清除。E2EE 密钥继续只在浏览器和本机，设备选择头不转发给本机。
 
 设备登记开关只控制新设备注册。关闭后，已登记客户端仍可用原凭证重连；浏览器仍需得到客户端授权。服务端管理凭证与客户端配对授权不能互换。
@@ -141,7 +143,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 输入框旁的上下文圆环使用本机返回的当前用量与窗口大小，点击查看具体 token 数；图形限制在 0–100%，文字保留真实数值。未知用量显示未知环，不显示成 0% 或保留上次进度；压缩状态独立显示，压缩后跟随新的实际用量。现有数据不包含输入/输出分类，因此详情不推测这些值，也不把当前请求用量解释为会话累计消耗。
 
-连接诊断与日志导出由 agentTools 本机连接页提供，受本机 Host/运行令牌保护；Remote 不接收这些诊断 API，也不保存设备凭证、配对码或会话正文日志。Windows 后台启动同样由本机负责，网页不要求先使用 macOS 的可选共享启动器。
+连接诊断与日志导出由 agentTools 本机连接页提供，受本机 Host/运行令牌保护；Remote 不接收这些诊断 API，也不保存设备凭证、配对码或会话正文日志。macOS / Windows GUI 的共享启动及就绪检查均由本机连接端负责，网页不选择桌面启动方式；历史可读不等于执行服务已连接。
 
 改动协议应同时更新两端的发送方/接收方、认证边界、浏览器和夹具。两端均需要本地 fake peer 的行为测试：一次性码、过期/撤销、错误设备凭证、跨来源、重连、慢流和取消。服务端执行 `make test-race`、`make vet` 和浏览器回归；客户端执行 `go test -race ./internal/remoteclient/...` 并运行对应 GUI 测试。Go 测试使用隔离配置及 HOME，不能访问用户真实凭证。
 
@@ -149,9 +151,9 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 ## 后台会话执行与同步
 
-网页新建显式发送 `POST /api/threads`、`executor: "background"`，连接端省略 executor 时也默认后台新建；本机 `createBackground` 校验共享项目及设置，通过官方 `thread/start` 创建、`thread/name/set` 持久化，并保留执行连接。它不调用桌面深链接，不发送首轮或伪造队列。已有共享 app-server 可复用，否则执行进程由本机 agentTools 持有；Remote 从不运行 Codex。
+网页新建显式发送 `POST /api/threads`、`executor: "background"`，连接端省略 executor 时也默认后台新建；本机 `createBackground` 校验共享项目及设置，通过官方 `thread/start` 创建、`thread/name/set` 持久化，并保留执行连接。macOS / Windows GUI 复用经过验证的 App 共享服务，不自动切换桌面聊天；Windows 无共享约束的命令行执行器仍保留新建后的 best-effort `codex://` 跟随。创建本身不发送首轮或伪造队列。Linux 或无共享约束的命令行模式可由本机 agentTools 持有独立执行进程；Remote 从不运行 Codex。
 
-创建前重新读取本次 options 并确认 `capabilities.background_creation: true`，失败为未知；旧客户端无此能力时明确要求更新，不能回退为桌面创建。已分配 ID 后失败返回 `created_thread_id`，网页绑定已有 ID、保留草稿及附件，不自动另建或重发。创建成功先进入新会话，再异步刷新列表。
+创建前重新读取本次 options 并确认 `capabilities.background_creation: true`，此项目级预检不附带当前选中的历史会话 ID；失败为未知。旧客户端无此能力时明确要求更新，不能回退为桌面创建。已分配 ID 后失败返回 `created_thread_id`，网页绑定已有 ID、保留草稿及附件，不自动另建或重发。创建成功先进入新会话，再异步刷新列表。Windows 历史会话按不区分盘符大小写的路径边界匹配项目根目录。
 
 选择历史先显示只读分页详情。自动连接、手动连接及重试都要求 `live.owner.capabilities.background_connect: true`，并调用 `POST /api/threads/{id}/connect`、`executor: "background"`。本机先发现原 owner：已存在就跟随，无 owner 才 `thread/resume` 同一 ID；超时、协议错误或归属不确定时拒绝恢复。此连接不发起模型轮次，不依赖桌面当前页面。旧客户端只有 `connect: true` 时提示更新，不回退到深链接；明确的“在 Codex 中打开”链接仅用于用户主动打开应用。
 
@@ -169,7 +171,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 后台使用本机 Codex 配置；已有原 owner 继续使用它的环境、工具和权限。App 注入的私有工具、开发者指令及 UI 上下文不保证在独立 app-server 中可用。普通发送继承实际会话设置，只应用明确选择的更改，不替用户降级自定义权限。只有用户明确发送才开始轮次；引导、停止、审批及队列保留轮次和 owner 约束。上下文窗口与压缩状态、真实标题通过详情和 SSE 同步，不伪造桌面状态。
 
-macOS 可选共享启动及 `executor: "native"` 旧路径仍保留兼容，不是后台能力的前提。启动器不退出日常 App、不改包和全局配置；已有锁/socket 不自动覆盖。Windows/Linux 本机 IPC、无 GUI 连接端继续沿用现有适配，尚需实机验收；跨平台构建不能代替运行验证。
+macOS / Windows GUI 要求共享 App 服务就绪后才连接中转；普通启动的 App 无法注入共享环境时，等待用户结束任务并退出，再由本机自动共享启动。Windows 连接端支持商店 / 手动安装 MSIX 清单发现及带官方签名的直接安装协议发现，以私有 ACL、进程身份验证和 capability 认证保护回环 WebSocket；原命名管道继续处理 owner、队列及控制确认。此实现面向 Windows 原生执行，WSL、便携版与企业重签名不在等价保证内；Windows 实机启动、发送及队列仍需验收。启动器不退出已有 App、不改包和全局配置，断开只关闭本连接。`executor: "native"` 旧路径仍用于明确的桌面打开请求；Linux 与无 GUI 连接端沿用原适配。公网接口和浏览器请求格式不变，跨平台构建不能代替运行验证。
 
 官方 [App-server](https://learn.chatgpt.com/docs/app-server) 是公开会话协议参考。本实现使用自部署 Remote 授权和中转，没有接入 OpenAI 云端远程协议；本机 follower 兼容层受 App 版本影响，不能承诺全部私有功能永久兼容。
 

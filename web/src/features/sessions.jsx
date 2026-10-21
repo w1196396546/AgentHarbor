@@ -321,7 +321,7 @@ export function createSessions({
     $("sessionCount").textContent = String(state.sessions.length);
   }
 
-  async function loadOptions(required = false) {
+  async function loadOptions(required = false, projectOnly = false) {
     const seq = ++state.optionsSeq,
       query = new URLSearchParams();
     if (!state.selected && !state.project) {
@@ -330,7 +330,7 @@ export function createSessions({
       return;
     }
     if (state.project) query.set("project", state.project);
-    if (state.selected) query.set("thread", state.selected);
+    if (state.selected && !projectOnly) query.set("thread", state.selected);
     state.optionsLoaded = false;
     updateControls();
     try {
@@ -468,15 +468,21 @@ export function createSessions({
     updateControls();
     const generation = state.generation,
       current = () => id === state.selected && generation === state.generation;
-    if (state.session?.cwd)
+    if (state.session?.cwd) {
+      const windowsPath = /^[a-z]:[\\/]/i.test(state.session.cwd),
+        cwd = state.session.cwd.replaceAll("\\", "/"),
+        normalize = (value) => {
+          const path = value.replaceAll("\\", "/");
+          return windowsPath ? path.toLowerCase() : path;
+        };
       state.project =
         state.projects
-          .filter(
-            (path) =>
-              state.session.cwd === path ||
-              state.session.cwd.startsWith(path.replace(/[\\/]$/, "") + "/"),
-          )
+          .filter((path) => {
+            const root = normalize(path).replace(/\/$/, "");
+            return normalize(cwd) === root || normalize(cwd).startsWith(root + "/");
+          })
           .sort((a, b) => b.length - a.length)[0] || "";
+    }
     await Promise.all([
       loadOptions(),
       (async () => {
@@ -555,7 +561,7 @@ export function createSessions({
         executor: "background",
       };
     try {
-      const catalog = await loadOptions(true);
+      const catalog = await loadOptions(true, true);
       if (
         !catalog ||
         generation !== state.generation ||

@@ -26,7 +26,8 @@ for (const engine of engines)
         const errors = [],
           posts = [],
           agentHeaders = [],
-          project = "/work/my-project";
+          project = "C:\\work\\my-project",
+          optionThreads = [];
         let paired = false,
           created = false,
           turns = 0;
@@ -35,7 +36,7 @@ for (const engine of engines)
         const old = {
           id: "historical-session",
           title: "Historical conversation",
-          cwd: project,
+          cwd: project + "\\nested",
           last: new Date().toISOString(),
         };
         const fresh = {
@@ -49,6 +50,8 @@ for (const engine of engines)
             u = new URL(req.url());
           if (u.pathname.startsWith("/api/")) {
             const data = req.postData() ? req.postDataJSON() : {};
+            if (u.pathname === "/api/options")
+              optionThreads.push(u.searchParams.get("thread"));
             if (req.headers()["x-remote-agent"])
               agentHeaders.push({
                 path: u.pathname,
@@ -241,9 +244,9 @@ for (const engine of engines)
         );
         assert.equal(
           await page
-            .locator('.settings-link[href="/admin"]')
+            .locator('.settings-link[href="/account"]')
             .getAttribute("href"),
-          "/admin",
+          "/account",
         );
         assert.equal(
           new URL(page.url()).hash,
@@ -264,8 +267,15 @@ for (const engine of engines)
           .locator("#projects button")
           .filter({ hasText: project })
           .click();
+        const previousOptionCount = optionThreads.length;
         await page.locator("#new").click();
         await page.locator("#composer:visible").waitFor();
+        assert.equal(
+          optionThreads.at(-1),
+          null,
+          "new conversation capability check reused the selected session ID",
+        );
+        assert(optionThreads.length > previousOptionCount);
         await page.locator("#message").fill("Please inspect this project.");
         await page.locator("#send").click();
         await page.locator(".request").waitFor();

@@ -126,6 +126,86 @@ func TestPairingAnotherDevicePreservesLegacyGenericCookie(t *testing.T) {
 	assertSelectedDevice(t, client, ts, idB)
 }
 
+func TestPairingPreservesClientExpiryAndCapsRelaySession(t *testing.T) {
+	const lifetime = 30 * 24 * time.Hour
+	for _, tc := range []struct {
+		name     string
+		duration time.Duration
+		status   int
+	}{
+		{"client clock ahead", lifetime + time.Minute, http.StatusOK},
+		{"shorter client grant", time.Hour, http.StatusOK},
+		{"expired client grant", -time.Minute, http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ts := testRelay(t, "")
+			id, grant := strings.Repeat("a", 32), strings.Repeat("3", 32)
+			clientExpiry := time.Now().In(time.FixedZone("UTC+8", 8*60*60)).Add(tc.duration)
+			testClient(t, ts, id, strings.Repeat("1", 64), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var in sealedEnvelope
+				if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				sealed := sealTest(map[string]any{"id": grant, "expires_at": clientExpiry})
+				sealed.ID = in.ID
+				jsonReply(w, http.StatusOK, map[string]any{"grant": grant, "id": grant, "sealed": sealed, "expires_at": clientExpiry})
+			}))
+			before := time.Now()
+			res := request(t, browser(t), http.MethodPost, ts.URL+"/api/pair", pairBody(id))
+			defer res.Body.Close()
+			after := time.Now()
+			if res.StatusCode != tc.status {
+				t.Fatalf("pair status = %d, want %d", res.StatusCode, tc.status)
+			}
+			if tc.status != http.StatusOK {
+				s.mu.Lock()
+				count := len(s.state.Sessions)
+				s.mu.Unlock()
+				if len(res.Cookies()) != 0 || count != 0 {
+					t.Fatal("expired client grant created a relay session")
+				}
+				return
+			}
+			var result struct {
+				ExpiresAt string         `json:"expires_at"`
+				Sealed    sealedEnvelope `json:"sealed"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			var encrypted struct {
+				ExpiresAt string `json:"expires_at"`
+			}
+			if err := openTest(result.Sealed, &encrypted); err != nil {
+				t.Fatal(err)
+			}
+			if result.ExpiresAt != encrypted.ExpiresAt || result.ExpiresAt != clientExpiry.Format(time.RFC3339Nano) {
+				t.Fatal("relay changed the client expiry authenticated by the encrypted pairing reply")
+			}
+			cookies := res.Cookies()
+			if len(cookies) != 2 {
+				t.Fatal("pairing did not set both browser cookies")
+			}
+			for _, cookie := range cookies {
+				if cookie.MaxAge <= 0 || cookie.MaxAge > int(lifetime.Seconds()) || cookie.Expires.After(after.Add(lifetime)) || cookie.Expires.After(clientExpiry) {
+					t.Fatal("browser cookie exceeded the relay or client lifetime")
+				}
+			}
+			s.mu.Lock()
+			session := s.state.Sessions[digest(cookies[0].Value)]
+			s.mu.Unlock()
+			if session.ExpiresAt.After(after.Add(lifetime)) || session.ExpiresAt.After(clientExpiry) {
+				t.Fatal("relay session exceeded the relay or client lifetime")
+			}
+			if tc.duration > lifetime && session.ExpiresAt.Before(before.Add(lifetime)) || tc.duration < lifetime && !session.ExpiresAt.Equal(clientExpiry) {
+				t.Fatal("relay session did not retain the earlier expiry")
+			}
+		})
+	}
+}
+
 func TestPairingLimitsRememberedDevicesBeforeConsumingAuthorizationCode(t *testing.T) {
 	s, ts := testRelay(t, "")
 	r := httptest.NewRequest(http.MethodPost, ts.URL+"/api/pair", nil)
