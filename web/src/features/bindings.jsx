@@ -322,7 +322,14 @@ export function bindWorkspace({
     dismissRequest();
   });
   $("pendingRequest").onclick = () => {
-    if (!ownerCan("answer")) return;
+    if (
+      !ownerCan(
+        state.currentRequests[0]?.method === "agentMessage/questions"
+          ? "steer"
+          : "answer",
+      )
+    )
+      return;
     state.dismissedKey = "";
     $("requestDialog").showModal();
     $("pendingRequest").hidden = true;

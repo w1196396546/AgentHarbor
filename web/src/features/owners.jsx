@@ -176,7 +176,13 @@ export function createOwners({
     if (!ownerCan("plan"))
       for (const id of ["executePlanDialog", "revisePlanDialog"])
         if ($(id).open) $(id).close();
-    if (!ownerCan("answer")) {
+    if (
+      !ownerCan(
+        state.currentRequests[0]?.method === "agentMessage/questions"
+          ? "steer"
+          : "answer",
+      )
+    ) {
       if ($("requestDialog").open) $("requestDialog").close();
       $("pendingRequest").hidden = true;
     }

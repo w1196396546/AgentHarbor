@@ -178,3 +178,11 @@ macOS 可选共享启动及 `executor: "native"` 旧路径仍保留兼容，不�
 前端完整采用 Solid Glass 的 Message/Bubble、Composer、Panel、AskCard、Tool Steps、表单、附件、表格与空状态结构，统一 Lucide 图标；侧栏、菜单和原生 dialog 通过本地适配保持既有焦点及取消行为。页面布局遵循官方 Agent Workspace 的阅读列、侧栏与浮动检查面板结构。样式层级将旧行为尺寸置于 legacy 层，新外观及响应式布局集中于 remote-glass.css。设计对照及受限范围记录于根目录 design-qa.md。
 
 固定操作图标由 [`Workspace.jsx`](../web/src/views/Workspace.jsx) 与 [`Dialogs.jsx`](../web/src/views/Dialogs.jsx) 直接使用共享 `RemoteIcon` 渲染，不依赖翻译或连接初始化补画；[`controller.jsx`](../web/src/controller.jsx) 只更新随当前适配器变化的 Agent 标识。手机抽屉侧栏、文件/更改面板及文件预览使用不透明背景，避免覆盖正文时透字；图标按钮、发送/停止及手机输入设置按钮保留底色与边线。账户/管理页长名称可换行，账户工具栏可折行，手机按钮至少 44px 高。回归位于 [`remote-workspace.test.cjs`](../tests/remote-workspace.test.cjs) 和 [`account.test.cjs`](../tests/account.test.cjs)，覆盖两浏览器、深浅主题、320/390px、静态 SVG 及其实际绘制/尺寸/父级透明度、浮层不透明度及按钮边界；真实 iPhone Safari 的键盘与安全区仍需实机验收。
+
+## 共享 App 的异步提问
+
+网页同时支持 `item/tool/requestUserInput` 等待型提问和原 App `agentMessage.questions` 异步提问。后者在当前 `inProgress` 轮次中使用 `{title, options: string[]}`；问题身份为 `JSON.stringify(["request_user_input_async", sourceItemId, questionIndex])`。网页复用既有问答弹窗，支持选项、自由文本及多题提交，关闭后可从待处理按钮继续作答。
+
+异步回答使用 `<send_user_message_question_reply>` 包裹 JSON 数组，每项为 `{questionItemId,question,answer}`，沿既有 `/api/threads/{id}/steer` 提交并携带点击时的 `expected_turn_id` 和 owner epoch；只在实际 owner 可引导时允许操作。等待型提问继续使用 `/answer`。没有自动提交、自动重发、创建第二个 owner 或切换桌面聊天。回答以可读问答显示；只有正式 userMessage 或 accepted steeringUserMessage 才消除对应题目，刷新不重新发送。旧轮次或已结束轮次不显示异步问题。
+
+协议证据：安装版 Codex `26.1013.40934`（build `20770`），`app.asar` SHA-256 `5ddc4e48259aa6f979e04529b1a5a4ae54b0f5c4ad6db5c6e004924c10916ddb`。其 `app-initial-90eb42395b7d.js` 的问题映射/回复编码、`app-primary-b4ce9e46e8cf.js` 的 send-now 提交，以及 `src-DsLVGakC.js` 的已接受回复识别提供字段和状态依据；未读取日常会话或凭据。实现见 [codex-questions.js](../web/src/agents/codex-questions.js)、[approvals.jsx](../web/src/features/approvals.jsx)，回归见 [codex-questions.test.cjs](../tests/codex-questions.test.cjs) 和 [remote-workspace.test.cjs](../tests/remote-workspace.test.cjs)。同一网页/owner 协议用于 macOS 与 Windows；Windows App 实机行为仍需单独验收。

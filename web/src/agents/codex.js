@@ -1,3 +1,9 @@
+import {
+  asyncQuestions,
+  asyncQuestionReply,
+  questionReplies,
+} from "./codex-questions";
+
 function displayUserContent(content) {
   const quote = '("(?:[^"\\\\]|\\\\.)*")';
   const patterns = [
@@ -30,6 +36,14 @@ function displayUserContent(content) {
   ];
   return content.map((part) => {
     if (part.type !== "text" || typeof part.text !== "string") return part;
+    const replies = questionReplies(part.text);
+    if (replies)
+      return {
+        ...part,
+        text: replies
+          .map((reply) => reply.question + "\n" + reply.answer)
+          .join("\n\n"),
+      };
     for (const [type, pattern] of patterns) {
       const match = part.text.match(pattern);
       if (!match) continue;
@@ -165,12 +179,15 @@ export const codex = {
   requestKind: (request) =>
     ({
       "item/tool/requestUserInput": "question",
+      "agentMessage/questions": "question",
       "mcpServer/elicitation/request": "elicitation",
       "item/permissions/requestApproval": "permissions",
     })[request.method] || "approval",
   isAppConsent: (params) =>
     params._meta?.codex_approval_kind === "mcp_tool_call" &&
     params._meta.connector_id === "computer-use",
+  asyncQuestions,
+  asyncQuestionReply,
   displayUserContent,
   appConsentOf,
   permissionProfiles,

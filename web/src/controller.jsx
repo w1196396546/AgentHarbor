@@ -270,7 +270,11 @@ export function startRemote() {
     const label = state.archivedSelection
       ? "Archived"
       : requests?.length
-        ? !ownerCan("answer")
+        ? !ownerCan(
+            requests[0]?.method === "agentMessage/questions"
+              ? "steer"
+              : "answer",
+          )
           ? "Waiting in original app"
           : "Waiting for you"
         : status === "inProgress" || status === "starting"
@@ -472,7 +476,10 @@ export function startRemote() {
     applyLiveQueue(live);
     state.turnID = live.turn_id || "";
     state.running = ["starting", "inProgress"].includes(live.status);
-    state.currentRequests = live.requests || [];
+    state.currentRequests = [
+      ...(live.requests || []),
+      ...(getAgent().asyncQuestions?.(live) || []),
+    ];
     renderOwner();
     if (state.session && typeof live.title === "string" && live.title.trim())
       state.session.title = live.title;

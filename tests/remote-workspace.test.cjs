@@ -7351,6 +7351,227 @@ for (const engine of engines) {
     await f.clean();
   });
 
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"])
+    test(`${engine} ${locale}: shared App async questions open a dialog and send identified answers to the active turn`, async (t) => {
+      const questions = [
+        { title: "Which computer?", options: ["Windows", "macOS"] },
+        { title: "When did it fail?", options: [] },
+      ];
+      const ids = questions.map((_, index) =>
+        JSON.stringify(["request_user_input_async", "app-question", index]),
+      );
+      const f = await fixture(t, engine, {
+        locale,
+        width: 390,
+        state: {
+          live: {
+            status: "inProgress",
+            turn_id: "shared-turn",
+            requests: [],
+            owner: {
+              kind: "native",
+              state: "connected",
+              epoch: "shared-owner",
+              capabilities: {
+                send: true,
+                queue: true,
+                steer: true,
+                answer: false,
+              },
+            },
+            items: [
+              {
+                id: "app-question",
+                type: "agentMessage",
+                turn_id: "shared-turn",
+                text: "I need some details.",
+                data: { questions },
+              },
+            ],
+          },
+        },
+      });
+      const { page, seen } = f;
+      await page.locator("#sidebarToggle").click();
+      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator("#requestDialog[open]").waitFor();
+      await page.getByText("Which computer?", { exact: true }).waitFor();
+      await page
+        .locator('#requests input[type="radio"][value="Windows"]')
+        .check();
+      await page
+        .getByRole("textbox", { name: "When did it fail?" })
+        .fill("After opening the link.");
+      if (locale === "zh-CN")
+        await screenshot(page, `shared-questions-${engine}.png`);
+      await page.keyboard.press("Escape");
+      await page.locator("#pendingRequest").click();
+      assert.equal(
+        await page
+          .getByRole("textbox", { name: "When did it fail?" })
+          .inputValue(),
+        "After opening the link.",
+      );
+      await page.locator('#requests button[type="submit"]').click();
+      await page.locator("#requestDialog").waitFor({ state: "hidden" });
+      const sent = seen.posts.filter((post) => post.path.endsWith("/steer"));
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].ownerEpoch, "shared-owner");
+      assert.equal(sent[0].data.expected_turn_id, "shared-turn");
+      assert.deepEqual(sent[0].data, {
+        text:
+          "<send_user_message_question_reply>\n" +
+          JSON.stringify([
+            {
+              questionItemId: ids[0],
+              question: questions[0].title,
+              answer: "Windows",
+            },
+            {
+              questionItemId: ids[1],
+              question: questions[1].title,
+              answer: "After opening the link.",
+            },
+          ]) +
+          "\n</send_user_message_question_reply>",
+        expected_turn_id: "shared-turn",
+      });
+      assert.equal(
+        seen.posts.filter((post) => post.path.endsWith("/answer")).length,
+        0,
+      );
+      const bubble = page.locator('#live [data-id="follow-up"]');
+      assert.match(await bubble.innerText(), /Which computer\?\s+Windows/);
+      assert(
+        !(await bubble.innerText()).includes("send_user_message_question_reply"),
+      );
+      // Refresh must recognize the accepted reply rather than reopen or resend.
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      );
+      await page.getByText("I need some details.", { exact: true }).waitFor();
+      assert.equal(
+        await page.locator("#requestDialog").evaluate((dialog) => dialog.open),
+        false,
+      );
+      assert.equal(
+        seen.posts.filter((post) => post.path.endsWith("/steer")).length,
+        1,
+      );
+      await f.clean();
+    });
+
+  test(`${engine}: streamed async questions follow App answers and retire with their turn`, async (t) => {
+    const owner = {
+      kind: "native",
+      state: "connected",
+      epoch: "app-owner",
+      capabilities: {
+        send: true,
+        steer: true,
+        answer: true,
+      },
+    };
+    const f = await fixture(t, engine, {
+      streaming: true,
+      catalog: { capabilities: { ...catalog.capabilities, streaming: true } },
+      state: {
+        live: {
+          status: "inProgress",
+          turn_id: "app-turn",
+          items: [],
+          requests: [],
+          owner,
+        },
+      },
+    });
+    const { page, seen } = f;
+    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.waitForFunction(() => window.fixtureStreams.length === 1);
+    const question = {
+      id: "stream-question",
+      type: "agentMessage",
+      turn_id: "app-turn",
+      text: "Working while you decide.",
+      data: {
+        questions: [{ title: "Choose a system", options: ["macOS", "Windows"] }],
+      },
+    };
+    await page.evaluate(
+      (item) => window.fixtureStreams[0].emit({ items: [item], state: {} }),
+      question,
+    );
+    await page.locator("#requestDialog[open]").waitFor();
+    await page
+      .getByRole("textbox", { name: "Choose a system" })
+      .fill("Windows details");
+    await page.evaluate(() =>
+      window.fixtureStreams[0].emit({
+        items: [
+          {
+            id: "progress",
+            type: "agentMessage",
+            text: "Still investigating.",
+          },
+        ],
+        state: {},
+      }),
+    );
+    assert.equal(
+      await page.getByRole("textbox", { name: "Choose a system" }).inputValue(),
+      "Windows details",
+    );
+    const text =
+      "<send_user_message_question_reply>\n" +
+      JSON.stringify({
+        questionItemId: '["request_user_input_async","stream-question",0]',
+        question: "Choose a system",
+        answer: "Answered in the App",
+      }) +
+      "\n</send_user_message_question_reply>";
+    await page.evaluate(
+      (text) =>
+        window.fixtureStreams[0].emit({
+          items: [
+            {
+              id: "app-answer",
+              type: "userMessage",
+              data: { content: [{ type: "text", text }] },
+            },
+          ],
+          state: {},
+        }),
+      text,
+    );
+    await page.locator("#requestDialog").waitFor({ state: "hidden" });
+    await page
+      .locator('#live [data-id="app-answer"]')
+      .filter({ hasText: "Answered in the App" })
+      .waitFor();
+    await page.evaluate(
+      (item) =>
+        window.fixtureStreams[0].emit({
+          items: [item],
+          remove: ["app-answer"],
+          state: {
+            status: "inProgress",
+            turn_id: "next-turn",
+          },
+        }),
+      question,
+    );
+    await page.getByText("Working while you decide.", { exact: true }).waitFor();
+    assert.equal(
+      await page.locator("#requestDialog").evaluate((d) => d.open),
+      false,
+    );
+    assert.equal(
+      seen.posts.filter((post) => /\/(steer|answer)$/.test(post.path)).length,
+      0,
+    );
+    await f.clean();
+  });
+
   test(`${engine}: another pending request preserves the answer being composed`, async (t) => {
     const first = {
       id: "first-question",

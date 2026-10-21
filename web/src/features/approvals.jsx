@@ -26,7 +26,9 @@ export function createApprovals({
     state.currentRequests = [];
   }
   function renderRequests(requests) {
-    if (!ownerCan("answer")) {
+    const operation =
+      requests[0]?.method === "agentMessage/questions" ? "steer" : "answer";
+    if (!ownerCan(operation)) {
       if ($("requestDialog").open) $("requestDialog").close();
       $("pendingRequest").hidden = true;
       return;
@@ -53,6 +55,8 @@ export function createApprovals({
     state.currentRequests = requests;
     const request = requests[0],
       epoch = ownerEpoch(),
+      sessionID = state.selected,
+      generation = state.generation,
       p = request.params || {},
       question = getAgent().requestKind(request) === "question",
       elicitation = getAgent().requestKind(request) === "elicitation",
@@ -70,17 +74,37 @@ export function createApprovals({
             : "Approval required",
     );
     const answer = async (value) => {
-      requireOwner("answer");
-      if (epoch !== ownerEpoch())
+      requireOwner(operation);
+      if (
+        epoch !== ownerEpoch() ||
+        sessionID !== state.selected ||
+        generation !== state.generation
+      )
         throw new Error(
           "The original application changed. Review the current request before answering.",
         );
-      await api("threads/" + encodeURIComponent(state.selected) + "/answer", {
-        id: request.id,
-        ...value,
-      });
-      state.requestKey = "";
-      await detail(state.generation);
+      const asyncQuestion = request.method === "agentMessage/questions";
+      if (asyncQuestion && (p.turn_id !== state.turnID || !state.running))
+        throw new Error("The running turn changed. Review it before steering.");
+      await api(
+        "threads/" +
+          encodeURIComponent(sessionID) +
+          (asyncQuestion ? "/steer" : "/answer"),
+        asyncQuestion
+          ? {
+              text: getAgent().asyncQuestionReply(p.questions, value.answers),
+              expected_turn_id: p.turn_id,
+            }
+          : { id: request.id, ...value },
+      );
+      if (
+        sessionID === state.selected &&
+        generation === state.generation &&
+        epoch === ownerEpoch()
+      ) {
+        state.requestKey = "";
+        await detail(generation);
+      }
     };
     let content,
       submit = (event) => event.preventDefault();
