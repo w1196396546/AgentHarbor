@@ -53,7 +53,7 @@ async function drag(page, delta) {
 
 for (const engine of engines) {
   test(engine + ': recent sessions refresh online and on return without losing loaded pages or drafts', async t => {
-    const session = id => ({id, title:id, cwd:'/other', last:'2026-10-20T08:00:00Z'});
+    const session = id => ({id, title:id, cwd:'/work/shop', project_id:'shop', last:'2026-10-20T08:00:00Z'});
     let rows = ['yesterday', 'older', 'oldest'].map(session);
     const offsets = [];
     const {page, clean} = await fixture(t, engine, 'en-US', url => {
@@ -62,14 +62,15 @@ for (const engine of engines) {
       const next = Math.min(offset + 2, rows.length);
       return {projects:['/work/shop'], sidebar_projects:[{id:'shop',name:'Shop',root_paths:['/work/shop']}], sessions:rows.slice(offset,next), next, has_more:next < rows.length};
     }, true);
-    const ids = () => page.locator('.project-group[data-path="recent"] [data-id]').evaluateAll(nodes => nodes.map(node => node.dataset.id));
+    const recent = page.locator('.project-group[data-path="recent"]');
+    const ids = () => recent.locator('[data-id]').evaluateAll(nodes => nodes.map(node => node.dataset.id));
     await page.locator('#more').click();
-    await page.locator('[data-id="oldest"]').waitFor();
+    await recent.locator('[data-id="oldest"]').waitFor();
     await page.locator('#message').evaluate(node => { node.value = 'Keep this draft'; });
     await page.locator('.project-collection > summary').click();
     rows = [{...session('today'),last:'2026-10-21T08:00:00Z'}, ...rows];
     await page.clock.fastForward(11000);
-    await page.locator('[data-id="today"]').waitFor();
+    await recent.locator('[data-id="today"]').waitFor();
     assert.equal(await page.locator('#message').inputValue(), 'Keep this draft');
     assert.deepEqual(await ids(), ['today','yesterday','older','oldest']);
     assert.equal(await page.locator('.project-collection').getAttribute('open'), null);
@@ -78,12 +79,18 @@ for (const engine of engines) {
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await page.waitForFunction(() => document.getElementById('sessionCount').textContent === '4');
     await page.locator('#search').fill('');
-    await page.locator('[data-id="returned"]').waitFor();
+    await recent.locator('[data-id="returned"]').waitFor();
     assert.deepEqual(await ids(), ['returned','today','yesterday','older']);
     await page.locator('#more').click();
-    await page.locator('[data-id="oldest"]').waitFor();
+    await recent.locator('[data-id="oldest"]').waitFor();
     assert.deepEqual(await ids(), ['returned','today','yesterday','older','oldest']);
     assert.deepEqual(offsets, [0,2,0,2,0,2,4]);
+    rows = [{...rows.find(row => row.id === 'older'), title:'Updated project conversation', last:'2026-10-22T08:00:00Z'}, ...rows.filter(row => row.id !== 'older')];
+    await page.clock.fastForward(11000);
+    await page.waitForFunction(() => document.querySelector('[data-path="recent"] [data-id="older"]').textContent.includes('Updated project conversation'));
+    assert.deepEqual(await ids(), ['older','returned','today','yesterday','oldest']);
+    assert.match(await page.locator('[data-path="project:shop"] [data-id="older"]').textContent(), /Updated project conversation/);
+    assert.equal(await page.locator('#message').inputValue(), 'Keep this draft');
     await clean();
   });
 
@@ -123,7 +130,7 @@ for (const engine of engines) {
     await panelWidth(Number(await handle.getAttribute('aria-valuemax')));
     await page.setViewportSize({width:1000,height:850});
     await panelWidth(710);
-    assert.equal(await page.locator('#sidebar').evaluate(node => Math.round(node.getBoundingClientRect().width)),244);
+    await width(page, 244);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await handle.isVisible(), false);
     assert(await panel.evaluate(node => node.getBoundingClientRect().width <= innerWidth - 20));
@@ -151,11 +158,12 @@ for (const engine of engines) {
     const docs = page.locator('.project-group[data-path="project:docs"]');
     await shop.locator(':scope > summary').click();
     assert.equal(await shop.getAttribute('open'), null);
-    assert(await page.locator('[data-id="docs-chat"]').isVisible());
+    assert(await docs.locator('[data-id="docs-chat"]').isVisible());
     await projects.locator(':scope > summary').click();
     await page.waitForFunction(() => document.querySelector('.project-collection').open === false);
-    assert.equal(await page.locator('[data-id="docs-chat"]').isVisible(), false);
-    assert(await page.locator('[data-id="pin"]').isVisible());
+    assert.equal(await docs.locator('[data-id="docs-chat"]').isVisible(), false);
+    assert(await page.locator('[data-path="pinned"] [data-id="pin"]').isVisible());
+    assert(await page.locator('[data-path="recent"] [data-id="docs-chat"]').isVisible());
     assert(await page.locator('[data-id="recent-chat"]').isVisible());
     await page.locator('#refresh').click();
     await page.waitForFunction(() => document.querySelector('.project-collection')?.open === false);
@@ -165,8 +173,8 @@ for (const engine of engines) {
     await docs.locator(':scope > summary').click();
     assert.equal(await docs.getAttribute('open'), null);
     await shop.locator(':scope > summary').click();
-    assert(await page.locator('[data-id="shop-chat"]').isVisible());
-    assert.equal(await page.locator('[data-id="docs-chat"]').isVisible(), false);
+    assert(await shop.locator('[data-id="shop-chat"]').isVisible());
+    assert.equal(await docs.locator('[data-id="docs-chat"]').isVisible(), false);
     await clean();
   });
 

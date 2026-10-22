@@ -170,13 +170,19 @@ export function createSessions({
           project,
           sessions: [],
         });
-      groups.set("recent", { name: t("Recent"), icon: "clock", sessions: [] });
+      groups.set("recent", {
+        name: t("Recent"),
+        icon: "clock",
+        sessions: [...rows].sort(
+          (a, b) => (Date.parse(b.last) || 0) - (Date.parse(a.last) || 0),
+        ),
+      });
       for (const session of rows) {
         const key =
           session.pinned || pinned.has(session.id)
             ? "pinned"
             : "project:" + session.project_id;
-        (groups.get(key) || groups.get("recent")).sessions.push(session);
+        groups.get(key)?.sessions.push(session);
       }
     } else {
       for (const session of rows) {
