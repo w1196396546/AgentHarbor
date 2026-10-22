@@ -2,7 +2,7 @@ import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
-import { ThemeToggle } from "../theme";
+import { ThemeToggle, StyleToggle } from "../theme";
 import { DeviceSwitcher } from "../components/DeviceSwitcher";
 
 export function Pairing() {
@@ -12,7 +12,12 @@ export function Pairing() {
       <Panel
         id="pair"
         title="anywhereToAgent"
-        actions={<ThemeToggle />}
+        actions={
+          <div style={{ display: "inline-flex", gap: "4px" }}>
+            <StyleToggle />
+            <ThemeToggle />
+          </div>
+        }
         hidden
         className="pair-card"
       >

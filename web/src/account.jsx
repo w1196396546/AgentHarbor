@@ -20,7 +20,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "./components/ui/empty";
-import { ThemeToggle, applyTheme } from "./theme";
+import { ThemeToggle, StyleToggle, applyTheme } from "./theme";
 import "./styles/admin.css";
 import "./styles/account.css";
 
@@ -80,7 +80,9 @@ function AccountApp() {
     }
   }
   return (
-    <main className="admin-dashboard account-dashboard">
+    <main
+      className={`admin-dashboard account-dashboard ${!account ? "account-auth-view" : ""}`}
+    >
       <section className="admin-main">
         <div className="admin-content">
           <header className="admin-page-heading">
@@ -94,7 +96,10 @@ function AccountApp() {
               </p>
               {account?.user.username && <p>{account.user.email}</p>}
             </div>
-            <ThemeToggle />
+            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+              <StyleToggle />
+              <ThemeToggle />
+            </div>
           </header>
           <p role="alert" className="admin-notice" hidden={!notice}>
             {notice}

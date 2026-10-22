@@ -2459,6 +2459,9 @@ for (const engine of engines) {
     );
     await page.clock.fastForward(10000);
     await checked;
+    await page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/sessions",
+    );
     assert.equal(
       seen.options.length,
       2,

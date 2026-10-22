@@ -19,7 +19,7 @@ import {
   Sidebar,
   DecisionSurface,
 } from "../components/workspace-surfaces";
-import { ThemeToggle } from "../theme";
+import { ThemeToggle, StyleToggle } from "../theme";
 import { DeviceSwitcher } from "../components/DeviceSwitcher";
 
 export function Workspace() {
@@ -111,6 +111,7 @@ export function Workspace() {
                 <span data-t="My account and devices"></span>
               </a>
               <ThemeToggle />
+              <StyleToggle />
               <Button
                 variant="ghost"
                 id="language"

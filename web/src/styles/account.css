@@ -1,11 +1,35 @@
 .account-dashboard {
   grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+}
+.account-dashboard .admin-main {
+  width: 100%;
 }
 .account-dashboard .admin-content {
   max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+}
+.account-dashboard.account-auth-view .admin-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 85vh;
+}
+.account-dashboard.account-auth-view .admin-content {
+  max-width: 480px;
+  width: 100%;
+  margin: 4vh auto;
+  padding: 0 16px;
+}
+.account-dashboard.account-auth-view .admin-page-heading {
+  margin-bottom: 24px;
 }
 .account-login-panel {
   max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
 }
 .account-login-form {
   display: grid;
@@ -59,9 +83,16 @@
   font-size: 12px;
 }
 .account-footer {
+  display: flex;
   flex-wrap: wrap;
   gap: 24px;
   justify-content: flex-start;
+  margin-top: 24px;
+}
+.account-dashboard.account-auth-view .account-footer {
+  justify-content: center;
+  align-items: center;
+  margin-top: 28px;
 }
 @media (max-width: 640px) {
   .account-login-form {

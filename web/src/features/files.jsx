@@ -1,5 +1,153 @@
+import { useState, useMemo } from "react";
 import { renderView, clearView } from "../render";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
+
+function buildFileTree(files) {
+  const root = {
+    name: "",
+    relative: "",
+    isDirectory: true,
+    children: new Map(),
+    files: [],
+  };
+
+  for (const file of files) {
+    const rawRel = (file.relative || file.name || file.path || "").replace(
+      /^\/+/,
+      "",
+    );
+    const parts = rawRel.split("/").filter(Boolean);
+    if (!parts.length) continue;
+
+    let current = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      const dirRel = parts.slice(0, i + 1).join("/");
+      if (!current.children.has(part)) {
+        current.children.set(part, {
+          name: part,
+          path: dirRel,
+          relative: dirRel,
+          isDirectory: true,
+          children: new Map(),
+          files: [],
+        });
+      }
+      current = current.children.get(part);
+    }
+
+    const lastPart = parts[parts.length - 1];
+    if (file.directory) {
+      if (!current.children.has(lastPart)) {
+        current.children.set(lastPart, {
+          name: lastPart,
+          path: file.path,
+          relative: rawRel,
+          isDirectory: true,
+          children: new Map(),
+          files: [],
+        });
+      }
+    } else {
+      current.files.push({
+        ...file,
+        name: lastPart,
+        relative: rawRel,
+        isDirectory: false,
+      });
+    }
+  }
+
+  return root;
+}
+
+function FileTree({ files, onOpenFile, isSearching, Action }) {
+  const tree = useMemo(() => buildFileTree(files), [files]);
+
+  // Expand top-level directories by default so immediate files and folders are visible
+  const [expanded, setExpanded] = useState(() => {
+    return new Set(Array.from(tree.children.values()).map((d) => d.relative));
+  });
+
+  const toggle = (dirPath) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) {
+        next.delete(dirPath);
+      } else {
+        next.add(dirPath);
+      }
+      return next;
+    });
+  };
+
+  function renderDir(dir, depth = 0) {
+    const isOpen = isSearching || expanded.has(dir.relative);
+    const subDirs = Array.from(dir.children.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    const subFiles = dir.files
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const count = subDirs.length + subFiles.length;
+
+    return (
+      <div key={dir.relative} className="file-tree-branch">
+        <button
+          type="button"
+          className="file-tree-node file-tree-dir"
+          style={{ paddingLeft: `${depth * 14 + 6}px` }}
+          onClick={() => toggle(dir.relative)}
+          aria-expanded={isOpen}
+          title={dir.relative}
+        >
+          <span className={`file-tree-arrow ${isOpen ? "open" : ""}`}>
+            <Icon name="chevron" />
+          </span>
+          <Icon name="folder" />
+          <span className="file-tree-label">{dir.name}</span>
+          <span className="file-tree-count">{count}</span>
+        </button>
+        {isOpen && (
+          <div className="file-tree-children">
+            {subDirs.map((sub) => renderDir(sub, depth + 1))}
+            {subFiles.map((file) => renderFile(file, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderFile(file, depth = 0) {
+    return (
+      <Action
+        key={file.path || file.relative}
+        className="file-list-button file-tree-node file-tree-file"
+        title={file.path || file.relative}
+        style={{ paddingLeft: `${depth * 14 + 20}px` }}
+        action={() => onOpenFile(file.path)}
+      >
+        <Icon name="file" />
+        <span className="file-path">{file.name}</span>
+        <span className="sr-only">{file.relative}</span>
+      </Action>
+    );
+  }
+
+  const rootDirs = Array.from(tree.children.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const rootFiles = tree.files
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="file-tree-root">
+      {rootDirs.map((dir) => renderDir(dir, 0))}
+      {rootFiles.map((file) => renderFile(file, 0))}
+    </div>
+  );
+}
 
 export function createFiles({
   state,
@@ -23,12 +171,13 @@ export function createFiles({
     const id = state.selected,
       project = state.project,
       seq = ++state.filesSeq;
+    const searchValue = $("filesSearch")?.value || "";
     const value = await api(
       "files?" +
         new URLSearchParams({
           project,
           ...(id ? { thread: id } : {}),
-          q: $("filesSearch").value,
+          q: searchValue,
         }),
     );
     if (
@@ -41,22 +190,14 @@ export function createFiles({
     renderView(
       $("fileList"),
       <>
-        {files.map((file) => (
-          <Action
-            key={file.path}
-            className="file-list-button"
-            title={file.path}
-            action={() =>
-              file.directory
-                ? browseFolder(file.relative || file.name)
-                : openProjectFile(file.path)
-            }
-          >
-            <Icon name={file.directory ? "folder" : "file"} />
-            <span className="file-path">{file.relative || file.name}</span>
-          </Action>
-        ))}
-        {!files.length && (
+        {files.length ? (
+          <FileTree
+            files={files}
+            onOpenFile={openProjectFile}
+            isSearching={Boolean(searchValue.trim())}
+            Action={Action}
+          />
+        ) : (
           <p className="menu-note">{t("No matching files or tools.")}</p>
         )}
         {value.truncated && (

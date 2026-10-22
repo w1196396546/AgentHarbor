@@ -81,7 +81,10 @@ export function DeviceSwitcher({ pairRequested = false }) {
       devices.map(async (device) => {
         try {
           const response = await fetch("/api/device", {
-            headers: { "X-Remote-Device": device.device_id },
+            headers: {
+              "X-Remote-Device": device.device_id,
+              "X-Codex-Remote": "1",
+            },
             cache: "no-store",
             signal: controller.signal,
           });
