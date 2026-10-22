@@ -405,6 +405,7 @@ export function Workspace() {
               ></p>
               <div id="queueList"></div>
             </section>
+            <form id="composer" hidden>
             <div id="subagentsBar" className="subagents-bar" hidden>
               <Button
                 variant="ghost"
@@ -420,7 +421,6 @@ export function Workspace() {
                 <Icon name="chevron" />
               </Button>
             </div>
-            <form id="composer" hidden>
               <ComposerSurface>
                 <div id="attachments" className="attachment-list" />
                 <div className="composer-line">

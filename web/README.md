@@ -100,3 +100,5 @@ for trust boundaries and [development conventions](../AGENTS.md) for scope and c
 
 [Design QA](../design-qa.md) and [question compatibility QA](../docs/shared-questions-qa.md)
 are historical evidence with their own limitations, not current release sign-off.
+
+Built HTML uses content-versioned JS/CSS URLs so deployments bypass stale browser or proxy caches.

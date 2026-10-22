@@ -2595,22 +2595,19 @@ body.inspector-resizing #changesResize::after {
   }
   #composer {
     position: relative;
+    padding-top: 54px;
   }
   .composer-toolbar .composer-left {
     display: contents;
   }
   .composer-toolbar #permission {
     position: absolute;
-    bottom: calc(100% + 10px);
+    top: 0;
     left: 4px;
     z-index: 4;
     min-height: 44px;
     max-width: calc(100% - 12px);
     background-color: var(--popover);
-  }
-  /* Reserve the floating permission control's 44px height and 10px gap. */
-  .composer-dock .subagents-bar {
-    margin-bottom: 62px;
   }
   .composer-chip {
     font-size: 11px;

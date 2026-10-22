@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
-import { copyFile, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 for (const name of ["remote", "admin", "account"]) {
   await build({
@@ -25,11 +26,19 @@ for (const name of ["remote", "admin", "account"]) {
     },
   });
 }
-for (const name of ["index", "admin", "account"])
-  await copyFile(
-    root + `web/${name}.html`,
-    root + `internal/relay/assets/${name}.html`,
-  );
+// Content versions bypass browser/proxy caches that retain fixed asset URLs.
+for (const name of ["index", "admin", "account"]) {
+  const entry = name === "index" ? "remote" : name;
+  let html = await readFile(root + `web/${name}.html`, "utf8");
+  for (const ext of ["css", "js"]) {
+    const asset = `${entry}.${ext}`;
+    const hash = createHash("sha256")
+      .update(await readFile(root + `internal/relay/assets/${asset}`))
+      .digest("hex").slice(0, 16);
+    html = html.replaceAll(`${asset}"`, `${asset}?v=${hash}"`);
+  }
+  await writeFile(root + `internal/relay/assets/${name}.html`, html);
+}
 
 await writeFile(
   root + "internal/relay/assets/THIRD-PARTY-NOTICES.txt",
