@@ -2608,6 +2608,10 @@ body.inspector-resizing #changesResize::after {
     max-width: calc(100% - 12px);
     background-color: var(--popover);
   }
+  /* Reserve the floating permission control's 44px height and 10px gap. */
+  .composer-dock .subagents-bar {
+    margin-bottom: 62px;
+  }
   .composer-chip {
     font-size: 11px;
     padding-inline: 6px;
