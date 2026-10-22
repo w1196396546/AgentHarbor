@@ -2593,6 +2593,21 @@ body.inspector-resizing #changesResize::after {
     padding: 2px 0 0;
     row-gap: 3px;
   }
+  #composer {
+    position: relative;
+  }
+  .composer-toolbar .composer-left {
+    display: contents;
+  }
+  .composer-toolbar #permission {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 4px;
+    z-index: 4;
+    min-height: 44px;
+    max-width: calc(100% - 12px);
+    background-color: var(--popover);
+  }
   .composer-chip {
     font-size: 11px;
     padding-inline: 6px;
