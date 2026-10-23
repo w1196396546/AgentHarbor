@@ -60,7 +60,7 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	s.wg.Add(1)
 	s.mu.Unlock()
 	defer s.wg.Done()
-	if !s.allowAttempt("connect", r.RemoteAddr, 30) {
+	if !s.allowAttempt("connect", s.clientIP(r), 30) {
 		failure(w, http.StatusTooManyRequests, "Too many client connections; try again later")
 		return
 	}

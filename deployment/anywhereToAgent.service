@@ -1,3 +1,4 @@
+# User service template. A system unit must set User= explicitly.
 [Unit]
 Description=anywhereToAgent relay
 After=network-online.target
@@ -9,6 +10,12 @@ ExecStart=%h/.local/bin/anywhereToAgent --data-dir %h/.local/share/anywhereToAge
 Restart=on-failure
 RestartSec=5
 UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/anywhereToAgent
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 [Install]
 WantedBy=default.target

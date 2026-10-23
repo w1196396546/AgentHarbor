@@ -1,3 +1,4 @@
+import { normalizeFilePath } from "./presentation";
 import { useState, useMemo } from "react";
 import { renderView, clearView } from "../render";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
@@ -61,7 +62,7 @@ function buildFileTree(files) {
   return root;
 }
 
-function FileTree({ files, onOpenFile, isSearching, Action }) {
+export function FileTree({ files, onOpenFile, isSearching, Action }) {
   const tree = useMemo(() => buildFileTree(files), [files]);
 
   // Expand top-level directories by default so immediate files and folders are visible
@@ -121,11 +122,11 @@ function FileTree({ files, onOpenFile, isSearching, Action }) {
   function renderFile(file, depth = 0) {
     return (
       <Action
-        key={file.path || file.relative}
+        key={file.changeKey || file.path || file.relative}
         className="file-list-button file-tree-node file-tree-file"
         title={file.path || file.relative}
         style={{ paddingLeft: `${depth * 14 + 20}px` }}
-        action={() => onOpenFile(file.path)}
+        action={() => onOpenFile(file.path, file)}
       >
         <Icon name="file" />
         <span className="file-path">{file.name}</span>
@@ -193,7 +194,7 @@ export function createFiles({
         {files.length ? (
           <FileTree
             files={files}
-            onOpenFile={openProjectFile}
+            onOpenFile={(path) => openProjectFile(path)}
             isSearching={Boolean(searchValue.trim())}
             Action={Action}
           />
@@ -223,6 +224,47 @@ export function createFiles({
     for (const url of state.filePreviewURLs || []) URL.revokeObjectURL(url);
     state.filePreviewURLs = [];
   }
+  async function resourceError(response) {
+    let raw = "";
+    try {
+      const reader = response.body?.getReader();
+      if (reader) {
+        const decoder = new TextDecoder();
+        let remaining = 2048;
+        try {
+          while (remaining > 0) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const part = value.subarray(0, remaining);
+            raw += decoder.decode(part, { stream: true });
+            remaining -= part.length;
+          }
+        } finally {
+          await reader.cancel();
+        }
+      } else raw = (await response.text()).slice(0, 2048);
+    } catch {}
+    let detail = raw.trim();
+    try {
+      const value = JSON.parse(detail);
+      detail = typeof value.error === "string" ? value.error : "";
+    } catch {
+      if (/<(?:html|!doctype)\b/i.test(detail)) detail = "";
+    }
+    const label =
+      {
+        401: "Resource unavailable: browser authorization required.",
+        403: "Resource unavailable: access denied.",
+        404: "Resource unavailable: file or attachment not found.",
+        410: "Resource unavailable: the session or resource is no longer available.",
+        413: "Resource unavailable: file exceeds the size limit.",
+        503: "Resource unavailable: the computer or service is unavailable.",
+      }[response.status] || "Resource unavailable (HTTP {status}).";
+    return new Error(
+      t(label).replace("{status}", String(response.status)) +
+        (detail ? " " + t(detail.replace(/\s+/g, " ").slice(0, 300)) : ""),
+    );
+  }
   async function projectFileBlob(path, extra = {}) {
     const response = await window.RemoteSecure.fetch(
       projectFileURL(path, extra),
@@ -230,11 +272,16 @@ export function createFiles({
         headers: { "X-Remote-Agent": getAgent().id },
       },
     );
-    if (!response.ok) throw new Error("Connection failed.");
+    if (!response.ok) throw await resourceError(response);
     return response.blob();
   }
   async function openProjectFile(path, line = 0) {
     if (!state.selected) throw new Error("Choose a session");
+    const root = state.cwd || state.project || "";
+    if (/^[A-Za-z]:[\\/]/.test(root)) {
+      const relative = normalizeFilePath(path, root);
+      if (!/^(?:[A-Za-z]:|\/)/.test(relative)) path = relative;
+    }
     const id = state.selected,
       generation = state.generation;
     openPanel(state.sideTab);
@@ -358,5 +405,65 @@ export function createFiles({
     }
   }
 
-  return { loadProjectFiles, openProjectFile, closeFilePreview };
+  async function openAttachment(attachmentID, name) {
+    if (!state.selected || typeof attachmentID !== "string" || !attachmentID)
+      return;
+    const id = state.selected,
+      generation = state.generation;
+    openPanel(state.sideTab);
+    closeFilePreview();
+    const seq = ++state.previewSeq;
+    $("filePreview").hidden = false;
+    $("filePreviewName").textContent = name;
+    $("filePreviewMeta").textContent = t("Attachment");
+    $("filePreviewDownload").hidden = true;
+    renderView($("filePreviewContent"), <p>{t("Loading file…")}</p>);
+    try {
+      const response = await window.RemoteSecure.fetch(
+        "attachments/" + encodeURIComponent(attachmentID),
+        { headers: { "X-Remote-Agent": getAgent().id } },
+      );
+      if (!response.ok) throw await resourceError(response);
+      const blob = await response.blob();
+      if (
+        id !== state.selected ||
+        generation !== state.generation ||
+        seq !== state.previewSeq
+      )
+        return;
+      const url = URL.createObjectURL(blob);
+      state.filePreviewURLs.push(url);
+      const image = /^image\/(png|jpeg|gif|webp)$/.test(blob.type);
+      renderView(
+        $("filePreviewContent"),
+        image ? (
+          <img src={url} alt={name} className="file-preview-image" />
+        ) : (
+          <p>{t("Binary file. Download to view it.")}</p>
+        ),
+      );
+      $("filePreviewDownload").href = url;
+      $("filePreviewDownload").download = name;
+      $("filePreviewDownload").onclick = null;
+      $("filePreviewDownload").hidden = false;
+    } catch (error) {
+      if (
+        id === state.selected &&
+        generation === state.generation &&
+        seq === state.previewSeq
+      )
+        renderView(
+          $("filePreviewContent"),
+          <p role="status">{t(error.message)}</p>,
+        );
+      throw error;
+    }
+  }
+
+  return {
+    loadProjectFiles,
+    openProjectFile,
+    closeFilePreview,
+    openAttachment,
+  };
 }

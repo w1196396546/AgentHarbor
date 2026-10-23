@@ -89,8 +89,9 @@ export function createLifecycle({
     clearTimeout(state.timer);
   }
   function renderContext() {
-    const context = state.live.context,
-      available = !!state.selected && !!context;
+    const context = state.live.context || {},
+      available =
+        !!state.selected && !!(state.live.context || state.live.usage);
     $("contextUsage").hidden = !available;
     if (
       $("contextUsageDialog").open &&
@@ -151,17 +152,48 @@ export function createLifecycle({
         <dd>{format(used)}</dd>
         <dt>{t("Context window")}</dt>
         <dd>{format(total)}</dd>
+        {[
+          ["Recent request", state.live.usage?.last],
+          ["Cumulative usage", state.live.usage?.total],
+        ].map(([label, usage]) => (
+          <div key={label} className="usage-group">
+            <dt>{t(label)}</dt>
+            <dd>
+              <dl>
+                {[
+                  ["Total tokens", "totalTokens"],
+                  ["Input tokens", "inputTokens"],
+                  ["Cached input tokens", "cachedInputTokens"],
+                  ["Output tokens", "outputTokens"],
+                  ["Reasoning tokens", "reasoningOutputTokens"],
+                ].map(([name, key]) => (
+                  <div key={key}>
+                    <dt>{t(name)}</dt>
+                    <dd>{format(number(usage?.[key]))}</dd>
+                  </div>
+                ))}
+              </dl>
+            </dd>
+          </div>
+        ))}
       </>,
     );
     const compaction = context.compaction || {};
-    $("contextCompaction").hidden = !["inProgress", "completed"].includes(
-      compaction.status,
-    );
+    $("contextCompaction").hidden = ![
+      "inProgress",
+      "completed",
+      "failed",
+      "interrupted",
+    ].includes(compaction.status);
     $("contextBar").hidden = $("contextCompaction").hidden;
     $("contextCompaction").textContent = t(
       compaction.status === "inProgress"
         ? "Compacting context…"
-        : "Context compacted",
+        : compaction.status === "failed"
+          ? "Context compaction failed"
+          : compaction.status === "interrupted"
+            ? "Interrupted"
+            : "Context compacted",
     );
     $("contextCompaction").dataset.status = compaction.status || "";
   }

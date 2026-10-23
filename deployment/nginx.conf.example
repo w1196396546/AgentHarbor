@@ -6,17 +6,26 @@ map $http_upgrade $codex_remote_connection {
 
 # Add as a dedicated site; preserve unrelated existing sites.
 server {
+    listen 80;
+    server_name remote.example.com;
+    return 308 https://remote.example.com$request_uri;
+}
+
+server {
     listen 443 ssl;
     server_name remote.example.com;
     ssl_certificate /etc/letsencrypt/live/remote.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/remote.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
     # Encrypted envelope limit; the desktop keeps the 20 MiB attachment limit.
     client_max_body_size 48m;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
-        proxy_set_header Host $http_host;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $codex_remote_connection;
         proxy_buffering off;

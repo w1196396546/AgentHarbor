@@ -50,7 +50,11 @@ function displayUserContent(content) {
       try {
         const name = JSON.parse(match[1]),
           other = JSON.parse(match[2]);
-        return { type, name: type === "tool" ? other + " / " + name : name };
+        return {
+          type,
+          name: type === "tool" ? other + " / " + name : name,
+          ...(["attachment", "mention"].includes(type) ? { path: other } : {}),
+        };
       } catch {
         return part;
       }

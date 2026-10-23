@@ -220,6 +220,15 @@ export function Workspace() {
             </a>
             <Button
               variant="ghost"
+              id="sessionInfo"
+              className="icon-button"
+              type="button"
+              data-label="Session information"
+            >
+              <Icon name="settings" />
+            </Button>
+            <Button
+              variant="ghost"
               id="filesToggle"
               className="icon-button"
               type="button"
@@ -299,6 +308,30 @@ export function Workspace() {
             </Empty>
             <div className="conversation-content">
               <p id="cwd" className="cwd"></p>
+              <div
+                id="conversationNavigator"
+                className="conversation-navigator"
+                hidden
+              >
+                <Input
+                  id="conversationSearch"
+                  type="search"
+                  data-label="Search this conversation"
+                  data-placeholder="Search loaded messages"
+                  autoComplete="off"
+                />
+                <select
+                  id="conversationFilter"
+                  data-label="Filter loaded records"
+                >
+                  <option value="all" data-t="All records"></option>
+                  <option value="failed" data-t="Failed"></option>
+                  <option value="changes" data-t="Changes"></option>
+                  <option value="artifacts" data-t="Artifacts"></option>
+                </select>
+                <select id="conversationTurn" data-label="Turn"></select>
+                <div id="conversationSearchResults" aria-live="polite"></div>
+              </div>
               <Button
                 variant="ghost"
                 id="older"
@@ -307,6 +340,13 @@ export function Workspace() {
                 data-t="Load older conversation"
                 hidden
               ></Button>
+              <p
+                id="readingRestore"
+                className="note"
+                role="status"
+                data-t="Saved position is in older history. Load older messages to restore it."
+                hidden
+              ></p>
               <div id="history"></div>
               <div id="live"></div>
               <div id="working" className="working" hidden />
@@ -406,21 +446,21 @@ export function Workspace() {
               <div id="queueList"></div>
             </section>
             <form id="composer" hidden>
-            <div id="subagentsBar" className="subagents-bar" hidden>
-              <Button
-                variant="ghost"
-                id="subagentsToggle"
-                className="subagents-chip"
-                type="button"
-                aria-haspopup="dialog"
-                aria-controls="subagentsDialog"
-              >
-                <Icon name="agent" />
-                <span data-t="Agents"></span>
-                <span id="subagentsCount"></span>
-                <Icon name="chevron" />
-              </Button>
-            </div>
+              <div id="subagentsBar" className="subagents-bar" hidden>
+                <Button
+                  variant="ghost"
+                  id="subagentsToggle"
+                  className="subagents-chip"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-controls="subagentsDialog"
+                >
+                  <Icon name="agent" />
+                  <span data-t="Agents"></span>
+                  <span id="subagentsCount"></span>
+                  <Icon name="chevron" />
+                </Button>
+              </div>
               <ComposerSurface>
                 <div id="attachments" className="attachment-list" />
                 <div className="composer-line">
@@ -612,6 +652,17 @@ export function Workspace() {
                 aria-controls="filesContent"
                 data-t="Files"
               ></Button>
+              <Button
+                variant="ghost"
+                id="artifactsTab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="artifactsContent"
+              >
+                <span data-t="Artifacts"></span>{" "}
+                <span id="artifactCount"></span>
+              </Button>
             </div>
           }
           actions={
@@ -647,6 +698,7 @@ export function Workspace() {
             hidden
           ></div>
           <div id="changesContent" role="tabpanel"></div>
+          <div id="artifactsContent" role="tabpanel" hidden></div>
           <div id="filesContent" role="tabpanel" hidden>
             <SearchField className="file-search">
               <span data-icon="search">

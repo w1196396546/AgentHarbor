@@ -102,3 +102,50 @@ for trust boundaries and [development conventions](../AGENTS.md) for scope and c
 are historical evidence with their own limitations, not current release sign-off.
 
 Built HTML uses content-versioned JS/CSS URLs so deployments bypass stale browser or proxy caches.
+
+
+## Execution details
+
+The existing conversation shows message phases and summaries for loaded turns,
+command actions and terminal input, structured MCP/dynamic results, search actions,
+linked requests and agent details, images and system notices. Summaries and the
+changes panel share the normalized, deduplicated change inventory. Tool success and
+failure counts link to their records. Answers, loaded turn answers, commands,
+outputs and diffs can be copied. Raw arguments remain available in disclosures.
+
+New linked requests expand their tool once; later stream updates preserve manual
+expansion and in-memory answers. The pending entry shows the request count and the
+existing dialog can switch requests without a second dispatcher. Errors display
+reported causes and related operations. Automatic model retries remain separate
+from browser SSE reconnects; neither implies retrying a control request.
+
+The context dialog separates recent/cumulative token usage from context occupancy;
+missing values stay unknown. Session information separates owner-reported settings
+from page preferences awaiting confirmation, and computer, stream, owner and task
+states. The last successful sync is a browser observation, not an execution time.
+Optional `mcp_servers` metadata groups tools by server and distinguishes empty,
+unloaded and failed catalogs, with reported runtime and authentication state.
+
+Changes can be filtered by turn or browsed as a tree, with numbered diffs,
+reported rename/binary/truncation states and current-file previews. A sibling
+artifact view groups real files/images from loaded records and links to their
+source. Conversation search covers loaded prose and tool output only, with turn
+navigation and failure/change/artifact filters. Bounded reading metadata preserves
+anchors, disclosure state and change filters per device, Agent and session; it
+stores no extra messages, answers, attachments or credentials. Refresh restores a
+still-authorized conversation as read-only only when the composer has no draft,
+attachments, skills, mentions, selected tools or queue edit. A missing saved anchor
+prompts loading older records; deliberate navigation cancels pending restoration.
+Agent summaries use
+loaded collaboration records and authorized read-only details, without model calls
+or broader child-session access.
+
+Optional item `turn` metadata (`status`, `started_at_ms`, `duration_ms`) passes
+through both history and SSE. Timings come from the client, never browser receipt
+time. Summaries cover loaded records only; unpersisted upstream notifications may
+be absent after client restart. Resources use encrypted project/registered attachment
+access, display unavailable/truncated states and never authorize arbitrary local
+paths. Assistant Markdown file/image targets share the existing local-file parser
+and encrypted authorization gate; external preview resources are never fetched.
+Hook durations use reported `durationMs`; timestamps without confirmed units remain
+in raw details. Older clients retain the existing fallback. See the [architecture contract](../docs/architecture.md#会话执行信息与资源展示).

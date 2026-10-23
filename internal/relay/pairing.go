@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
-	if !s.allowAttempt("pair", r.RemoteAddr, 12) {
+	if !s.allowAttempt("pair", s.clientIP(r), 12) {
 		failure(w, http.StatusTooManyRequests, "Too many pairing attempts; try again later")
 		return
 	}

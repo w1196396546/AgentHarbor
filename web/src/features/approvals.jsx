@@ -19,42 +19,132 @@ export function createApprovals({
   textOf,
   getAgent,
 }) {
+  let scope = "",
+    selectedKey = "",
+    renderedKey = "",
+    pendingKeys = new Set();
+  const drafts = new Map();
+
+  function requestScope() {
+    return JSON.stringify([
+      state.device?.id,
+      getAgent().id,
+      state.selected,
+      ownerEpoch(),
+    ]);
+  }
+  function requestKey(request) {
+    return JSON.stringify(
+      [scope, request.id, request.method, request.params || {}],
+      (_, value) =>
+        value && typeof value === "object" && !Array.isArray(value)
+          ? Object.fromEntries(
+              Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+            )
+          : value,
+    );
+  }
+  function operationOf(request) {
+    return request.method === "agentMessage/questions" ? "steer" : "answer";
+  }
+  function captureAnswers() {
+    if (!renderedKey || !pendingKeys.has(renderedKey)) return;
+    drafts.set(
+      renderedKey,
+      Array.from(
+        $("requests").querySelectorAll("input[name], textarea[name]"),
+      ).map((input) => ({
+        name: input.name,
+        value: input.value,
+        checked: input.checked,
+      })),
+    );
+  }
+  function AnswerInput(props) {
+    const saved = drafts
+      .get(selectedKey)
+      ?.find(
+        (field) =>
+          field.name === props.name &&
+          (!["checkbox", "radio"].includes(props.type) ||
+            field.value === String(props.value ?? "on")),
+      );
+    return (
+      <Input
+        {...props}
+        {...(saved
+          ? ["checkbox", "radio"].includes(props.type)
+            ? { defaultChecked: saved.checked }
+            : { defaultValue: saved.value }
+          : {})}
+      />
+    );
+  }
   function closeDialog() {
     if ($("requestDialog").open) $("requestDialog").close();
     $("pendingRequest").hidden = true;
     clearView($("requests"));
     state.currentRequests = [];
+    state.requestKey = "";
+    state.dismissedKey = "";
+    scope = selectedKey = renderedKey = "";
+    pendingKeys.clear();
+    drafts.clear();
   }
   function renderRequests(requests) {
-    const operation =
-      requests[0]?.method === "agentMessage/questions" ? "steer" : "answer";
+    const nextScope = requestScope();
+    if (scope !== nextScope) {
+      closeDialog();
+      scope = nextScope;
+    }
+    const hadPending = pendingKeys.size > 0;
+    captureAnswers();
+    pendingKeys = new Set(requests.map(requestKey));
+    for (const key of drafts.keys())
+      if (!pendingKeys.has(key)) drafts.delete(key);
+    state.currentRequests = requests;
+    if (!requests.length) {
+      closeDialog();
+      return;
+    }
+    const request =
+        requests.find(
+          (value) =>
+            requestKey(value) === selectedKey && ownerCan(operationOf(value)),
+        ) ||
+        requests.find((value) => ownerCan(operationOf(value))) ||
+        requests[0],
+      operation = operationOf(request);
+    selectedKey = requestKey(request);
+    const pending = $("pendingRequest"),
+      pendingLabel = pending.querySelector("[data-t]");
+    if (pendingLabel)
+      pendingLabel.textContent =
+        t("Codex is waiting for you") + " (" + requests.length + ")";
+    pending.disabled = !requests.some((value) => ownerCan(operationOf(value)));
     if (!ownerCan(operation)) {
       if ($("requestDialog").open) $("requestDialog").close();
-      $("pendingRequest").hidden = true;
+      if (renderedKey && !pendingKeys.has(renderedKey)) {
+        clearView($("requests"));
+        renderedKey = "";
+      }
+      pending.hidden = false;
       return;
     }
     const key = JSON.stringify([
-      requests[0] || null,
-      ownerEpoch(),
-      getAgent().isAppConsent(requests[0]?.params || {})
+      selectedKey,
+      [...pendingKeys],
+      state.generation,
+      getAgent().isAppConsent(request.params || {})
         ? !!state.catalog.capabilities?.app_approval_persistence
         : null,
     ]);
     if (key === state.requestKey) {
-      if (requests.length && !$("requestDialog").open)
-        $("pendingRequest").hidden = false;
+      pending.hidden = $("requestDialog").open;
       return;
     }
     state.requestKey = key;
-    clearView($("requests"));
-    if (!requests.length) {
-      closeDialog();
-      state.dismissedKey = "";
-      return;
-    }
-    state.currentRequests = requests;
-    const request = requests[0],
-      epoch = ownerEpoch(),
+    const epoch = ownerEpoch(),
       sessionID = state.selected,
       generation = state.generation,
       p = request.params || {},
@@ -64,15 +154,20 @@ export function createApprovals({
       appConsent = elicitation
         ? getAgent().appConsentOf(p, state.catalog.capabilities)
         : null;
-    $("requestTitle").textContent = t(
-      question
-        ? "Codex has a question"
-        : appConsent
-          ? "Allow app access?"
-          : elicitation
-            ? "A tool needs your input"
-            : "Approval required",
-    );
+    $("requestTitle").textContent =
+      t(
+        question
+          ? "Codex has a question"
+          : appConsent
+            ? "Allow app access?"
+            : elicitation
+              ? "A tool needs your input"
+              : "Approval required",
+      ) +
+      (requests.length > 1
+        ? " (" + (requests.indexOf(request) + 1) + "/" + requests.length + ")"
+        : "");
+    const answerKey = selectedKey;
     const answer = async (value) => {
       requireOwner(operation);
       if (
@@ -97,6 +192,14 @@ export function createApprovals({
             }
           : { id: request.id, ...value },
       );
+      drafts.delete(answerKey);
+      if (renderedKey === answerKey)
+        for (const input of $("requests").querySelectorAll(
+          "input[name], textarea[name]",
+        )) {
+          input.value = "";
+          input.checked = false;
+        }
       if (
         sessionID === state.selected &&
         generation === state.generation &&
@@ -117,14 +220,14 @@ export function createApprovals({
               {q.header && <p className="question-header">{q.header}</p>}
               {(q.options || []).map((option) => (
                 <FieldLabel key={option.label} className="option-label">
-                  <Input type="radio" name={q.id} value={option.label} />
+                  <AnswerInput type="radio" name={q.id} value={option.label} />
                   <span className="option-copy">
                     <strong>{option.label}</strong>
                     {option.description && <small>{option.description}</small>}
                   </span>
                 </FieldLabel>
               ))}
-              <Input
+              <AnswerInput
                 type={q.isSecret ? "password" : "text"}
                 name={q.id + "-text"}
                 maxLength={16000}
@@ -156,7 +259,8 @@ export function createApprovals({
         }, event.nativeEvent.submitter);
       };
     } else if (elicitation) {
-      const href = p.mode === "url" ? safeURL(p.url) : null;
+      const href = p.mode === "url" ? safeURL(p.url) : null,
+        destination = href ? new URL(href) : null;
       content = (
         <>
           {p.message && <p>{p.message}</p>}
@@ -198,7 +302,10 @@ export function createApprovals({
               {p.mode === "url" ? (
                 href && (
                   <a href={href} target="_blank" rel="noreferrer noopener">
-                    {t("Open tool authorization")}
+                    {t("Open tool authorization")}{" "}
+                    {destination && (
+                      <span>({destination.host || destination.pathname})</span>
+                    )}
                   </a>
                 )
               ) : (
@@ -311,25 +418,44 @@ export function createApprovals({
     }
     renderView(
       $("requests"),
-      <form
-        key={key}
-        className="request"
-        data-slot="ask-card"
-        onSubmit={submit}
-      >
-        <AskCard
-          question=""
-          eyebrow={t(question ? "Codex has a question" : "Approval required")}
-          className="request-card"
+      <>
+        {requests.length > 1 && (
+          <nav className="request-actions" aria-label={t("Pending requests")}>
+            {requests.map((value, index) => (
+              <Button
+                variant="glass"
+                key={requestKey(value)}
+                type="button"
+                aria-pressed={value === request}
+                disabled={!ownerCan(operationOf(value))}
+                onClick={() => openRequest(value)}
+              >
+                {t("Review request")} {index + 1}
+              </Button>
+            ))}
+          </nav>
+        )}
+        <form
+          key={selectedKey}
+          className="request"
+          data-slot="ask-card"
+          onSubmit={submit}
         >
-          {content}
-        </AskCard>
-      </form>,
+          <AskCard
+            question=""
+            eyebrow={t(question ? "Codex has a question" : "Approval required")}
+            className="request-card"
+          >
+            {content}
+          </AskCard>
+        </form>
+      </>,
     );
-    if (state.dismissedKey !== key) {
+    renderedKey = selectedKey;
+    if (!hadPending && !state.dismissedKey) {
       if (!$("requestDialog").open) $("requestDialog").showModal();
-      $("pendingRequest").hidden = true;
-    } else $("pendingRequest").hidden = false;
+    }
+    pending.hidden = $("requestDialog").open;
   }
 
   function schemaChoices(schema) {
@@ -366,7 +492,7 @@ export function createApprovals({
           {choices.length ? (
             choices.map((choice, index) => (
               <FieldLabel key={index} className="option-label">
-                <Input
+                <AnswerInput
                   type={field.type === "array" ? "checkbox" : "radio"}
                   name={name}
                   value={String(index)}
@@ -381,7 +507,7 @@ export function createApprovals({
               </FieldLabel>
             ))
           ) : (
-            <Input
+            <AnswerInput
               name={name}
               type={type}
               required={required && field.type !== "boolean"}
@@ -445,10 +571,29 @@ export function createApprovals({
     return content;
   }
   function dismissRequest() {
+    captureAnswers();
     state.dismissedKey = state.requestKey;
     if ($("requestDialog").open) $("requestDialog").close();
     $("pendingRequest").hidden = !state.currentRequests.length;
   }
 
-  return { closeDialog, renderRequests, dismissRequest };
+  function openRequest(request) {
+    if (scope !== requestScope()) return;
+    request = request
+      ? state.currentRequests.find(
+          (value) => requestKey(value) === requestKey(request),
+        )
+      : state.currentRequests.find(
+          (value) => requestKey(value) === selectedKey,
+        ) ||
+        state.currentRequests.find((value) => ownerCan(operationOf(value)));
+    if (!request || !ownerCan(operationOf(request))) return;
+    captureAnswers();
+    selectedKey = requestKey(request);
+    state.dismissedKey = "";
+    renderRequests(state.currentRequests);
+    if (!$("requestDialog").open) $("requestDialog").showModal();
+    $("pendingRequest").hidden = true;
+  }
+  return { closeDialog, renderRequests, dismissRequest, openRequest };
 }

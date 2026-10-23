@@ -37,7 +37,7 @@ func (s *Server) accountCookieName() string {
 }
 
 func (s *Server) accountLogin(w http.ResponseWriter, r *http.Request) {
-	if !s.allowAttempt("account-login", r.RemoteAddr, 10) {
+	if !s.allowAttempt("account-login", s.clientIP(r), 10) {
 		failure(w, http.StatusTooManyRequests, "Too many sign-in attempts")
 		return
 	}

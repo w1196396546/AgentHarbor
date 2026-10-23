@@ -18,6 +18,7 @@ export function createAgentLifecycle({
   renderChanges,
   updateControls,
   t,
+  saveReading = () => {},
 }) {
   const drafts = new Map();
 
@@ -27,6 +28,8 @@ export function createAgentLifecycle({
       state.catalog.agent = agent;
       return;
     }
+    saveReading();
+    state.reportedOptions = null;
     drafts.set(previous, {
       text: $("message").value,
       attachments: state.attachments,

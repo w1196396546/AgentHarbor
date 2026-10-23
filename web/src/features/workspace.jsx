@@ -1,7 +1,12 @@
 import { renderView, clearView } from "../render";
 import { Empty, EmptyMedia, EmptyDescription } from "../components/ui/empty";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
-import { useRef } from "react";
+import { FileTree } from "./files";
+import {
+  collectChanges,
+  numberedDiff,
+  normalizeFilePath,
+} from "./presentation";
 import { Button } from "../components/ui/button";
 
 export function createWorkspace({
@@ -26,67 +31,33 @@ export function createWorkspace({
   detail,
   ensureStream,
   permissionLabel,
+  getReadingState,
+  onReadingChange,
+  getArtifacts,
+  Resource,
+  Copy,
+  jumpToItem,
+  onChangesChanged,
+  turnLabel,
 }) {
-  function normalizedFilePath(path) {
-    const cwd = (state.cwd || state.project)
-      .replace(/\\/g, "/")
-      .replace(/\/$/, "");
-    path = String(path || "").replace(/\\/g, "/");
-    if (path.startsWith(cwd + "/")) path = path.slice(cwd.length + 1);
-    return path.replace(/^\.\//, "");
-  }
   function changedFiles() {
-    const items = new Map(),
-      liveIDs = new Set((state.live.items || []).map((item) => item.id));
-    for (const item of [...state.history, ...(state.live.items || [])])
-      items.set(item.id, item);
-    let files = [];
-    for (const item of items.values())
-      if (item.type === "fileChange")
-        for (const [index, change] of (item.data?.changes || []).entries())
-          files.push({
-            ...change,
-            path: normalizedFilePath(change.path),
-            key: item.id + "|" + index,
-            turn_id:
-              item.turn_id ||
-              (liveIDs.has(item.id) ? state.live.turn_id : "") ||
-              "",
-          });
-    if (state.live.diff) {
-      const aggregated = [];
-      for (const chunk of state.live.diff
-        .split(/(?=^diff --git )/m)
-        .filter(Boolean)) {
-        const match =
-          chunk.match(/^\+\+\+ b\/(.+)$/m) ||
-          chunk.match(/^diff --git a\/(.+) b\//m);
-        if (match)
-          aggregated.push({
-            path: normalizedFilePath(match[1]),
-            diff: chunk,
-            key: "aggregate|" + normalizedFilePath(match[1]),
-            turn_id: state.live.turn_id,
-          });
-      }
-      if (aggregated.length)
-        files = [
-          ...files.filter((file) => file.turn_id !== state.live.turn_id),
-          ...aggregated,
-        ];
-    }
-    const merged = new Map();
-    for (const file of files)
-      merged.set((file.turn_id || "history") + "|" + file.path, file);
-    for (const change of state.workspaceChanges) {
-      const path = normalizedFilePath(change.path),
-        key = (change.turn_id || "workspace") + "|" + path;
-      merged.set(key, { ...change, path, key: "workspace|" + key });
-    }
-    return [...merged.values()];
+    return collectChanges(state);
+  }
+  function TreeAction({ action, ...props }) {
+    return (
+      <Button
+        variant="ghost"
+        type="button"
+        {...props}
+        onClick={(event) => run(action, event.currentTarget)}
+      />
+    );
   }
   function renderChanges() {
-    const files = changedFiles();
+    const files = changedFiles(),
+      reading = getReadingState(),
+      changesTurn = reading.changesTurn || "",
+      changesTree = !!reading.changesTree;
     $("changeCount").textContent = String(
       new Set(files.map((file) => file.path)).size,
     );
@@ -95,94 +66,229 @@ export function createWorkspace({
     $("changesWarning").textContent = state.workspaceWarning;
     renderView(
       $("changesContent"),
-      files.length ? (
-        files.map((file) => (
-          <DiffFile
-            key={file.key}
-            file={file}
-            initialOpen={files.length <= 4}
-          />
-        ))
-      ) : (
-        <Empty className="empty-changes">
-          <EmptyMedia variant="icon">
-            <Icon name="diff" />
-          </EmptyMedia>
-          <EmptyDescription>{t("No file changes yet.")}</EmptyDescription>
-          <EmptyDescription>
-            {t("Files changed by Codex will appear here.")}
-          </EmptyDescription>
-        </Empty>
-      ),
+      <>
+        {state.workspacePending && (
+          <p className="note" role="status">
+            {t("Reading changes…")}
+          </p>
+        )}
+        {files.length ? (
+          <>
+            <div
+              className="changes-controls"
+              role="group"
+              aria-label={t("Filter changes")}
+            >
+              <Button
+                variant="ghost"
+                aria-pressed={!changesTurn}
+                onClick={() => {
+                  reading.changesTurn = "";
+                  onReadingChange();
+                  renderChanges();
+                }}
+              >
+                {t("All turns")}
+              </Button>
+              {[...new Set(files.map((file) => file.turn_id))].map(
+                (turn, index) => (
+                  <Button
+                    variant="ghost"
+                    key={turn || "unknown"}
+                    aria-pressed={changesTurn === (turn || "unknown")}
+                    onClick={() => {
+                      reading.changesTurn = turn || "unknown";
+                      onReadingChange();
+                      renderChanges();
+                    }}
+                  >
+                    {turnLabel(turn)}
+                  </Button>
+                ),
+              )}
+              <Button
+                variant="ghost"
+                aria-pressed={changesTree}
+                onClick={() => {
+                  reading.changesTree = !changesTree;
+                  onReadingChange();
+                  renderChanges();
+                }}
+              >
+                {t(changesTree ? "File list" : "File tree")}
+              </Button>
+            </div>
+            {changesTree && (
+              <FileTree
+                files={files
+                  .filter(
+                    (file) =>
+                      !changesTurn ||
+                      (file.turn_id || "unknown") === changesTurn,
+                  )
+                  .map((file) => ({
+                    ...file,
+                    relative: file.path,
+                    changeKey: file.key,
+                  }))}
+                Action={TreeAction}
+                onOpenFile={(path, file) => openChanges(path, file?.changeKey)}
+              />
+            )}
+            {files.map((file) => (
+              <div
+                key={state.generation + "|" + file.key}
+                hidden={
+                  !!changesTurn && (file.turn_id || "unknown") !== changesTurn
+                }
+                className="change-record"
+              >
+                <p className="change-source">
+                  {t(
+                    file.turn_id && file.turn_id === state.live.turn_id
+                      ? "Current turn"
+                      : "Historical changes",
+                  )}{" "}
+                  · {t("Recorded diff")}
+                </p>
+                <DiffFile file={file} initialOpen={files.length <= 4} />
+              </div>
+            ))}
+          </>
+        ) : (
+          <Empty className="empty-changes">
+            <EmptyMedia variant="icon">
+              <Icon name="diff" />
+            </EmptyMedia>
+            <EmptyDescription>{t("No file changes yet.")}</EmptyDescription>
+            <EmptyDescription>
+              {t("Files changed by Codex will appear here.")}
+            </EmptyDescription>
+          </Empty>
+        )}
+      </>,
     );
+    renderArtifacts();
   }
   function DiffFile({ file, initialOpen }) {
-    const open = useRef(initialOpen),
-      diff = displayDiff(file).text;
+    const reading = getReadingState(),
+      expanded = reading.diffExpanded || (reading.diffExpanded = {}),
+      diff = displayDiff(file).text,
+      kind = typeof file.kind === "string" ? file.kind : file.kind?.type,
+      oldPath = file.old_path || "",
+      newPath = file.path;
     return (
       <details
         className="diff-file"
         data-slot="diff-view"
         data-path={file.path}
         data-record={file.key}
-        open={open.current}
+        open={expanded[file.key] ?? initialOpen}
+        onToggle={(event) => {
+          expanded[file.key] = event.currentTarget.open;
+          onReadingChange();
+        }}
       >
         <summary>
           <Icon name="file" />
-          <span>{file.path}</span>
+          <span>
+            {oldPath && oldPath !== newPath ? oldPath + " → " : ""}
+            {newPath}
+          </span>
+          <span className="change-kind">
+            {t(
+              oldPath && oldPath !== newPath
+                ? "Renamed"
+                : { add: "Added", delete: "Deleted", update: "Modified" }[
+                    kind
+                  ] || "Modified",
+            )}
+          </span>
           <DiffStats change={file} />
-          {(typeof file.kind === "string" ? file.kind : file.kind?.type) !==
-            "delete" && (
+          {kind !== "delete" && (
             <Button
               variant="glass"
               type="button"
               className="icon-button preview-file-button"
               aria-label={t("Open file") + " " + file.path}
-              title={t("Open file")}
+              title={t("Current file content")}
               onClick={(event) => {
                 event.preventDefault();
-                run(() => openProjectFile(file.path), event.currentTarget);
+                run(() => openProjectFile(newPath), event.currentTarget);
               }}
             >
               <Icon name="external" />
             </Button>
           )}
         </summary>
+        {diff && <Copy text={diff} label="Copy diff" />}
+        {file.binary && (
+          <p className="diff-empty">{t("Binary file. Download to view it.")}</p>
+        )}
         {diff ? (
           <pre>
-            {diff.split("\n").map((line, index) => (
-              <span
-                key={index}
-                className={
-                  "diff-line " +
-                  (line.startsWith("@@")
-                    ? "hunk"
-                    : line.startsWith("+")
-                      ? "add"
-                      : line.startsWith("-")
-                        ? "delete"
-                        : "")
-                }
-              >
-                {line || " "}
+            {numberedDiff(diff, kind).map((row, index) => (
+              <span key={index} className={"diff-line " + (row.kind || "")}>
+                <span className="diff-number" aria-label={t("Old line")}>
+                  {row.old ?? ""}
+                </span>
+                <span className="diff-number" aria-label={t("New line")}>
+                  {row.next ?? ""}
+                </span>
+                <span>{row.text || " "}</span>
               </span>
             ))}
           </pre>
         ) : (
-          <p className="diff-empty">
-            {t(
-              file.binary
-                ? "Binary file. Download to view it."
-                : "No textual diff is available.",
-            )}
-          </p>
+          !file.binary && (
+            <p className="diff-empty">{t("No textual diff is available.")}</p>
+          )
         )}
-        {file.truncated && (
-          <p className="diff-empty">
-            {t("Preview truncated. Download the complete file.")}
-          </p>
-        )}
+        {file.truncated && <p className="diff-empty">{t("Diff truncated.")}</p>}
       </details>
+    );
+  }
+
+  function renderArtifacts() {
+    const artifacts = getArtifacts(),
+      groups = new Map();
+    for (const artifact of artifacts) {
+      const turn = artifact.turn_id || "";
+      if (!groups.has(turn)) groups.set(turn, []);
+      groups.get(turn).push(artifact);
+    }
+    $("artifactCount").textContent = String(artifacts.length);
+    renderView(
+      $("artifactsContent"),
+      <>
+        <p className="note">{t("Artifacts from loaded messages only.")}</p>
+        {artifacts.length ? (
+          [...groups].map(([turn, values], index) => (
+            <section key={turn || "unknown"}>
+              <h3>{turnLabel(turn)}</h3>
+              {values.map((artifact) => (
+                <div key={artifact.key}>
+                  <Resource part={artifact.part} cut={artifact.cut} />
+                  {artifact.item_id && (
+                    <TreeAction action={() => jumpToItem(artifact.item_id)}>
+                      {t("Jump to source")}
+                    </TreeAction>
+                  )}
+                </div>
+              ))}
+            </section>
+          ))
+        ) : (
+          <Empty className="empty-changes">
+            <EmptyMedia variant="icon">
+              <Icon name="file" />
+            </EmptyMedia>
+            <EmptyDescription>
+              {t("No artifacts in loaded messages.")}
+            </EmptyDescription>
+          </Empty>
+        )}
+      </>,
     );
   }
 
@@ -196,24 +302,61 @@ export function createWorkspace({
     state.sideTab = tab;
     $("changesTab").setAttribute("aria-selected", String(tab === "changes"));
     $("filesTab").setAttribute("aria-selected", String(tab === "files"));
+    $("artifactsTab").setAttribute(
+      "aria-selected",
+      String(tab === "artifacts"),
+    );
     $("changesContent").hidden = tab !== "changes";
     $("filesContent").hidden = tab !== "files";
+    $("artifactsContent").hidden = tab !== "artifacts";
     $("changesWarning").hidden = tab !== "changes" || !state.workspaceWarning;
     closeFilePreview();
     if (tab === "files") run(loadProjectFiles);
+    else if (tab === "artifacts") renderArtifacts();
     else renderChanges();
   }
   function openChanges(path, record) {
+    if (path) path = normalizeFilePath(path, state.cwd || state.project);
+    const reading = getReadingState(),
+      files = changedFiles(),
+      matches = files.filter((file) =>
+        record
+          ? file.key === record ||
+            (file.item_id &&
+              record.startsWith(file.item_id + "|") &&
+              (file.path === path || file.old_path === path))
+          : file.path === path,
+      ),
+      keys = new Set(
+        (matches.length
+          ? matches
+          : files.filter((file) => file.path === path || file.old_path === path)
+        ).map((file) => file.key),
+      );
+    if (path) {
+      reading.changesTurn = "";
+      for (const key of keys)
+        (reading.diffExpanded || (reading.diffExpanded = {}))[key] = true;
+      onReadingChange();
+    }
     openPanel("changes");
     if (path)
-      for (const node of $("changesContent").children)
-        if (
-          record
-            ? node.dataset.record === record ||
-              node.dataset.record === "aggregate|" + path
-            : node.dataset.path === path
-        )
+      for (const node of $("changesContent").querySelectorAll(
+        "details[data-record]",
+      ))
+        if (keys.has(node.dataset.record)) {
           node.open = true;
+          const content = $("changesContent");
+          content.scrollTop +=
+            node.getBoundingClientRect().top -
+            content.getBoundingClientRect().top;
+          break;
+        }
+  }
+  function openTurnChanges(turnID) {
+    getReadingState().changesTurn = turnID || "unknown";
+    onReadingChange();
+    openPanel("changes");
   }
   function closeChanges() {
     $("changesPanel").hidden = true;
@@ -221,6 +364,7 @@ export function createWorkspace({
     $("changesToggle").setAttribute("aria-expanded", "false");
   }
   function resetSideData() {
+    if ($("sessionInfoDialog").open) $("sessionInfoDialog").close();
     resetSubagents();
     if ($("revisePlanDialog").open) $("revisePlanDialog").close();
     $("revisePlanDialog").dataset.planId = "";
@@ -230,6 +374,7 @@ export function createWorkspace({
     clearTimeout(state.workspaceTimer);
     state.workspaceChanges = [];
     state.workspaceWarning = "";
+    state.workspacePending = false;
     state.workspaceToken = "";
     state.workspaceFetch = null;
     state.workspaceQueued = false;
@@ -265,8 +410,10 @@ export function createWorkspace({
       if (id !== state.selected || generation !== state.generation) return;
       state.workspaceChanges = value.changes || [];
       state.workspaceWarning = value.warning || "";
+      state.workspacePending = value.pending === true;
       state.workspaceToken = token;
       renderChanges();
+      onChangesChanged();
       if (value.pending && !state.stream) {
         clearTimeout(state.workspaceTimer);
         state.workspaceTimer = setTimeout(
@@ -279,7 +426,9 @@ export function createWorkspace({
         state.workspaceToken = token;
         state.workspaceWarning =
           t("Unable to load changes.") + " " + error.message;
+        state.workspacePending = false;
         renderChanges();
+        onChangesChanged();
       }
     } finally {
       if (state.workspaceFetch === request) {
@@ -485,10 +634,13 @@ export function createWorkspace({
     resetSideData,
     closeChanges,
     renderChanges,
+    renderArtifacts,
+    changedFiles,
     renderPlanAction,
     refreshWorkspaceChanges,
     refreshPendingPlan,
     openChanges,
+    openTurnChanges,
     openPanel,
     setPanelTab,
     requestPlanExecution,

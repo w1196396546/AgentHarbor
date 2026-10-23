@@ -1,5 +1,6 @@
 {
   "public_url": "https://remote.example.com",
   "listen_address": "127.0.0.1:8080",
-  "registration_enabled": true
+  "registration_enabled": false,
+  "trusted_proxies": ["127.0.0.1/32", "::1/128"]
 }

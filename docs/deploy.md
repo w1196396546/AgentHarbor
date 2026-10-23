@@ -55,11 +55,14 @@ cp deployment/config.example.json "$HOME/.local/share/anywhereToAgent/config.jso
 | `public_url` | `--public-url` | 浏览器和客户端使用的 HTTPS 入口，例如 `https://remote.example.com`；必须与实际入口一致 |
 | `listen_address` | `--listen` | 中转 HTTP 监听，默认 `127.0.0.1:8080`，供本机反向代理访问 |
 | `data_dir` | `--data-dir` | 私有配置、设备登记、浏览器会话映射和管理凭证目录 |
-| `registration_enabled` | — | 省略为 `true`；`false` 禁止新设备注册，已登记设备仍可凭原凭证重连 |
+| `registration_enabled` | — | 省略仍兼容为 `true`；私有单用户部署建议为 `false`，禁止新设备注册但不影响已登记设备重连 |
+| `trusted_proxies` | — | 明确允许提供 `X-Forwarded-For` 的代理 CIDR；示例仅信任本机回环代理 |
 | — | `--admin-listen` | 独立管理监听，默认 `127.0.0.1:9090`，只允许回环地址 |
 | — | `--config` | 严格 JSON 配置文件；显式传入的配置字段命令行选项覆盖文件值 |
 
 新安装默认数据目录为当前用户系统配置目录下的 `anywhereToAgent`；若原 `codex-remote` 目录已存在，继续使用原目录，避免遗失设备登记、浏览器授权和管理凭证。显式 `--data-dir` 或配置中的 `data_dir` 优先；更新已有服务时须保留原数据目录，本文的 anywhereToAgent 目录为新安装示例。`data_dir` 可省略并通过 `--data-dir` 指定。配置中不要写用户项目目录或 Agent 凭证。修改配置文件后重启本服务；服务端管理页展示当前配置、状态和设备，不修改客户端的 Agent 设置。
+
+`deployment/config.example.json` 默认关闭新设备登记。已有设备仍可重连；需要登记新设备时，启用 `registration_enabled`。公开注册的多用户中继应有意保持开启，并监控容量；旧配置未设置该字段时仍沿用允许登记的兼容默认值。`trusted_proxies` 仅填写直接连接中继的反向代理地址段；代理必须覆盖写入转发地址，不能把公网客户端可伪造的头直接交给中继。
 
 同机开发可用 `--public-url http://127.0.0.1:8080`，HTTP 仅允许回环地址。手机或远程电脑使用 HTTPS。现有 IP 测试服务使用临时自签名证书，客户端仅对该预设地址内置信任，用户无需粘贴证书；这并不等同于受信任生产入口。自部署应优先使用域名和有效证书。
 
@@ -70,7 +73,7 @@ cp deployment/config.example.json "$HOME/.local/share/anywhereToAgent/config.jso
 - [Caddyfile.example](../deployment/Caddyfile.example)：替换域名，Caddy 自动管理证书并支持 WebSocket。
 - [nginx.conf.example](../deployment/nginx.conf.example)：替换域名和证书路径，包含 WebSocket Upgrade 和 SSE 无缓冲配置。
 
-保留原始 Host，不缓存会话/配对 API，关闭 SSE 响应缓冲。Nginx 的 `map` 段放在 `http` 上下文，`server` 段作为专用站点加入；不要覆盖现有无关站点。CDN/WAF 也必须允许长连接和 WebSocket，否则客户端可能反复离线或输出成批出现。
+保留原始 Host，不缓存会话/配对 API，关闭 SSE 响应缓冲。两份示例都为中继覆盖写入 `X-Forwarded-For`；限流只在连接地址命中 `trusted_proxies` 时读取该头，并从右向左越过受信代理。若 CDN/WAF 位于 Caddy/Nginx 前方，须先让边缘代理只信任官方代理网段，再解析真实客户端地址并覆盖传给中继的头；不能直接采纳公网传入的转发头。Cloudflare 前置时，Caddy 配置 `trusted_proxies` 为 Cloudflare 官方 IP 网段、`client_ip_headers CF-Connecting-IP` 和 `trusted_proxies_strict`，并把 `{client_ip}` 写入 `X-Forwarded-For`；定期同步官方网段。Nginx 同理须在 `set_real_ip_from` 中列出可信 CDN 网段后再使用 `$remote_addr`。Nginx 的 `map` 段放在 `http` 上下文，`server` 段作为专用站点加入；不要覆盖现有无关站点。CDN/WAF 也必须允许长连接和 WebSocket，否则客户端可能反复离线或输出成批出现。
 
 加密后的 `POST /api/secure` 包含 Base64 和认证数据开销，代理请求正文上限应与中转一致，为 48 MiB：Caddy 使用 `max_size 48MiB`，Nginx 使用 `client_max_body_size 48m`。本机实际附件仍限 20 MiB；代理放宽外层上限不会增加附件上限。响应为流式加密记录，代理须保持无缓冲转发和取消传播。
 
@@ -104,7 +107,7 @@ ssh -N -L 19090:127.0.0.1:9090 '备用服务器'
 
 ## 系统服务
 
-Linux 用户服务模板：[anywhereToAgent.service](../deployment/anywhereToAgent.service)。先按原生部署准备配置文件，再安装；已有服务应先停用旧单元并保留原 `--data-dir`，不要让两份服务同时读写同一目录：
+Linux 用户服务模板：[anywhereToAgent.service](../deployment/anywhereToAgent.service)包含权限提升限制、私有临时目录、只读系统/主目录、状态目录写入白名单与地址族限制。使用不同 `--data-dir` 时同步调整 `ReadWritePaths`。复制为系统级单元时必须设置专用 `User=`，并按实际状态目录调整白名单。先按原生部署准备配置文件，再安装；已有服务应先停用旧单元并保留原 `--data-dir`，不要让两份服务同时读写同一目录：
 
 ```sh
 mkdir -p "$HOME/.local/bin" "$HOME/.config/systemd/user"

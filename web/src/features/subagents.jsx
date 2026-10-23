@@ -13,6 +13,8 @@ export function createSubagents({
   run,
   Action,
   projectName,
+  onAgentsChanged,
+  jumpToItem,
 }) {
   const { markdown } = createMarkdown({ t, run, Action, readOnly: true });
   const { renderItems, legacyItems, mergeOrdered } = createConversation({
@@ -20,6 +22,8 @@ export function createSubagents({
     getAgent,
     markdown,
     projectName,
+    getScope: () => scope + "|" + selected,
+    getAllItems: () => items,
     readOnly: true,
   });
   let scope = "",
@@ -42,7 +46,12 @@ export function createSubagents({
 
   function currentScope() {
     return state.selected && state.catalog.capabilities?.subagents === true
-      ? [getAgent().id, state.selected, state.generation].join("|")
+      ? [
+          window.RemoteSecure?.deviceID?.() || state.device?.id || "",
+          getAgent().id,
+          state.selected,
+          state.generation,
+        ].join("|")
       : "";
   }
   function agentName(agent) {
@@ -68,10 +77,143 @@ export function createSubagents({
       }[status] || "Status unknown",
     );
   }
-  function render() {
-    const called = [...state.history, ...(state.live.items || [])].some(
-      (item) => item.type === "collabAgentToolCall",
+  function operationLabel(item) {
+    return t(
+      {
+        spawnAgent: "Create agent",
+        sendInput: "Send to agent",
+        wait: "Wait for agents",
+        closeAgent: "Close agent",
+        resumeAgent: "Resume agent",
+      }[item.data?.tool] || item.data?.tool || "Agent",
     );
+  }
+  function agentOperations(calls, id) {
+    return calls.filter((item) => {
+      const data = item.data || {};
+      return (
+        (Array.isArray(data.receiverThreadIds) &&
+          data.receiverThreadIds.includes(id)) ||
+        (Array.isArray(data.receiverThreads) &&
+          data.receiverThreads.some(
+            (agent) => (agent.threadId || agent.id) === id,
+          )) ||
+        Object.hasOwn(data.agentsStates || {}, id)
+      );
+    });
+  }
+  function showOperation(id) {
+    if (!scope || scope !== currentScope() || !jumpToItem) return;
+    $("subagentsDialog").close();
+    jumpToItem(id);
+  }
+  function Overview({ agent, calls, detail = false }) {
+    const operations = agentOperations(calls, agent.id),
+      creation = operations.find((item) => item.data?.tool === "spawnAgent"),
+      task = creation?.data?.prompt,
+      parentID = agent.parent_id || creation?.data?.senderThreadId,
+      parent = agents.find((value) => value.id === parentID),
+      latest = operations.at(-1),
+      result = operations
+        .map((item) => item.data?.agentsStates?.[agent.id]?.message)
+        .reverse()
+        .find((value) => typeof value === "string" && value.trim()),
+      reply = detail
+        ? items
+            .filter((item) => item.type === "agentMessage")
+            .map((item) => item.text || item.data?.text)
+            .reverse()
+            .find((value) => typeof value === "string" && value.trim())
+        : "";
+    return (
+      <section className="subagent-overview">
+        {detail ? (
+          <p className="note">
+            {agentName(agent)} · {statusLabel(agent.status)}
+          </p>
+        ) : (
+          <Button
+            variant="ghost"
+            type="button"
+            className="subagent-row"
+            data-agent-id={agent.id}
+            data-status={agent.status}
+            onClick={() => openAgent(agent.id)}
+          >
+            <Icon name="agent" />
+            <span className="subagent-name">{agentName(agent)}</span>
+            <span className="subagent-status">{statusLabel(agent.status)}</span>
+            <Icon name="chevron" />
+          </Button>
+        )}
+        {parentID && (
+          <p className="note">
+            {t("Parent agent")}: {parent
+              ? agentName(parent)
+              : parentID === state.selected
+                ? state.session?.title || t("Parent conversation")
+                : parentID}
+          </p>
+        )}
+        {typeof task === "string" && task.trim() && (
+          <details className="raw-details">
+            <summary>{t("Agent task")}</summary>
+            <div className="tool-text">{markdown(task)}</div>
+          </details>
+        )}
+        {latest && (
+          <p className="note">
+            {t("Last observed operation")}: {operationLabel(latest)} ·{" "}
+            {statusLabel(latest.status)}
+          </p>
+        )}
+        {result && result !== reply && (
+          <details className="raw-details">
+            <summary>{t("Result summary")}</summary>
+            <div className="tool-text">{markdown(result)}</div>
+          </details>
+        )}
+        {reply && (
+          <p className="tool-text">
+            <strong>{t("Latest loaded reply")}: </strong>
+            {reply}
+          </p>
+        )}
+        {!!operations.length && (
+          <details className="raw-details">
+            <summary>
+              {t("Loaded agent operations")} ({operations.length})
+            </summary>
+            <ol>
+              {operations.map((item) => (
+                <li key={item.id}>
+                  {jumpToItem ? (
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      onClick={() => showOperation(item.id)}
+                      title={t("Show original record")}
+                    >
+                      {operationLabel(item)} · {statusLabel(item.status)}
+                    </Button>
+                  ) : (
+                    <span>
+                      {operationLabel(item)} · {statusLabel(item.status)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
+      </section>
+    );
+  }
+  function render() {
+    const calls = mergeOrdered(state.history, state.live.items || []).filter(
+        (item) => ["collabAgentToolCall", "collabToolCall"].includes(item.type),
+      ),
+      called = calls.length > 0;
     $("subagentsBar").hidden =
       !scope || (!agents.length && !called && !listError);
     $("subagentsCount").textContent = agents.length
@@ -83,7 +225,7 @@ export function createSubagents({
           agents.find((agent) => agent.id === selected) || { id: selected },
         )
       : t("Agents");
-    $("subagentsList").hidden = !!selected;
+    $("subagentsList").hidden = false;
     $("subagentConversation").hidden = !selected;
     $("subagentOlder").hidden = !cursor;
     $("subagentOlder").disabled = loadingDetail;
@@ -97,26 +239,19 @@ export function createSubagents({
             ? t("No agents in this conversation.")
             : "");
     if (selected) renderItems($("subagentMessages"), items);
-    else
-      renderView(
-        $("subagentsList"),
-        agents.map((agent) => (
-          <Button
+    renderView(
+      $("subagentsList"),
+      agents
+        .filter((agent) => !selected || agent.id === selected)
+        .map((agent) => (
+          <Overview
             key={agent.id}
-            variant="ghost"
-            type="button"
-            className="subagent-row"
-            data-agent-id={agent.id}
-            data-status={agent.status}
-            onClick={() => openAgent(agent.id)}
-          >
-            <Icon name="agent" />
-            <span className="subagent-name">{agentName(agent)}</span>
-            <span className="subagent-status">{statusLabel(agent.status)}</span>
-            <Icon name="chevron" />
-          </Button>
+            agent={agent}
+            calls={calls}
+            detail={!!selected}
+          />
         )),
-      );
+    );
   }
   function reset() {
     clearTimeout(timer);
@@ -167,7 +302,9 @@ export function createSubagents({
         return;
       if (!Array.isArray(value.agents))
         throw new Error(t("Unable to load agents."));
+      const changed = JSON.stringify(agents) !== JSON.stringify(value.agents);
       agents = value.agents;
+      if (changed) onAgentsChanged?.();
       listError = "";
       if (selected && !agents.some((agent) => agent.id === selected)) back();
     } catch (error) {
@@ -262,6 +399,12 @@ export function createSubagents({
     }
   }
   function openAgent(id) {
+    if (
+      !scope ||
+      scope !== currentScope() ||
+      !agents.some((agent) => agent.id === id)
+    )
+      return;
     selected = id;
     items = [];
     cursor = anchor = detailError = "";
@@ -311,5 +454,19 @@ export function createSubagents({
     schedule();
   });
   window.addEventListener("pagehide", reset);
-  return { syncSubagents: sync, resetSubagents: reset };
+  return {
+    syncSubagents: sync,
+    resetSubagents: reset,
+    getSubagents: () => (scope && scope === currentScope() ? agents : []),
+    openSubagent: (id) => {
+      if (
+        !scope ||
+        scope !== currentScope() ||
+        !agents.some((agent) => agent.id === id)
+      )
+        return;
+      if (!$("subagentsDialog").open) $("subagentsDialog").showModal();
+      openAgent(id);
+    },
+  };
 }

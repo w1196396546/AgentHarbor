@@ -7,6 +7,10 @@ import { Modal, MenuSurface } from "../components/workspace-surfaces";
 export function Dialogs() {
   return (
     <>
+      <Modal id="sessionInfoDialog" className="session-info-dialog" aria-labelledby="sessionInfoTitle">
+        <div className="dialog-heading"><h2 id="sessionInfoTitle" data-t="Session information"></h2><Button variant="ghost" id="closeSessionInfo" className="icon-button" type="button" data-label="Close dialog"><Icon name="close" /></Button></div>
+        <div id="sessionInfoContent"></div>
+      </Modal>
       <Modal
         id="subagentsDialog"
         className="subagents-dialog"

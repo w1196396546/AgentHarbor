@@ -1,11 +1,13 @@
 # Use a dedicated domain. Set the relay public_url to this same origin.
 remote.example.com {
+    header Strict-Transport-Security "max-age=31536000"
     request_body {
         # Encrypted envelope limit; the desktop keeps the 20 MiB attachment limit.
         max_size 48MiB
     }
     reverse_proxy 127.0.0.1:8080 {
-        header_up Host {http.request.hostport}
+        header_up Host {http.request.host}
+        header_up X-Forwarded-For {client_ip}
         # Caddy handles WebSocket upgrades; disable buffering for streamed replies.
         flush_interval -1
         transport http {

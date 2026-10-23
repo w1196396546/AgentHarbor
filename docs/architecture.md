@@ -59,7 +59,7 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 | 路径 | 职责 |
 | --- | --- |
 | `cmd/anywhereToAgent` | 进程入口、配置参数、监听与退出；兼容旧默认数据路径 |
-| `internal/relay/server.go`、`http.go`、`assets.go` | 服务生命周期、来源校验、路由与嵌入网页 |
+| `internal/relay/server.go`、`http.go`、`assets.go` | 服务生命周期、来源校验、可信代理 IP 与限流、路由及嵌入网页 |
 | `internal/relay/devices.go`、`connection.go`、`state.go` | 设备目录/撤销、WSS 登记与心跳、原子私有持久化 |
 | `internal/relay/sessions.go`、`pairing.go`、`secure.go` | 浏览器授权映射、配对、受限密文代理 |
 | `internal/relay/admin*.go` | 独立管理凭证/会话、来源校验、管理路由 |
@@ -129,9 +129,9 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 ## 服务端配置和持久化
 
-`cmd/anywhereToAgent` 启动网页/中转监听及独立管理监听。`internal/relay` 维护服务端，`internal/transport/tunnel` 定义传输协议。网页资源嵌入二进制。配置只有 `public_url`、`listen_address`、`data_dir` 和 `registration_enabled`，不包含 Codex 程序、Codex home、共享根目录、SSH 或模型凭证。
+`cmd/anywhereToAgent` 启动网页/中转监听及独立管理监听。`internal/relay` 维护服务端，`internal/transport/tunnel` 定义传输协议。网页资源嵌入二进制。配置只有 `public_url`、`listen_address`、`data_dir`、`registration_enabled` 和可选的 `trusted_proxies`，不包含 Codex 程序、Codex home、共享根目录、SSH 或模型凭证。`trusted_proxies` 只允许明确列出的反向代理 CIDR 影响限流地址解析。
 
-私有数据目录保存 `relay-state.json` 和 `admin-token`；示例将管理员提供的配置文件也存为该目录的 `config.json`，只有显式指定 `--config` 才加载它，服务不会自动重写配置文件。`relay-state.json` 保存设备凭证哈希、浏览器授权映射、FullCupAI 用户资料、设备用户关联/别名及账户会话哈希，权限 0600；会话映射及用户资料仍须私有保护；不含平台凭证、原始授权 token 或加密密钥。原状态无需迁移文件即可载入，新增字段之后旧二进制因严格解析会拒绝读取；回滚应使用同时备份的旧状态，并知悉备份后撤销/新增的授权差异，不能静默删除新字段。`admin-token` 是独立管理凭证，也为 0600。解析失败不能当作空授权列表覆盖原状态，应报告错误并保留原文件。
+私有数据目录保存 `relay-state.json` 和 `admin-token`；示例将管理员提供的配置文件也存为该目录的 `config.json`，只有显式指定 `--config` 才加载它，服务不会自动重写配置文件。状态写入先同步临时文件，再原子重命名并同步父目录；成功重命名后，内存状态跟随该文件，即使目录同步报告错误也不会回退到旧状态。Windows 上 Go 没有可移植的目录同步接口。`relay-state.json` 保存设备凭证哈希、浏览器授权映射、FullCupAI 用户资料、设备用户关联/别名及账户会话哈希，权限 0600；会话映射及用户资料仍须私有保护；不含平台凭证、原始授权 token 或加密密钥。原状态无需迁移文件即可载入，新增字段之后旧二进制因严格解析会拒绝读取；回滚应使用同时备份的旧状态，并知悉备份后撤销/新增的授权差异，不能静默删除新字段。`admin-token` 是独立管理凭证，也为 0600。解析失败不能当作空授权列表覆盖原状态，应报告错误并保留原文件。
 
 普通聊天与账户页面不显示中转管理入口，管理员仍通过原 `/admin/` 地址和独立管理凭证进入。设备选择与当前连接状态合并为一个区域；列表按各设备已有浏览器授权读取在线状态，在线绿色、离线红色，无法确认时灰色，不更改当前设备选择或凭据。
 
@@ -194,3 +194,24 @@ macOS / Windows GUI 要求共享 App 服务就绪后才连接中转；普通启�
 异步回答使用 `<send_user_message_question_reply>` 包裹 JSON 数组，每项为 `{questionItemId,question,answer}`，沿既有 `/api/threads/{id}/steer` 提交并携带点击时的 `expected_turn_id` 和 owner epoch；只在实际 owner 可引导时允许操作。等待型提问继续使用 `/answer`。没有自动提交、自动重发、创建第二个 owner 或切换桌面聊天。回答以可读问答显示；只有正式 userMessage 或 accepted steeringUserMessage 才消除对应题目，刷新不重新发送。旧轮次或已结束轮次不显示异步问题。
 
 协议证据：安装版 Codex `26.1013.40934`（build `20770`），`app.asar` SHA-256 `5ddc4e48259aa6f979e04529b1a5a4ae54b0f5c4ad6db5c6e004924c10916ddb`。其 `app-initial-90eb42395b7d.js` 的问题映射/回复编码、`app-primary-b4ce9e46e8cf.js` 的 send-now 提交，以及 `src-DsLVGakC.js` 的已接受回复识别提供字段和状态依据；未读取日常会话或凭据。实现见 [codex-questions.js](../web/src/agents/codex-questions.js)、[approvals.jsx](../web/src/features/approvals.jsx)，回归见 [codex-questions.test.cjs](../tests/codex-questions.test.cjs) 和 [remote-workspace.test.cjs](../tests/remote-workspace.test.cjs)。同一网页/owner 协议用于 macOS 与 Windows；Windows App 实机行为仍需单独验收。
+
+
+## 会话执行信息与资源展示
+
+网页沿用聊天区、输入框附近状态、右侧文件面板及会话信息弹窗。消息阶段读取 `data.phase`；轮次摘要按 `turn_id` 归组。摘要和更改面板共用 `collectChanges`，合并已加载 `fileChange`、`live.diff` 和 `workspaceChanges`，按轮次与规范化路径去重；无法归属轮次的更改只出现在全部更改中。成功、失败工具数依据真实结果、退出码或状态，并可跳到对应记录；历史尚未完整加载时明确标记范围。连接端可在现有 `items` / `history_items` 中附带 `turn: {status, started_at_ms, duration_ms}`，SSE 的 item 更新保留同一字段。它来自真实 owner 快照、app-server 轮次历史及生命周期事件，不以浏览器接收时间补值。旧连接端可省略；未知字段和缺失信息保留安全回退。
+
+命令使用 `commandActions` 分类并显示终端交互和截断提示；MCP / 动态结果分别展示文本、受支持的内联图片、资源链接及错误，参数放在折叠详情。搜索工具区分查询、打开网页和页内查找，只链接上游提供的来源。回答、本轮已加载回答、命令、工具输出及 Diff 可复制；回答保留 Markdown 原文。
+
+审批按 item / turn 与工具关联，异步问题也关联其消息；标题显示等待状态，新增关联请求展开对应工具一次，同一请求的后续流更新保留用户的展开选择。待处理入口显示数量，弹窗可切换请求；输入仅在内存中按设备、Agent、会话、owner epoch 和请求内容隔离，解决请求、内容变化或切换归属后清除。点击复用原请求弹窗、`/answer` / `/steer`、owner epoch 和轮次校验，不自动重发。子智能体概览从已加载创建/发送/等待/关闭记录串联任务说明、父子关系、最近观测操作和结果摘要，详情仍只读，不扩大子会话授权范围。
+
+错误详情读取真实 `error_data` / `error` / `retrying`，展示原因、错误代码与明确关联的失败操作；模型请求自动重试与网页 SSE 重连分别显示，不推测次数、下次重试时间或执行状态。系统通知、Hook、审查、模型切换和图片产物按类型显示；Hook 只展示上游已有的触发事件、处理程序、状态、输出及 `durationMs` 耗时，自动审查展示 action / review 的真实风险、理由和关联操作，已知枚举沿用界面语言。Hook `startedAt` / `completedAt` 的 schema 未明确时间单位，不转换成日期；原始详情仍可展开。未持久化的上游通知在连接端进程重启后可能不再存在，无归属的通知不混入其它会话。
+
+`usage.last` 与 `usage.total` 展示最近请求和累计 Token 明细；`context` 独立表示窗口占用和压缩状态，不用累计用量推算上下文，也不表示账户额度。缺失为未知，真实零值保留。会话信息分别显示电脑在线、网页流、执行 owner 和任务状态；owner 上报的设置不以页面偏好补值，待确认偏好另列，owner 失联时明确标记上次上报状态。最近成功同步时间是当前浏览器的观测时间，不表示任务开始、完成或最近执行时间。
+
+右侧面板保留更改列表、文件树和轮次筛选，并增加按轮次归集已加载真实图片/文件的产物入口，可定位原消息、预览和下载。文件更改显示上游明确提供的重命名前后路径、二进制和截断状态，任务结束与更改仍在读取分别表示；当前文件预览与历史差异分开。会话内搜索只覆盖已加载正文和工具输出，支持失败、更改、产物筛选及轮次跳转，不声称全历史搜索。阅读锚点、展开状态和更改筛选以设备 / Agent / 会话隔离保存到有界本地元数据；不额外持久化正文、回答、附件或凭据，草稿和附件沿用原生命周期。刷新后只在当前授权列表仍包含该会话，且没有输入草稿、附件、技能、提及、工具选择或队列编辑时恢复只读详情，不自动连接 owner；锚点不在已加载记录时提示用户加载更早内容，主动滚动或返回最新会取消等待恢复，不自动抓取完整历史。
+
+资源读取继续通过加密 `project-file` / `attachments/{id}`。本机只允许授权项目内文件，以及与当前项目登记上传路径完全一致的附件；不开放任意本机路径。助手 Markdown 中的本机文件链接和图片通过与点击预览相同的 `localFileTarget` 识别并归集产物；`file:` 只接受空 host 或 `localhost`，仍交给原项目文件授权校验，远程 host 不作为本机文件。内联图片仅允许有界 PNG/JPEG/GIF/WebP 数据，资源被截断、已删除、需要授权或不可访问时按实际结果提示原因；外部 HTTP(S) 资源作为链接，不为预览抓取外部资源。中转仍不解析或保存资源明文。会话信息复用已有 options 目录和错误，不额外创建执行进程。
+
+可选 `options.mcp_servers` 为 `{name, tools_known, tools_error?, runtime_status?, auth_status?}[]`，现有 `tools` 列表不变。成功读取且无服务返回 `[]`；整体目录不可读为 `null` 并保留错误，旧客户端省略此字段。每个服务区分目录成功但无工具、未加载和读取失败；运行连接与认证状态只显示上游提供的值。来源为安装版 Codex CLI `0.163.0` 的 `app-server generate-json-schema`：`McpServerStatus`、`HookRunSummary`、`GuardianApprovalReview` 和 `PatchChangeKind`；自动审查 schema 标记为 unstable，未知或缺失字段继续保留降级。
+
+前端实现见 [conversation.jsx](../web/src/features/conversation.jsx)、[lifecycle.jsx](../web/src/features/lifecycle.jsx)、[workspace.jsx](../web/src/features/workspace.jsx)、[files.jsx](../web/src/features/files.jsx) 和 [subagents.jsx](../web/src/features/subagents.jsx)；共享统计与阅读元数据分别位于 `web/src/features/presentation.js`、`web/src/features/reading.js`。

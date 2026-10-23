@@ -19,8 +19,9 @@ export function createDevices({
       state.selected &&
       nativeSettings() &&
       state.live.owner?.state !== "connected";
-    const key =
-      state.device?.online === false
+    const key = state.deviceConnectionUnknown
+      ? "Connection unknown"
+      : state.device?.online === false
         ? "Your computer is offline"
         : state.archivedSelection
           ? "Archived"
@@ -45,11 +46,13 @@ export function createDevices({
       );
     $("connectionLabel").textContent = t(key);
     $("connectionLabel").parentElement.dataset.state =
-      state.device?.online === false
-        ? "offline"
-        : blocked || state.archivedSelection
-          ? "observing"
-          : state.streamMode;
+      state.deviceConnectionUnknown
+        ? "observing"
+        : state.device?.online === false
+          ? "offline"
+          : blocked || state.archivedSelection
+            ? "observing"
+            : state.streamMode;
   }
   function renderDevice() {
     window.dispatchEvent(
@@ -57,19 +60,27 @@ export function createDevices({
     );
     $("deviceName").textContent = state.device?.name || t("Connected computer");
     $("deviceName").title = state.device?.id || "";
-    $("deviceOffline").hidden = state.device?.online !== false;
+    $("deviceOffline").hidden =
+      state.deviceConnectionUnknown || state.device?.online !== false;
     $("deviceDetails").textContent = state.device
       ? [
           state.device.name,
           state.device.id,
-          t(state.device.online ? "Connected" : "Your computer is offline"),
+          t(
+            state.deviceConnectionUnknown
+              ? "Connection unknown"
+              : state.device.online
+                ? "Connected"
+                : "Your computer is offline",
+          ),
         ]
           .filter(Boolean)
           .join(" · ")
       : "";
   }
-  function setDeviceOnline(online) {
+  function setDeviceOnline(online, unknown = false) {
     if (!state.device) return;
+    state.deviceConnectionUnknown = unknown;
     state.device.online = online;
     if (!online) {
       closeStream();
@@ -90,6 +101,7 @@ export function createDevices({
       const previous = state.device,
         value = await api("device");
       state.device = value;
+      state.deviceConnectionUnknown = false;
       showWorkspace();
       renderDevice();
       updateControls();
@@ -131,7 +143,7 @@ export function createDevices({
       else if (!document.hidden) await list(false, true).catch(() => {});
     } catch (e) {
       if (state.device) {
-        setDeviceOnline(false);
+        setDeviceOnline(false, true);
         notice(
           e.name === "AbortError"
             ? "Connection timed out. Try again."

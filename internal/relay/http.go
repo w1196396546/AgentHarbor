@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -136,4 +137,43 @@ func (s *Server) allowAttempt(kind, remote string, limit int) bool {
 	window.count++
 	s.attempts[key] = window
 	return window.count <= limit
+}
+
+func (s *Server) clientIP(r *http.Request) string {
+	peer, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		peer = r.RemoteAddr
+	}
+	addr, err := netip.ParseAddr(peer)
+	if err != nil {
+		return peer
+	}
+	addr = addr.Unmap().WithZone("")
+	if !s.trustedProxy(addr) {
+		return addr.String()
+	}
+	chain := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	if len(chain) > 32 {
+		return addr.String()
+	}
+	for i := len(chain) - 1; i >= 0; i-- {
+		if !s.trustedProxy(addr) {
+			break
+		}
+		forwarded, err := netip.ParseAddr(strings.TrimSpace(chain[i]))
+		if err != nil {
+			return peer
+		}
+		addr = forwarded.Unmap().WithZone("")
+	}
+	return addr.String()
+}
+
+func (s *Server) trustedProxy(addr netip.Addr) bool {
+	for _, prefix := range s.trustedProxies {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }

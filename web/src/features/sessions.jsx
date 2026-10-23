@@ -32,8 +32,11 @@ export function createSessions({
   hideSuggestions,
   resizeComposer,
   getAgent,
+  saveReading = () => {},
+  restoreSession = () => "",
 }) {
-  let listRequests = 0;
+  let listRequests = 0,
+    restoredScope = "";
   function setNavigation(open) {
     document.body.classList.toggle("nav-open", open);
     $("navBackdrop").hidden = !open;
@@ -72,7 +75,8 @@ export function createSessions({
       while (refresh && value.has_more && value.next < loaded) {
         const offset = value.next;
         value = await api(
-          "sessions?" + new URLSearchParams({ project, offset: String(offset) }),
+          "sessions?" +
+            new URLSearchParams({ project, offset: String(offset) }),
         );
         if (seq !== state.listSeq || project !== state.listProject) return;
         rows.push(...value.sessions);
@@ -97,6 +101,22 @@ export function createSessions({
       renderProjects();
       renderSessions();
       updateControls();
+      const viewScope = JSON.stringify([state.device?.id, getAgent().id]);
+      if (restoredScope !== viewScope) {
+        restoredScope = viewScope;
+        const restored = restoreSession();
+        if (
+          !state.selected &&
+          !$("message").value &&
+          !state.attachments.length &&
+          !state.skills.length &&
+          !state.mentions.length &&
+          !state.tools.length &&
+          !state.queueEdit &&
+          state.sessions.some((session) => session.id === restored)
+        )
+          await select(restored, false);
+      }
       if (!refresh && !state.optionsLoaded) await loadOptions();
       if (!refresh && value.history_warning) notice(value.history_warning);
     } finally {
@@ -362,6 +382,8 @@ export function createSessions({
     }
   }
   async function resetSelection() {
+    saveReading();
+    state.reportedOptions = null;
     state.connectingOwner?.controller?.abort();
     closeStream();
     const navigation = ++state.generation;
@@ -421,12 +443,14 @@ export function createSessions({
     }
     if (generation === state.generation) clearDraft();
   }
-  async function select(id) {
+  async function select(id, connect = true) {
     if (state.sending) return;
     if (id === state.selected && !state.selecting) {
       setNavigation(false);
       return connectOriginalOwner();
     }
+    saveReading();
+    state.reportedOptions = null;
     state.connectingOwner?.controller?.abort();
     closeStream();
     const navigation = ++state.generation;
@@ -485,7 +509,9 @@ export function createSessions({
         state.projects
           .filter((path) => {
             const root = normalize(path).replace(/\/$/, "");
-            return normalize(cwd) === root || normalize(cwd).startsWith(root + "/");
+            return (
+              normalize(cwd) === root || normalize(cwd).startsWith(root + "/")
+            );
           })
           .sort((a, b) => b.length - a.length)[0] || "";
     }
@@ -493,7 +519,7 @@ export function createSessions({
       loadOptions(),
       (async () => {
         await detail(generation);
-        if (current()) await connectOriginalOwner();
+        if (current() && connect) await connectOriginalOwner();
       })(),
     ]);
     if (current() && !$("changesPanel").hidden && state.sideTab === "files")

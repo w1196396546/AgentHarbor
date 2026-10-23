@@ -1,3 +1,4 @@
+import { localFileTarget } from "./presentation";
 import { useState } from "react";
 import {
   Table,
@@ -25,35 +26,9 @@ export function createMarkdown({
       return null;
     }
   }
-  function localFileTarget(value) {
-    let path = value.trim().replace(/^<|>$/g, "");
-    if (
-      !path ||
-      path.startsWith("#") ||
-      (/^[a-z][a-z0-9+.-]*:/i.test(path) && !/^\w:[\\/]/.test(path))
-    )
-      return null;
-    try {
-      path = decodeURIComponent(path);
-    } catch {
-      return null;
-    }
-    const lineMatch = path.match(
-        /(?::(\d+)(?::\d+)?|#L(\d+)(?:C\d+)?(?:-L\d+)?)$/,
-      ),
-      line = Number(lineMatch?.[1] || lineMatch?.[2] || 0);
-    if (lineMatch) path = path.slice(0, lineMatch.index);
-    if (
-      !/^(?:\/|\.\.?\/)/.test(path) &&
-      !path.includes("/") &&
-      !/\.[^./\s]+$/.test(path)
-    )
-      return null;
-    return { path, line };
-  }
   function inline(text) {
     const re =
-      /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|~~[^~\n]+~~|\[[^\]\n]+\]\((?:<[^>\n]+>|[^)\n]+)\))/g;
+      /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|~~[^~\n]+~~|!?\[[^\]\n]+\]\((?:<[^>\n]+>|[^)\n]+)\))/g;
     const nodes = [];
     let start = 0;
     for (const match of text.matchAll(re)) {
@@ -73,7 +48,8 @@ export function createMarkdown({
           target = value.slice(split + 2, -1),
           file = localFileTarget(target),
           url = file ? null : safeURL(target),
-          label = value.slice(1, split);
+          image = value.startsWith("!"),
+          label = value.slice(image ? 2 : 1, split);
         nodes.push(
           file && readOnly ? (
             <span key={key}>{label}</span>
@@ -87,7 +63,7 @@ export function createMarkdown({
                 run(() => openProjectFile(file.path, file.line));
               }}
             >
-              {label}
+              {image ? t("View image") + " · " + label : label}
             </a>
           ) : url ? (
             <a key={key} href={url} target="_blank" rel="noreferrer noopener">

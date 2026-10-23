@@ -1,3 +1,9 @@
+import { createReading } from "./features/reading";
+import {
+  loadedItems,
+  itemResources,
+  searchItems,
+} from "./features/presentation";
 import { bindWorkspace } from "./features/bindings";
 import { createAgentLifecycle } from "./features/agents";
 import { agentFor } from "./agents/registry";
@@ -152,6 +158,135 @@ export function startRemote() {
     queueDraftID: "",
     queueDraftKey: "",
   };
+  const reading = createReading({ state, $, getAgent });
+  const jumpToItem = (id) => reading.jump(id);
+  function conversationItems() {
+    return [
+      ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
+      ...loadedItems(state),
+    ];
+  }
+  function turnLabel(id) {
+    if (!id) return t("Unknown");
+    if (id === state.live.turn_id) return t("Current turn");
+    const turns = [
+      ...new Set(
+        conversationItems()
+          .map((item) => item.turn_id)
+          .filter(Boolean),
+      ),
+    ];
+    const index = turns.indexOf(id);
+    return t("Turn") + " " + (index >= 0 ? index + 1 : t("Unknown"));
+  }
+  function renderSearch() {
+    const items = conversationItems(),
+      scope = [state.device?.id, getAgent().id, state.selected].join("|");
+    if ($("conversationSearch").dataset.scope !== scope) {
+      $("conversationSearch").dataset.scope = scope;
+      $("conversationSearch").value = "";
+      $("conversationFilter").value = "all";
+      $("conversationTurn").value = "";
+    }
+    const turns = [
+        ...new Set(items.map((item) => item.turn_id).filter(Boolean)),
+      ],
+      selectedTurn = $("conversationTurn").value;
+    renderView(
+      $("conversationTurn"),
+      <>
+        <option value="">{t("All turns")}</option>
+        {turns.map((id, index) => (
+          <option key={id} value={id}>
+            {t("Turn") + " " + (index + 1)}
+          </option>
+        ))}
+      </>,
+    );
+    $("conversationTurn").value = turns.includes(selectedTurn)
+      ? selectedTurn
+      : "";
+    $("conversationNavigator").hidden = !state.selected;
+    const query = $("conversationSearch").value,
+      filter = $("conversationFilter").value,
+      active = !!query.trim() || filter !== "all" || !!selectedTurn,
+      matches = searchItems(items, query, filter).filter(
+        (item) => !selectedTurn || item.turn_id === selectedTurn,
+      ),
+      changes =
+        filter === "changes"
+          ? changedFiles().filter(
+              (file) =>
+                !file.item_id &&
+                (!selectedTurn || file.turn_id === selectedTurn) &&
+                (!query.trim() ||
+                  (file.path + "\n" + (file.diff || ""))
+                    .toLocaleLowerCase()
+                    .includes(query.trim().toLocaleLowerCase())),
+            )
+          : [];
+    renderView(
+      $("conversationSearchResults"),
+      active ? (
+        <>
+          <p className="note">
+            {t("Loaded messages and tool output only.")} ·{" "}
+            {matches.length + changes.length} {t("matches")}
+          </p>
+          {matches.slice(0, 100).map((item) => (
+            <Action
+              key={item.id}
+              className="search-result"
+              action={() => jumpToItem(item.id)}
+            >
+              <span>
+                {t("Turn")} {turns.indexOf(item.turn_id) + 1 || t("Unknown")}
+              </span>
+              <span>
+                {String(
+                  item.text ||
+                    item.data?.command ||
+                    item.data?.aggregatedOutput ||
+                    item.type,
+                ).slice(0, 150)}
+              </span>
+            </Action>
+          ))}
+          {changes.slice(0, Math.max(0, 100 - matches.length)).map((file) => (
+            <Action
+              key={file.key}
+              className="search-result"
+              action={() => openTurnChanges(file.turn_id)}
+            >
+              {file.path}
+            </Action>
+          ))}
+          {matches.length + changes.length > 100 && (
+            <p className="note">
+              {t("Showing first 100 matches. Refine your search.")}
+            </p>
+          )}
+        </>
+      ) : null,
+    );
+  }
+  function renderTimeline() {
+    reading.capture();
+    const live = state.live,
+      activeIDs = new Set((live.items || []).map((item) => item.id)),
+      history = state.history.filter((item) => !activeIDs.has(item.id));
+    renderItems(
+      $("history"),
+      [
+        ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
+        ...history,
+      ],
+      new Set((live.items || []).map((item) => item.turn_id)),
+    );
+    renderItems($("live"), live.items || []);
+    renderSearch();
+    reading.afterRender();
+  }
   const notice = (text = "") => {
     $("notice").textContent = t(text);
   };
@@ -202,11 +337,13 @@ export function startRemote() {
     }
   }
   function showPair() {
+    reading.save();
     notice();
     clearTimeout(state.deviceTimer);
     clearTimeout(state.timer);
     clearTimeout(state.workspaceTimer);
     state.device = null;
+    state.deviceConnectionUnknown = false;
     state.agentDiscovered = false;
     closeStream();
     state.sending = false;
@@ -257,7 +394,12 @@ export function startRemote() {
     $("pair").hidden = false;
     $("workspace").hidden = true;
     $("logout").hidden = true;
-    for (const id of ["executePlanDialog", "permissionDialog", "deviceDialog"])
+    for (const id of [
+      "executePlanDialog",
+      "permissionDialog",
+      "deviceDialog",
+      "sessionInfoDialog",
+    ])
       if ($(id).open) $(id).close();
     renderSessions();
     renderProjects();
@@ -266,7 +408,6 @@ export function startRemote() {
     setNavigation(false);
   }
   function setStatus(status, requests) {
-    if (state.live.owner?.state === "offline") status = "unknown";
     const label = state.archivedSelection
       ? "Archived"
       : requests?.length
@@ -276,18 +417,36 @@ export function startRemote() {
               : "answer",
           )
           ? "Waiting in original app"
-          : "Waiting for you"
-        : status === "inProgress" || status === "starting"
-          ? "Running"
-          : status === "failed"
-            ? "Failed"
-            : status === "interrupted"
-              ? "Interrupted"
-              : status === "unknown"
-                ? "Status unknown"
-                : "Ready";
+          : ["question", "elicitation"].includes(
+                getAgent().requestKind(requests[0]),
+              )
+            ? "Waiting for you"
+            : "Waiting for approval"
+        : state.live.retrying
+          ? "Retrying…"
+          : status === "completed"
+            ? "Completed"
+            : status === "inProgress" || status === "starting"
+              ? "Running"
+              : status === "failed"
+                ? "Failed"
+                : status === "interrupted"
+                  ? "Interrupted"
+                  : status === "idle" || !state.selected
+                    ? "Ready"
+                    : "Status unknown";
     $("state").textContent = t(label);
     $("state").dataset.state = status || "idle";
+    const connection = state.deviceConnectionUnknown
+      ? "Connection unknown"
+      : state.device?.online === false
+        ? "Computer offline"
+        : state.live.owner?.state === "offline"
+          ? "Connection unknown"
+          : "";
+    $("state").title = connection
+      ? t("Task status") + ": " + t(label) + " · " + t(connection)
+      : t("Task status") + ": " + t(label);
   }
   function selectedModel() {
     return (
@@ -402,6 +561,7 @@ export function startRemote() {
     renderPlanAction();
     renderQueue();
     renderOwner();
+    renderSessionInfo();
     renderContext();
     renderReasoning();
     syncSubagents();
@@ -420,6 +580,10 @@ export function startRemote() {
       return;
     const session = value.session,
       live = revision !== state.liveRevision ? state.live : value.live || {};
+    reading.get();
+    state.lastSyncedAt = Date.now();
+    state.reportedOptions = value.options || null;
+    state.reportedOptionsEpoch = value.live?.owner?.epoch || "";
     state.ownerUnavailable = false;
     state.session = session;
     state.cwd = session.cwd || "";
@@ -503,13 +667,7 @@ export function startRemote() {
       if (status) row.status = status;
       renderSessions();
     }
-    const activeIDs = new Set((live.items || []).map((item) => item.id)),
-      history = state.history.filter((item) => !activeIDs.has(item.id));
-    renderItems($("history"), [
-      ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
-      ...history,
-    ]);
-    renderItems($("live"), live.items || []);
+    renderTimeline();
     renderPlan(live.plan);
     renderChanges();
     renderRequests(state.currentRequests);
@@ -531,15 +689,17 @@ export function startRemote() {
             }[live.activity] || "thinking"
           }
           label={t(
-            state.live.owner?.state !== "connected" && state.live.owner
-              ? "Following the original application…"
-              : {
-                  agentMessage: "Writing a response…",
-                  commandExecution: "Running a command…",
-                  mcpToolCall: "Using a tool…",
-                  fileChange: "Updating files…",
-                  webSearch: "Searching the web…",
-                }[live.activity] || "Codex is thinking…",
+            live.retrying
+              ? "Retrying…"
+              : state.live.owner?.state !== "connected" && state.live.owner
+                ? "Following the original application…"
+                : {
+                    agentMessage: "Writing a response…",
+                    commandExecution: "Running a command…",
+                    mcpToolCall: "Using a tool…",
+                    fileChange: "Updating files…",
+                    webSearch: "Searching the web…",
+                  }[live.activity] || "Codex is thinking…",
           )}
         />
       ),
@@ -550,8 +710,7 @@ export function startRemote() {
       !live.cut &&
       !live.diff_cut &&
       ![...state.history, ...(live.items || [])].some((item) => item.cut);
-    if (live.error) notice(live.error);
-    else if (typeof live.title_notice === "string" && live.title_notice.trim())
+    if (typeof live.title_notice === "string" && live.title_notice.trim())
       notice(live.title_notice);
     updateControls();
     updateLatest();
@@ -559,6 +718,264 @@ export function startRemote() {
     refreshPendingPlan();
     refreshQueue();
   }
+  function renderSessionInfo() {
+    if (!$("sessionInfoDialog").open) return;
+    const owner = state.live.owner || {},
+      options =
+        state.live.options ||
+        ((owner.epoch || "") === state.reportedOptionsEpoch
+          ? state.reportedOptions
+          : null) ||
+        {},
+      catalog = state.catalog,
+      label = (value, names) =>
+        value == null || value === ""
+          ? t("Unknown")
+          : t(names[value] || "Unknown") + (names[value] ? "" : " · " + value),
+      taskNames = {
+        starting: "Running",
+        inProgress: "Running",
+        completed: "Completed",
+        failed: "Failed",
+        interrupted: "Interrupted",
+        idle: "Ready",
+        unknown: "Status unknown",
+      },
+      connectionNames = {
+        open: "Live updates",
+        connecting: "Connecting live updates…",
+        retrying: "Reconnecting live updates…",
+        fallback: "Live stream unavailable; refreshing periodically.",
+        closed: "Live stream closed",
+      },
+      ownerNames = {
+        connected: "Connected",
+        offline: "Unavailable",
+        observing: "Observing",
+        available: "Available to connect",
+        unknown: "Connection unknown",
+        disconnected: "Disconnected",
+      },
+      sourceNames = {
+        background: "Background execution on your computer",
+        native: "Original application",
+        remote: "Remote execution on your computer",
+      },
+      rows = [
+        ["Project", state.session?.cwd || state.cwd || t("Unknown")],
+        [
+          "Computer connection",
+          state.deviceConnectionUnknown
+            ? t("Connection unknown")
+            : state.device?.online === true
+              ? t("Computer online")
+              : state.device?.online === false
+                ? t("Computer offline")
+                : t("Unknown"),
+        ],
+        ["Live stream", label(state.streamMode, connectionNames)],
+        ["Execution source", label(owner.kind, sourceNames)],
+        ["Execution owner", label(owner.state, ownerNames)],
+        ["Task status", label(state.live.status, taskNames)],
+        [
+          "Last successful sync",
+          state.lastSyncedAt
+            ? new Date(state.lastSyncedAt).toLocaleString()
+            : t("Unknown"),
+        ],
+      ],
+      settingLabels = {
+        model: "Model",
+        effort: "Reasoning effort",
+        permission: "Permissions",
+        mode: "Mode",
+      },
+      formatSetting = (key, value) => {
+        if (value == null || value === "") return t("Unknown");
+        if (key === "permission")
+          return t(
+            getAgent().permissionLabel(value, { ...state, nativeSettings }),
+          );
+        if (key === "mode")
+          return t(
+            value === "plan" ? "Plan" : value === "default" ? "Default" : value,
+          );
+        if (key === "effort") return effortName(value);
+        return (
+          getAgent().modelName(getAgent().selectedModel?.(catalog, value)) ||
+          value
+        );
+      },
+      mcpStatusNames = {
+        notStarted: "Not started",
+        starting: "Running",
+        connected: "Connected",
+        authenticationRequired: "Authentication required",
+        failed: "Failed",
+        cancelled: "Cancelled",
+        disabled: "Disabled",
+      };
+    const servers = Array.isArray(catalog.mcp_servers)
+      ? catalog.mcp_servers
+      : [
+          ...new Set((catalog.tools || []).map((tool) => tool.server || "")),
+        ].map((name) => ({ name }));
+    renderView(
+      $("sessionInfoContent"),
+      <>
+        <dl className="session-info-fields">
+          {rows.map(([name, value]) => (
+            <div key={name}>
+              <dt>{t(name)}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="note">
+          {t("Sync time is observed by this browser, not task execution time.")}
+        </p>
+        {state.streamMode === "retrying" && (
+          <p className="note">
+            {t(
+              "Reconnecting the page stream does not retry the model request.",
+            )}
+          </p>
+        )}
+        {owner.notice && <p className="note">{t(owner.notice)}</p>}
+        <h3>{t("Owner-reported settings")}</h3>
+        <p className="note">
+          {t(
+            owner.state === "connected" &&
+              state.device?.online === true &&
+              !state.ownerUnavailable
+              ? "Reported by the connected execution owner."
+              : "Last reported values; the execution owner is not currently confirmed.",
+          )}
+        </p>
+        <dl className="session-info-fields">
+          {Object.entries(settingLabels).map(([key, name]) => (
+            <div key={key}>
+              <dt>{t(name)}</dt>
+              <dd>{formatSetting(key, options[key])}</dd>
+            </div>
+          ))}
+        </dl>
+        {(state.settingsMutation ||
+          Object.keys(settingLabels).some(
+            (key) => state.prefs[key] && state.prefs[key] !== options[key],
+          )) && (
+          <>
+            <h3>{t("Page preferences · awaiting confirmation")}</h3>
+            <dl className="session-info-fields">
+              {Object.entries(settingLabels)
+                .filter(
+                  ([key]) =>
+                    state.prefs[key] && state.prefs[key] !== options[key],
+                )
+                .map(([key, name]) => (
+                  <div key={key}>
+                    <dt>{t(name)}</dt>
+                    <dd>{formatSetting(key, state.prefs[key])}</dd>
+                  </div>
+                ))}
+            </dl>
+          </>
+        )}
+        <h3>{t("Skills")}</h3>
+        {!state.optionsLoaded ? (
+          <p>{t("Catalog not loaded")}</p>
+        ) : catalog.skills?.length ? (
+          catalog.skills.map((skill) => (
+            <div className="catalog-entry" key={skill.path || skill.name}>
+              <strong>{skill.name}</strong>
+              <p>{skill.description}</p>
+              <small>{skill.path}</small>
+            </div>
+          ))
+        ) : (
+          <p>{t("No entries reported")}</p>
+        )}
+        <h3>{t("Tools")}</h3>
+        {!state.optionsLoaded ? (
+          <p>{t("Catalog not loaded")}</p>
+        ) : !servers.length ? (
+          <p>
+            {t(
+              Array.isArray(catalog.mcp_servers)
+                ? "No MCP servers reported"
+                : "MCP catalog unavailable",
+            )}
+          </p>
+        ) : (
+          servers.map((server) => {
+            const tools = (catalog.tools || []).filter(
+              (tool) => (tool.server || "") === server.name,
+            );
+            return (
+              <section className="catalog-entry" key={server.name}>
+                <strong>{server.name || t("Tools")}</strong>
+                {server.runtime_status && (
+                  <p>
+                    {t("Connection")}:{" "}
+                    {label(server.runtime_status, mcpStatusNames)}
+                  </p>
+                )}
+                {server.auth_status && (
+                  <p>
+                    {t("Authentication")}:{" "}
+                    {label(server.auth_status, {
+                      unsupported: "Not supported",
+                      notLoggedIn: "Not signed in",
+                      bearerToken: "Token configured",
+                      oAuth: "Signed in",
+                    })}
+                  </p>
+                )}
+                {Object.hasOwn(server, "tools_error") ? (
+                  <p role="status">
+                    {t("Unable to load tools")}: {server.tools_error}
+                  </p>
+                ) : tools.length ? (
+                  tools.map((tool) => (
+                    <div key={tool.name}>
+                      <strong>
+                        {[server.name, tool.name].filter(Boolean).join(" / ")}
+                      </strong>
+                      <p>{tool.description}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p>
+                    {t(
+                      server.tools_known === true
+                        ? "No tools reported by this server"
+                        : "Tools not loaded",
+                    )}
+                  </p>
+                )}
+              </section>
+            );
+          })
+        )}
+        {catalog.errors?.length > 0 && (
+          <>
+            <h3>{t("Catalog errors")}</h3>
+            {catalog.errors.map((error, index) => (
+              <p role="status" key={index}>
+                {String(error)}
+              </p>
+            ))}
+          </>
+        )}
+      </>,
+    );
+  }
+  $("sessionInfo").onclick = () => {
+    if (!state.selected) return;
+    $("sessionInfoDialog").showModal();
+    renderSessionInfo();
+  };
+  $("closeSessionInfo").onclick = () => $("sessionInfoDialog").close();
   const { markdown, safeURL } = createMarkdown({
     run: (...args) => run(...args),
     openProjectFile: (...args) => openProjectFile(...args),
@@ -572,25 +989,55 @@ export function startRemote() {
     displayDiff,
     DiffStats,
     textOf,
+    Copy,
+    Resource,
   } = createConversation({
     getAgent,
+    getScope: () =>
+      [state.device?.id, getAgent().id, state.selected, state.generation].join(
+        "|",
+      ),
+    getChangedFiles: () => changedFiles(),
+    getReadingState: () => reading.get(),
+    onReadingChange: () => reading.persist(),
+    isPartialHistory: () =>
+      !!state.historyCursor || state.historyCut || !!state.live.cut,
+    jumpToItem,
+    openTurnChanges: (...args) => openTurnChanges(...args),
+    getLive: () => state.live,
+    getAllItems: conversationItems,
+    turnLabel,
+    getRequests: () => state.currentRequests,
+    openRequest: (...args) => openRequest(...args),
+    openProjectFile: (...args) => openProjectFile(...args),
+    openAttachment: (...args) => openAttachment(...args),
+    getSubagents: () => getSubagents(),
+    openSubagent: (...args) => openSubagent(...args),
     t,
     markdown: (...args) => markdown(...args),
     Action: (...args) => Action(...args),
     openChanges: (...args) => openChanges(...args),
     projectName: (...args) => projectName(...args),
   });
-  const { syncSubagents, resetSubagents } = createSubagents({
-    state,
-    $,
-    t,
-    getAgent,
-    api: (...args) => api(...args),
-    run: (...args) => run(...args),
-    Action: (...args) => Action(...args),
-    projectName: (...args) => projectName(...args),
-  });
-  const { loadProjectFiles, openProjectFile, closeFilePreview } = createFiles({
+  const { syncSubagents, resetSubagents, getSubagents, openSubagent } =
+    createSubagents({
+      jumpToItem,
+      onAgentsChanged: () => renderCurrent(),
+      state,
+      $,
+      t,
+      getAgent,
+      api: (...args) => api(...args),
+      run: (...args) => run(...args),
+      Action: (...args) => Action(...args),
+      projectName: (...args) => projectName(...args),
+    });
+  const {
+    loadProjectFiles,
+    openProjectFile,
+    closeFilePreview,
+    openAttachment,
+  } = createFiles({
     getAgent,
     state,
     $,
@@ -626,21 +1073,22 @@ export function startRemote() {
     requireOwner: (...args) => requireOwner(...args),
     detail: (...args) => detail(...args),
   });
-  const { closeDialog, renderRequests, dismissRequest } = createApprovals({
-    getAgent,
-    $,
-    state,
-    ownerCan: (...args) => ownerCan(...args),
-    ownerEpoch: (...args) => ownerEpoch(...args),
-    t,
-    requireOwner: (...args) => requireOwner(...args),
-    api: (...args) => api(...args),
-    detail: (...args) => detail(...args),
-    run: (...args) => run(...args),
-    safeURL: (...args) => safeURL(...args),
-    Action: (...args) => Action(...args),
-    textOf: (...args) => textOf(...args),
-  });
+  const { closeDialog, renderRequests, dismissRequest, openRequest } =
+    createApprovals({
+      getAgent,
+      $,
+      state,
+      ownerCan: (...args) => ownerCan(...args),
+      ownerEpoch: (...args) => ownerEpoch(...args),
+      t,
+      requireOwner: (...args) => requireOwner(...args),
+      api: (...args) => api(...args),
+      detail: (...args) => detail(...args),
+      run: (...args) => run(...args),
+      safeURL: (...args) => safeURL(...args),
+      Action: (...args) => Action(...args),
+      textOf: (...args) => textOf(...args),
+    });
   const {
     closeReasoning,
     renderReasoning,
@@ -713,6 +1161,8 @@ export function startRemote() {
   });
   const {
     resetSideData,
+    changedFiles,
+    openTurnChanges,
     closeChanges,
     renderChanges,
     renderPlanAction,
@@ -726,6 +1176,28 @@ export function startRemote() {
     requestPlanRevision,
     revisePendingPlan,
   } = createWorkspace({
+    getReadingState: () => reading.get(),
+    onReadingChange: () => reading.persist(),
+    turnLabel,
+    onChangesChanged: renderTimeline,
+    getArtifacts: () =>
+      loadedItems(state).flatMap((item) =>
+        itemResources(
+          item.turn_id
+            ? item
+            : {
+                ...item,
+                turn_id: (state.live.items || []).some(
+                  (live) => live.id === item.id,
+                )
+                  ? state.live.turn_id
+                  : "",
+              },
+        ),
+      ),
+    Resource,
+    Copy,
+    jumpToItem,
     state,
     $,
     t,
@@ -780,6 +1252,8 @@ export function startRemote() {
     create,
     discardDraft,
   } = createSessions({
+    saveReading: () => reading.save(),
+    restoreSession: () => reading.lastSession(),
     getAgent,
     $,
     t,
@@ -893,6 +1367,7 @@ export function startRemote() {
     list: (...args) => list(...args),
   });
   const { switchAgent } = createAgentLifecycle({
+    saveReading: () => reading.save(),
     state,
     $,
     getAgent,
@@ -911,7 +1386,11 @@ export function startRemote() {
     updateControls,
     t,
   });
+  $("conversationSearch").oninput = renderSearch;
+  $("conversationFilter").onchange = renderSearch;
+  $("conversationTurn").onchange = renderSearch;
   bindWorkspace({
+    openRequest,
     $,
     closeMenu,
     chooseComposeProject,

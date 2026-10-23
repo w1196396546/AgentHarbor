@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -14,28 +15,30 @@ import (
 )
 
 type Config struct {
-	PublicURL           string `json:"public_url"`
-	ListenAddress       string `json:"listen_address"`
-	DataDir             string `json:"data_dir"`
-	RegistrationEnabled *bool  `json:"registration_enabled,omitempty"`
+	PublicURL           string   `json:"public_url"`
+	ListenAddress       string   `json:"listen_address"`
+	DataDir             string   `json:"data_dir"`
+	RegistrationEnabled *bool    `json:"registration_enabled,omitempty"`
+	TrustedProxies      []string `json:"trusted_proxies,omitempty"`
 }
 
 type Server struct {
-	mu          sync.Mutex
-	cfg         Config
-	public      *url.URL
-	state       persistedState
-	clients     map[string]*connection
-	attempts    map[string]attemptWindow
-	requests    map[string]map[uint64]context.CancelFunc
-	nextRequest uint64
-	admin       http.Handler
-	accountHTTP *http.Client
-	ctx         context.Context
-	cancel      context.CancelFunc
-	closed      bool
-	wg          sync.WaitGroup
-	closeDone   chan struct{}
+	mu             sync.Mutex
+	cfg            Config
+	public         *url.URL
+	trustedProxies []netip.Prefix
+	state          persistedState
+	clients        map[string]*connection
+	attempts       map[string]attemptWindow
+	requests       map[string]map[uint64]context.CancelFunc
+	nextRequest    uint64
+	admin          http.Handler
+	accountHTTP    *http.Client
+	ctx            context.Context
+	cancel         context.CancelFunc
+	closed         bool
+	wg             sync.WaitGroup
+	closeDone      chan struct{}
 }
 
 type attemptWindow struct {
@@ -67,8 +70,16 @@ func New(cfg Config) (*Server, error) {
 		value := *cfg.RegistrationEnabled
 		cfg.RegistrationEnabled = &value
 	}
+	trustedProxies := make([]netip.Prefix, 0, len(cfg.TrustedProxies))
+	for _, value := range cfg.TrustedProxies {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			return nil, errors.New("trusted_proxies entries must be IP CIDR ranges")
+		}
+		trustedProxies = append(trustedProxies, prefix.Masked())
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Server{cfg: cfg, public: public, clients: map[string]*connection{}, attempts: map[string]attemptWindow{}, requests: map[string]map[uint64]context.CancelFunc{}, closeDone: make(chan struct{}), ctx: ctx, cancel: cancel}
+	s := &Server{cfg: cfg, public: public, trustedProxies: trustedProxies, clients: map[string]*connection{}, attempts: map[string]attemptWindow{}, requests: map[string]map[uint64]context.CancelFunc{}, closeDone: make(chan struct{}), ctx: ctx, cancel: cancel}
 	s.accountHTTP = &http.Client{Timeout: 8 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	if err := s.loadState(); err != nil {
 		cancel()

@@ -59,6 +59,7 @@ export function bindWorkspace({
   requestPlanRevision,
   revisePendingPlan,
   dismissRequest,
+  openRequest,
   checkDevice,
   discardDraft,
   clearDraft,
@@ -294,6 +295,7 @@ export function bindWorkspace({
   $("closeChanges").onclick = closeChanges;
   $("changesTab").onclick = () => setPanelTab("changes");
   $("filesTab").onclick = () => setPanelTab("files");
+  $("artifactsTab").onclick = () => setPanelTab("artifacts");
   $("filesToggle").onclick = () => openPanel("files");
   $("filesSearch").oninput = () => run(loadProjectFiles);
   $("closeFilePreview").onclick = closeFilePreview;
@@ -321,19 +323,7 @@ export function bindWorkspace({
     e.preventDefault();
     dismissRequest();
   });
-  $("pendingRequest").onclick = () => {
-    if (
-      !ownerCan(
-        state.currentRequests[0]?.method === "agentMessage/questions"
-          ? "steer"
-          : "answer",
-      )
-    )
-      return;
-    state.dismissedKey = "";
-    $("requestDialog").showModal();
-    $("pendingRequest").hidden = true;
-  };
+  $("pendingRequest").onclick = () => openRequest();
   $("pairForm").onsubmit = (e) => {
     e.preventDefault();
     run(async () => {

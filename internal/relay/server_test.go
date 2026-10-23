@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,44 @@ func testRelay(t *testing.T, dir string) (*Server, *httptest.Server) {
 	ts.Start()
 	t.Cleanup(func() { s.Close(); ts.Close() })
 	return s, ts
+}
+
+func TestRateLimitUsesForwardedIPOnlyFromTrustedProxies(t *testing.T) {
+	s := &Server{
+		attempts:       map[string]attemptWindow{},
+		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
+	}
+	request := func(remote, forwarded string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "http://relay.test/", nil)
+		r.RemoteAddr = remote
+		r.Header.Set("X-Forwarded-For", forwarded)
+		return r
+	}
+	for i := 0; i < 2; i++ {
+		if !s.allowAttempt("pair", s.clientIP(request("127.0.0.1:8080", "198.51.100.10")), 2) {
+			t.Fatal("first client exhausted its limit too early")
+		}
+	}
+	if !s.allowAttempt("pair", s.clientIP(request("127.0.0.1:8080", "198.51.100.11")), 2) {
+		t.Fatal("a second client behind the proxy shared the first client's limit")
+	}
+	if s.allowAttempt("pair", s.clientIP(request("127.0.0.1:8080", "198.51.100.10")), 2) {
+		t.Fatal("the first client's limit was not enforced")
+	}
+	if got := s.clientIP(request("192.0.2.8:1234", "203.0.113.9")); got != "192.0.2.8" {
+		t.Fatalf("untrusted forwarded header changed client IP: %s", got)
+	}
+}
+
+func TestNewRejectsMalformedTrustedProxyCIDR(t *testing.T) {
+	_, err := New(Config{
+		PublicURL:      "http://127.0.0.1:8080",
+		DataDir:        t.TempDir(),
+		TrustedProxies: []string{"127.0.0.1"},
+	})
+	if err == nil {
+		t.Fatal("invalid trusted proxy entry was accepted")
+	}
 }
 
 func testClient(t *testing.T, ts *httptest.Server, id, secret string, handler http.Handler) (*tunnel.Peer, <-chan struct{}) {

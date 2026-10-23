@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -71,10 +70,7 @@ func (a *Admin) authenticated(r *http.Request) bool {
 }
 
 func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
+	ip := a.server.clientIP(r)
 	now := time.Now()
 	a.mu.Lock()
 	attempt := a.attempts[ip]

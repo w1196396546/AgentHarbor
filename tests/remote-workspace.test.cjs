@@ -501,7 +501,7 @@ async function fixture(t, engine, options = {}) {
           json: {
             changes: state.workspaceChanges,
             warning: state.workspaceWarning || "",
-            pending: false,
+            pending: state.workspacePending === true,
           },
         });
       }
@@ -1037,6 +1037,515 @@ async function visibleActionIcons(page) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: structured timeline preserves approvals, navigation and unified turn changes`, async (t) => {
+    const history = richItems();
+    history[3].data.commandActions = [{ type: "read", path: "src/cart.ts" }];
+    history.at(-1).data = { phase: "final_answer" };
+    history.splice(5, 0, {
+      id: "failed-command",
+      type: "commandExecution",
+      turn_id: "turn-1",
+      status: "completed",
+      data: {
+        command: "npm run missing",
+        aggregatedOutput: "Unknown script: missing",
+        exitCode: 1,
+      },
+    });
+    history.forEach((item) => {
+      item.turn = {
+        status: "completed",
+        started_at_ms: 1700000000000,
+        duration_ms: 1250,
+      };
+    });
+    history.push({
+      id: "generated",
+      type: "imageGeneration",
+      turn_id: "turn-1",
+      status: "completed",
+      data: {
+        result:
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/hUAAAAASUVORK5CYII=",
+      },
+    });
+    history.push({
+      id: "review",
+      type: "approvalReview",
+      turn_id: "turn-1",
+      data: {
+        targetItemId: "failed-command",
+        action: { type: "command", command: "npm run missing", cwd: project },
+        review: {
+          status: "denied",
+          rationale: "Denied by review",
+          riskLevel: "high",
+        },
+      },
+    });
+    history.push({
+      id: "post-hook",
+      type: "hook",
+      turn_id: "turn-1",
+      data: {
+        eventName: "postToolUse",
+        status: "failed",
+        durationMs: 12,
+        entries: [{ kind: "error", text: "Fixture validation hook failed" }],
+      },
+    });
+    const requests = [
+      {
+        id: "waiting-question",
+        method: "item/tool/requestUserInput",
+        params: {
+          itemId: "waiting-command",
+          turnId: "turn-2",
+          questions: [
+            {
+              id: "answer",
+              question: "Continue?",
+              options: [{ label: "Safe" }, { label: "Fast" }],
+            },
+          ],
+        },
+      },
+      {
+        id: "second-question",
+        method: "item/tool/requestUserInput",
+        params: {
+          itemId: "waiting-command",
+          turnId: "turn-2",
+          questions: [{ id: "notes", question: "Any notes?" }],
+        },
+      },
+    ];
+    const f = await fixture(t, engine, {
+      streaming: true,
+      catalog: {
+        capabilities: { ...catalog.capabilities, streaming: true },
+        mcp_servers: [
+          { name: "docs", tools_known: true },
+          { name: "empty", tools_known: true },
+          { name: "unknown" },
+          { name: "broken", tools_error: "Fixture catalog read failed" },
+        ],
+      },
+      state: {
+        historyItems: history,
+        workspaceChanges: [
+          {
+            path: project + "/src/cart.ts",
+            turn_id: "turn-1",
+            source: "workspace",
+            diff: patch("before", "final"),
+          },
+          {
+            path: "src/receipt.ts",
+            turn_id: "turn-1",
+            source: "workspace",
+            kind: "add",
+            diff: "export const receipt = true;\n",
+          },
+          {
+            path: "src/current.ts",
+            turn_id: "turn-2",
+            source: "workspace",
+            kind: "add",
+            diff: "current turn\n",
+          },
+        ],
+        live: {
+          status: "inProgress",
+          turn_id: "turn-2",
+          options: defaults,
+          usage: {
+            last: {
+              totalTokens: 40,
+              inputTokens: 30,
+              cachedInputTokens: 0,
+              outputTokens: 10,
+            },
+            total: { totalTokens: 400 },
+          },
+          context: {
+            used_tokens: 40,
+            window_tokens: 1000,
+            compaction: { status: "failed" },
+          },
+          items: [
+            {
+              id: "waiting-command",
+              type: "commandExecution",
+              turn_id: "turn-2",
+              status: "inProgress",
+              data: { command: "echo confirm" },
+            },
+          ],
+          requests,
+        },
+      },
+      onAnswer(state, data) {
+        state.live.requests = state.live.requests.filter(
+          (request) => request.id !== data.id,
+        );
+        if (!state.live.requests.length) {
+          state.live.status = "completed";
+          state.live.items[0].status = "completed";
+        }
+      },
+    });
+    const { page, state, seen } = f;
+    const emitLive = async (packet) => {
+      Object.assign(state.live, packet.state || {});
+      const items = new Map(state.live.items.map((item) => [item.id, item]));
+      for (const item of packet.items || []) items.set(item.id, item);
+      state.live.items = [...items.values()];
+      await page.evaluate(
+        (packet) => window.fixtureStreams.at(-1).emit(packet),
+        packet,
+      );
+    };
+    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator("#requestDialog[open]").waitFor();
+    await page.waitForFunction(() => window.fixtureStreams.length === 1);
+    await page.evaluate(() => window.fixtureStreams[0].open());
+    await page.locator("#dismissRequest").click();
+    assert.match(await page.locator("#pendingRequest").textContent(), /\(2\)/);
+    assert.match(
+      await page.locator(".message-phase").textContent(),
+      /Final answer/,
+    );
+    await page.waitForFunction(
+      () => document.querySelector("#changeCount").textContent === "3",
+    );
+    assert.match(
+      await page.locator('.turn-summary[data-turn="turn-1"]').textContent(),
+      /Completed.*3 Tool calls.*2 Successful tools.*1 Failed tools.*2 files.*1.3 s/,
+    );
+    assert.match(
+      await page.locator('[data-id="cmd-1"]').textContent(),
+      /Read file.*src\/cart.ts/,
+    );
+    assert.match(
+      await page.locator('[data-id="tool-1"] .tool-text').textContent(),
+      /Use the cart store/,
+    );
+    assert.equal(
+      await page.locator('[data-id="generated"] .artifact-image').count(),
+      1,
+    );
+    assert.match(
+      await page.locator('[data-id="review"]').textContent(),
+      /Automatic review.*Declined.*Denied by review.*npm run missing/,
+    );
+    assert.match(
+      await page.locator('[data-id="post-hook"]').textContent(),
+      /Hook.*After tool use.*Failed.*TriggerAfter tool use.*Fixture validation hook failed.*12 ms/,
+    );
+    await emitLive({
+      items: [],
+      state: {
+        retrying: true,
+        error_data: {
+          error: {
+            message: "Fixture model request failed",
+            codexErrorInfo: "rateLimit",
+          },
+          itemId: "waiting-command",
+          turnId: "turn-2",
+          willRetry: true,
+        },
+      },
+    });
+    assert.match(
+      await page.locator("#live .failure-details").textContent(),
+      /Automatic model retry.*Fixture model request failed.*rateLimit.*The model request is retrying automatically/,
+    );
+    assert.equal(
+      await page
+        .locator("#live .failure-details")
+        .getByRole("button", { name: "Go to failed operation", exact: true })
+        .count(),
+      1,
+    );
+    await emitLive({
+      items: [],
+      state: { retrying: false, error: "", error_data: null },
+    });
+    assert.equal(await page.locator("#live .failure-details").count(), 0);
+
+    const waiting = page.locator('[data-id="waiting-command"]');
+    assert.equal(await waiting.evaluate((node) => node.open), true);
+    await waiting.locator(":scope > summary").click();
+    await page.locator("#pendingRequest").click();
+    await page
+      .locator('#requests input[type="text"]')
+      .fill("Continue after review");
+    await page.locator('#requests input[type="radio"][value="Safe"]').check();
+    await page
+      .locator("#requests nav")
+      .getByRole("button", { name: "Review request 2", exact: true })
+      .click();
+    await page.locator('#requests input[type="text"]').fill("Keep both answers");
+    await page
+      .locator("#requests nav")
+      .getByRole("button", { name: "Review request 1", exact: true })
+      .click();
+    assert.equal(
+      await page.locator('#requests input[type="text"]').inputValue(),
+      "Continue after review",
+    );
+    assert(
+      await page
+        .locator('#requests input[type="radio"][value="Safe"]')
+        .isChecked(),
+    );
+    await page.locator('#requests input[type="text"]').focus();
+    await emitLive({
+      items: [],
+      state: { requests: JSON.parse(JSON.stringify(requests)) },
+    });
+    assert.equal(
+      await page.locator('#requests input[type="text"]').inputValue(),
+      "Continue after review",
+    );
+    assert.equal(
+      await page
+        .locator('#requests input[type="text"]')
+        .evaluate((node) => document.activeElement === node),
+      true,
+    );
+    assert.equal(
+      await waiting.evaluate((node) => node.open),
+      false,
+      "an equivalent request update reopened a manually collapsed tool",
+    );
+    await page.locator("#dismissRequest").click();
+    await emitLive({
+      items: [],
+      state: { requests: JSON.parse(JSON.stringify(requests)) },
+    });
+    assert.equal(
+      await page.locator("#requestDialog").evaluate((node) => node.open),
+      false,
+    );
+    await page.locator("#pendingRequest").click();
+    await page.locator('#requests button[type="submit"]').click();
+    await page.getByText("Any notes?", { exact: true }).waitFor();
+    assert.equal(
+      await page.locator('#requests input[type="text"]').inputValue(),
+      "Keep both answers",
+    );
+    await page.locator('#requests button[type="submit"]').click();
+    await page.locator("#requestDialog").waitFor({ state: "hidden" });
+    assert.deepEqual(
+      seen.posts
+        .filter((post) => post.path.endsWith("/answer"))
+        .map((post) => post.data),
+      [
+        {
+          id: "waiting-question",
+          answers: { answer: "Continue after review" },
+        },
+        { id: "second-question", answers: { notes: "Keep both answers" } },
+      ],
+    );
+
+    await page.locator("#message").fill("Keep this draft");
+    await page.locator("#conversationSearch").fill("cart.test.ts");
+    assert.match(
+      await page.locator("#conversationSearchResults").textContent(),
+      /Loaded messages and tool output only.*1 matches/,
+    );
+    await page.locator("#conversationSearchResults .search-result").click();
+    assert.equal(
+      await page.locator('[data-id="cmd-1"]').evaluate((node) => node.open),
+      true,
+    );
+    assert.equal(await page.locator("#message").inputValue(), "Keep this draft");
+    await page.locator("#conversationSearch").fill("");
+    await page.locator("#conversationFilter").selectOption("failed");
+    assert.match(
+      await page.locator("#conversationSearchResults").textContent(),
+      /2 matches.*npm run missing.*hook/,
+    );
+    await page.locator("#conversationFilter").selectOption("all");
+    await page.evaluate(() =>
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text) => {
+            window.fixtureClipboard = text;
+          },
+        },
+      }),
+    );
+    await page
+      .locator('.turn-summary[data-turn="turn-1"]')
+      .getByRole("button", { name: "Copy turn answer", exact: true })
+      .click();
+    assert.match(
+      await page.evaluate(() => window.fixtureClipboard),
+      /^# Cart update/,
+    );
+    await page
+      .locator('[data-id="cmd-1"]')
+      .getByRole("button", { name: "Copy command", exact: true })
+      .click();
+    assert.equal(
+      await page.evaluate(() => window.fixtureClipboard),
+      "npm test -- cart",
+    );
+
+    await page.locator("#contextUsage").click();
+    const usage = page.locator(".usage-group");
+    assert.match(
+      await usage.nth(0).textContent(),
+      /Recent request.*Total tokens40.*Cached input tokens0.*Reasoning tokensUnknown/,
+    );
+    assert.match(
+      await usage.nth(1).textContent(),
+      /Cumulative usage.*Total tokens400.*Input tokensUnknown/,
+    );
+    await page.locator("#closeContextUsage").click();
+    await page.locator("#sessionInfo").click();
+    const info = page.locator("#sessionInfoContent");
+    assert.match(
+      await info.textContent(),
+      /Codex Main.*repo-style.*docs \/ lookup/,
+    );
+    for (const [server, message] of [
+      ["empty", "No tools reported by this server"],
+      ["unknown", "Tools not loaded"],
+      ["broken", "Unable to load tools: Fixture catalog read failed"],
+    ])
+      assert.match(
+        await info
+          .locator("section.catalog-entry")
+          .filter({
+            has: page.locator("strong", {
+              hasText: new RegExp("^" + server + "$"),
+            }),
+          })
+          .textContent(),
+        new RegExp(message),
+      );
+    await page.locator("#closeSessionInfo").click();
+    await page.locator("#changesToggle").click();
+    await page.locator("#changesContent .diff-number").first().waitFor();
+    assert.equal(
+      await page.locator("#changesContent .diff-file").count(),
+      3,
+      "absolute and project-relative copies of the same changed path were duplicated",
+    );
+    const added = page.locator("#changesContent .diff-line.add").first();
+    assert.equal(await added.locator(".diff-number").nth(0).textContent(), "");
+    assert.equal(await added.locator(".diff-number").nth(1).textContent(), "1");
+    await page.locator("#artifactsTab").click();
+    assert.equal(await page.locator("#artifactCount").textContent(), "1");
+    assert.equal(
+      await page.locator("#artifactsContent .artifact-image").count(),
+      1,
+    );
+    assert.equal(
+      await page
+        .locator("#artifactsContent")
+        .getByRole("button", { name: "Jump to source", exact: true })
+        .count(),
+      1,
+    );
+    await page
+      .locator("#artifactsContent")
+      .getByRole("button", { name: "Jump to source", exact: true })
+      .click();
+    assert.equal(
+      await page.locator('[data-id="generated"]').evaluate((node) => node.open),
+      true,
+    );
+    assert.equal(await page.locator("#message").inputValue(), "Keep this draft");
+    await page.locator("#changesTab").click();
+    state.workspacePending = true;
+    const pendingChanges = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/changes"),
+    );
+    await emitLive({
+      items: [],
+      state: { status: "completed", requests: [], workspace_revision: 1 },
+    });
+    await pendingChanges;
+    await page
+      .locator("#changesContent")
+      .getByRole("status")
+      .filter({ hasText: "Reading changes…" })
+      .waitFor();
+    assert.match(
+      await page.locator('.turn-summary[data-turn="turn-2"]').textContent(),
+      /Completed/,
+    );
+    state.workspacePending = false;
+    const completedChanges = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/changes"),
+    );
+    await emitLive({ items: [], state: { workspace_revision: 2 } });
+    await completedChanges;
+    await page
+      .locator("#changesContent")
+      .getByRole("status")
+      .waitFor({ state: "hidden" });
+    await page
+      .locator("#changesContent .changes-controls")
+      .getByRole("button", { name: "Turn 1", exact: true })
+      .click();
+    await page
+      .locator("#changesContent .changes-controls")
+      .getByRole("button", { name: "File tree", exact: true })
+      .click();
+    assert.equal(
+      await page.locator("#changesContent .file-list-button").count(),
+      2,
+    );
+    const connections = seen.posts.filter((post) =>
+      post.path.endsWith("/connect"),
+    ).length;
+    await page.reload();
+    await page.locator('[data-id="cmd-1"]').waitFor({ state: "attached" });
+    assert.equal(
+      await page.locator('[data-id="cmd-1"]').evaluate((node) => node.open),
+      true,
+    );
+    assert.equal(
+      await page
+        .locator('[data-id="waiting-command"]')
+        .evaluate((node) => node.open),
+      false,
+    );
+    await page.locator("#changesToggle").click();
+    assert.equal(
+      await page
+        .locator("#changesContent .changes-controls")
+        .getByRole("button", { name: "Turn 1", exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(
+      await page
+        .locator("#changesContent .changes-controls")
+        .getByRole("button", { name: "File list", exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(
+      await page.locator("#changesContent .file-list-button").count(),
+      2,
+    );
+    assert.equal(
+      seen.posts.filter((post) => post.path.endsWith("/connect")).length,
+      connections,
+      "restoring the reading view reconnected the execution owner",
+    );
+    await f.clean();
+  });
   test(`${engine}: phone controls render icons and overlay surfaces cover conversation text`, async (t) => {
     const f = await fixture(t, engine, {
       width: 390,
@@ -5559,6 +6068,15 @@ for (const engine of engines) {
           },
         },
       },
+      {
+        id: "mcp-url",
+        method: "mcpServer/elicitation/request",
+        params: {
+          mode: "url",
+          url: "https://auth.example.test/authorize",
+          message: "Authorize the documentation tool",
+        },
+      },
     ];
     const f = await fixture(t, engine, {
       state: { sessionOptions: { ...defaults, permission: "read-only" } },
@@ -5883,6 +6401,16 @@ for (const engine of engines) {
     await page
       .getByRole("button", { name: "Submit answer", exact: true })
       .click();
+    const authorizationLink = page.getByRole("link", {
+      name: "Open tool authorization (auth.example.test)",
+      exact: true,
+    });
+    await authorizationLink.waitFor();
+    assert.equal(
+      new URL(await authorizationLink.getAttribute("href")).hostname,
+      "auth.example.test",
+    );
+    await page.getByRole("button", { name: "Decline", exact: true }).click();
     await page.locator("#requestDialog").waitFor({ state: "hidden" });
     const answers = seen.posts
       .filter((p) => p.path.endsWith("/answer"))
@@ -5919,6 +6447,7 @@ for (const engine of engines) {
           includeExamples: true,
         },
       },
+      { id: "mcp-url", decision: "decline" },
     ]);
     await menu(page, "permission", "Full access");
     await page.locator("#confirmPermission").click();
@@ -6572,7 +7101,7 @@ for (const engine of engines) {
           {
             id: "file-links",
             type: "agentMessage",
-            text: "[Relative file](src/cart.ts)\n\n[Absolute file](/work/shop/src/cart.ts)\n\n[中文文件](测试.txt)\n\n[Source line](src/cart.ts#L2)\n\n[Out of scope](../private.txt)",
+            text: "[Relative file](src/cart.ts)\n\n[Absolute file](/work/shop/src/cart.ts)\n\n[中文文件](测试.txt)\n\n[Source line](src/cart.ts#L2)\n\n[Out of scope](../private.txt)\n\n[Protocol-relative](//docs.example.test/guide)",
           },
         ],
       },
@@ -6636,6 +7165,17 @@ for (const engine of engines) {
       .filter({ hasText: "File is outside the shared project" })
       .waitFor();
     assert.equal(page.url(), origin + "/");
+    const external = page.getByRole("link", {
+      name: "Protocol-relative",
+      exact: true,
+    });
+    assert.equal(
+      new URL(await external.getAttribute("href")).hostname,
+      "docs.example.test",
+      "protocol-relative URLs must stay external links instead of file previews",
+    );
+    assert.equal(await external.getAttribute("target"), "_blank");
+    assert.match(await external.getAttribute("rel"), /noopener/);
     await page.locator("#filesToggle").click();
     await page
       .locator("#filesContent button")

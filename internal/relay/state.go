@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -158,7 +159,25 @@ func (s *Server) saveState(next persistedState) error {
 	if err := os.Rename(name, filepath.Join(s.cfg.DataDir, "relay-state.json")); err != nil {
 		return err
 	}
+	// shortcut: Windows has no portable directory fsync in Go; add a native flush if its rename durability is required.
+	if runtime.GOOS == "windows" {
+		s.state = next
+		return nil
+	}
+	dir, err := os.Open(s.cfg.DataDir)
+	if err != nil {
+		s.state = next
+		return err
+	}
+	syncErr := dir.Sync()
+	dirCloseErr := dir.Close()
 	s.state = next
+	if syncErr != nil {
+		return syncErr
+	}
+	if dirCloseErr != nil {
+		return dirCloseErr
+	}
 	return nil
 }
 

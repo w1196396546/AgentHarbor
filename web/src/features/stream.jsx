@@ -120,6 +120,12 @@ export function createStream({
           packet.state?.turn_id &&
           state.live.turn_id &&
           packet.state.turn_id !== state.live.turn_id;
+      if (
+        packet.state?.owner &&
+        packet.state.owner.epoch !== state.live.owner?.epoch &&
+        !Object.hasOwn(packet.state, "options")
+      )
+        delete nextState.options;
       const synthetic = (item) =>
           item.type === "userMessage" && item.id.startsWith("native-input-"),
         hydratedTurns = new Set(
@@ -149,6 +155,7 @@ export function createStream({
       );
       for (const item of packet.items) items.set(item.id, item);
       state.live = { ...nextState, items: [...items.values()] };
+      state.lastSyncedAt = Date.now();
       state.liveRevision++;
       state.streamMode = "open";
       clearTimeout(state.timer);
