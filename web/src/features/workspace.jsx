@@ -42,9 +42,10 @@ export function createWorkspace({
   jumpToItem,
   onChangesChanged,
   turnLabel,
+  getChangedFiles,
 }) {
   function changedFiles() {
-    return collectChanges(state);
+    return getChangedFiles ? getChangedFiles() : collectChanges(state);
   }
   function TreeAction({ action, ...props }) {
     return (

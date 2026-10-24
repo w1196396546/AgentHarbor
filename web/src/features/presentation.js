@@ -364,6 +364,16 @@ export function loadedItems(state) {
   ];
 }
 
+export function groupByTurn(values) {
+  const groups = new Map();
+  for (const value of values) {
+    const id = value.turn_id;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(value);
+  }
+  return groups;
+}
+
 export function searchItems(items, query, filter = "all") {
   const term = query.trim().toLocaleLowerCase();
   return items.filter((item) => {

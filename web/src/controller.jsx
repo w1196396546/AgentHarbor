@@ -5,6 +5,8 @@ import {
   loadedItems,
   itemResources,
   searchItems,
+  collectChanges,
+  groupByTurn,
 } from "./features/presentation";
 import { bindWorkspace } from "./features/bindings";
 import { createAgentLifecycle } from "./features/agents";
@@ -162,11 +164,55 @@ export function startRemote() {
   };
   const reading = createReading({ state, $, getAgent });
   const jumpToItem = (id) => reading.jump(id);
+  let conversationView = null;
+  function withConversationView(draw) {
+    if (conversationView) return draw();
+    const items = [
+        ...new Map(conversationItems().map((item) => [item.id, item])).values(),
+      ],
+      turnsPage = indexedTurns(),
+      turns = new Map(turnsPage.items.map((turn) => [turn.id, turn])),
+      turnIDs = [
+        ...new Set(
+          [...turns.keys(), ...items.map((item) => item.turn_id)].filter(
+            Boolean,
+          ),
+        ),
+      ],
+      labels = new Map(
+        turnIDs.map((id, index) => [
+          id,
+          id === state.live.turn_id
+            ? t("Current turn")
+            : turns.has(id)
+              ? t("Turn") + " · " + id.slice(0, 8)
+              : t("Turn") + " " + (index + 1),
+        ]),
+      ),
+      changes = collectChanges(state);
+    conversationView = {
+      items,
+      turnsPage,
+      turns,
+      turnIDs,
+      labels,
+      changes,
+      itemsByTurn: groupByTurn(items),
+      changesByTurn: groupByTurn(changes),
+    };
+    try {
+      return draw();
+    } finally {
+      conversationView = null;
+    }
+  }
   function conversationItems() {
-    return [
-      ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
-      ...loadedItems(state),
-    ];
+    return (
+      conversationView?.items || [
+        ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
+        ...loadedItems(state),
+      ]
+    );
   }
   const readIndexes = createReadIndexes({
     state,
@@ -178,28 +224,39 @@ export function startRemote() {
     },
   });
   function indexedTurns() {
+    if (conversationView) return conversationView.turnsPage;
     const page = readIndexes.read("conversation_index", "turns", "turns");
     return readIndexes.supports("conversation_index")
       ? page
       : { ...page, items: [], loaded: false };
   }
   function allTurnIDs() {
-    return [
-      ...new Set(
-        [
-          ...indexedTurns().items.map((turn) => turn.id),
-          ...conversationItems().map((item) => item.turn_id),
-        ].filter(Boolean),
-      ),
-    ];
+    return (
+      conversationView?.turnIDs || [
+        ...new Set(
+          [
+            ...indexedTurns().items.map((turn) => turn.id),
+            ...conversationItems().map((item) => item.turn_id),
+          ].filter(Boolean),
+        ),
+      ]
+    );
   }
   function turnLabel(id) {
     if (!id) return t("Unknown");
     if (id === state.live.turn_id) return t("Current turn");
+    if (conversationView)
+      return conversationView.labels.get(id) || t("Turn") + " " + t("Unknown");
     if (indexedTurns().items.some((turn) => turn.id === id))
       return t("Turn") + " · " + id.slice(0, 8);
     const index = allTurnIDs().indexOf(id);
     return t("Turn") + " " + (index >= 0 ? index + 1 : t("Unknown"));
+  }
+  function renderChanges() {
+    return withConversationView(drawChanges);
+  }
+  function renderArtifacts() {
+    return withConversationView(drawArtifacts);
   }
   async function locateRecord(target) {
     const wantedID =
@@ -278,6 +335,9 @@ export function startRemote() {
     };
   }
   function renderSearch() {
+    return withConversationView(drawSearch);
+  }
+  function drawSearch() {
     const items = conversationItems(),
       scope = [state.device?.id, getAgent().id, state.selected].join("|");
     if ($("conversationSearch").dataset.scope !== scope) {
@@ -299,7 +359,7 @@ export function startRemote() {
       <>
         <option value="">{t("All turns")}</option>
         {turns.map((id) => {
-          const turn = turnsPage.items.find((turn) => turn.id === id);
+          const turn = conversationView.turns.get(id);
           return (
             <option key={id} value={id}>
               {turnLabel(id)}
@@ -520,6 +580,9 @@ export function startRemote() {
     );
   }
   function renderTimeline() {
+    return withConversationView(drawTimeline);
+  }
+  function drawTimeline() {
     reading.capture();
     const live = state.live,
       activeIDs = new Set((live.items || []).map((item) => item.id)),
@@ -531,8 +594,9 @@ export function startRemote() {
         ...history,
       ],
       new Set((live.items || []).map((item) => item.turn_id)),
+      conversationView,
     );
-    renderItems($("live"), live.items || []);
+    renderItems($("live"), live.items || [], new Set(), conversationView);
     renderSearch();
     reading.afterRender();
   }
@@ -822,12 +886,20 @@ export function startRemote() {
     renderReasoning();
     syncSubagents();
   }
-  async function detail(generation) {
+  async function detail(generation, created) {
     clearTimeout(state.timer);
     const seq = ++state.detailSeq,
       id = state.selected,
       revision = state.liveRevision;
-    const value = await api("sessions/" + encodeURIComponent(id));
+    const snapshot = created?.live,
+      value =
+        created?.id === id &&
+        Array.isArray(snapshot?.items) &&
+        snapshot.owner?.state === "connected" &&
+        typeof snapshot.owner.epoch === "string" &&
+        snapshot.owner.epoch
+          ? { session: created, live: snapshot, history_items: [] }
+          : await api("sessions/" + encodeURIComponent(id));
     if (
       generation !== state.generation ||
       id !== state.selected ||
@@ -881,6 +953,9 @@ export function startRemote() {
     schedulePoll(generation);
   }
   function renderCurrent() {
+    return withConversationView(drawCurrent);
+  }
+  function drawCurrent() {
     const live = state.live;
     if (live.options && !state.settingsMutation) {
       state.prefs = { ...live.options };
@@ -1246,7 +1321,17 @@ export function startRemote() {
     renderSessionInfo();
   };
   $("closeSessionInfo").onclick = () => $("sessionInfoDialog").close();
+  const getMarkdownRenderKey = () =>
+    [
+      lang,
+      state.device?.id,
+      getAgent().id,
+      getAgent().name,
+      state.selected,
+      state.generation,
+    ].join("|");
   const { markdown, safeURL } = createMarkdown({
+    getRenderKey: getMarkdownRenderKey,
     run: (...args) => run(...args),
     openProjectFile: (...args) => openProjectFile(...args),
     t,
@@ -1292,6 +1377,7 @@ export function startRemote() {
   });
   const { syncSubagents, resetSubagents, getSubagents, openSubagent } =
     createSubagents({
+      getRenderKey: getMarkdownRenderKey,
       jumpToItem: (id) => run(() => locateRecord({ item_id: id })),
       onAgentsChanged: () => renderCurrent(),
       state,
@@ -1448,8 +1534,8 @@ export function startRemote() {
     changedFiles,
     openTurnChanges,
     closeChanges,
-    renderChanges,
-    renderArtifacts,
+    renderChanges: drawChanges,
+    renderArtifacts: drawArtifacts,
     renderPlanAction,
     refreshWorkspaceChanges,
     refreshPendingPlan,
@@ -1461,6 +1547,7 @@ export function startRemote() {
     requestPlanRevision,
     revisePendingPlan,
   } = createWorkspace({
+    getChangedFiles: () => conversationView?.changes || collectChanges(state),
     getReadingState: () => reading.get(),
     onReadingChange: () => reading.persist(),
     turnLabel,

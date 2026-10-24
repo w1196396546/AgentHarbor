@@ -32,6 +32,14 @@ Clear a live region with `clearView`, never `replaceChildren`, so React can unmo
 it. Do not rerender the static shell over controller-owned controls. This keeps
 existing cancellation, drafts, protocol boundaries and granular streaming intact.
 
+Each synchronous conversation draw shares one derived index of messages, changes
+and turn labels, then discards it in `finally`. Existing-ID content replacements
+use a linear merge path; history insertion keeps the original ordering rules.
+Markdown leaves reuse unchanged text within their language, device, Agent,
+conversation and selection generation. Dynamic requests and owners keep updating
+independently, and resource actions still check their current context. These
+changes reduce browser computation without adding a stream delay or global cache.
+
 ## Solid Glass source
 
 Source: https://github.com/deeplethe/solid-glass
@@ -105,7 +113,10 @@ Built HTML uses content-versioned JS/CSS URLs so deployments bypass stale browse
 
 Creation preflight requests project options with `scope=creation`, without replacing
 the full catalog; older clients can ignore the scope. Newly created conversations
-skip a redundant owner connection. Confirmed settings and sends release their UI
+skip a redundant owner connection. A matching creation receipt with a connected
+owner, epoch and live snapshot also skips the full detail read before the first
+message; older or incomplete receipts keep the detail confirmation path. Selection
+generations and newer streamed state still take precedence. Confirmed settings and sends release their UI
 controls before history/list refreshes; newer drafts and streamed state win over
 late responses. Attachment uploads run in ordered pairs, and new image chips use
 temporary local previews instead of downloading the image again. The encrypted

@@ -1,5 +1,5 @@
 import { localFileTarget } from "./presentation";
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Table,
   TableHeader,
@@ -15,6 +15,7 @@ export function createMarkdown({
   t,
   Action,
   readOnly = false,
+  getRenderKey = () => document.documentElement.lang,
 }) {
   function safeURL(text) {
     try {
@@ -100,7 +101,7 @@ export function createMarkdown({
       </div>
     );
   }
-  function markdown(text) {
+  const Markdown = memo(function Markdown({ text }) {
     const nodes = [],
       lines = String(text || "")
         .replace(/\r\n/g, "\n")
@@ -217,6 +218,9 @@ export function createMarkdown({
       nodes.push(<p key={key}>{inline(paragraph.join("\n"))}</p>);
     }
     return <div className="markdown">{nodes}</div>;
+  });
+  function markdown(text) {
+    return <Markdown text={String(text || "")} renderKey={getRenderKey()} />;
   }
 
   return { markdown, safeURL };

@@ -513,7 +513,7 @@ export function createSessions({
     }
     if (generation === state.generation) clearDraft();
   }
-  async function select(id, connect = true) {
+  async function select(id, connect = true, created) {
     if (state.sending) return;
     if (id === state.selected && !state.selecting) {
       setNavigation(false);
@@ -574,7 +574,7 @@ export function createSessions({
     await Promise.all([
       loadOptions(),
       (async () => {
-        await detail(generation);
+        await detail(generation, created);
         if (current() && connect) await connectOriginalOwner();
       })(),
     ]);
@@ -758,7 +758,7 @@ export function createSessions({
       state.sending = false;
       updateControls();
     }
-    await select(value.id, false);
+    await select(value.id, false, value);
     list().catch((error) => notice(error.message));
     updateControls();
   }

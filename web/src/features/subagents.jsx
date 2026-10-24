@@ -17,8 +17,15 @@ export function createSubagents({
   projectName,
   onAgentsChanged,
   jumpToItem,
+  getRenderKey = () => document.documentElement.lang,
 }) {
-  const { markdown } = createMarkdown({ t, run, Action, readOnly: true });
+  const { markdown } = createMarkdown({
+    t,
+    run,
+    Action,
+    readOnly: true,
+    getRenderKey: () => getRenderKey() + "|" + selected,
+  });
   const { renderItems, legacyItems, mergeOrdered } = createConversation({
     t,
     Action,

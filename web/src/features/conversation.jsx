@@ -5,6 +5,7 @@ import {
   toolStatus,
   errorDetails,
   resourcePath,
+  groupByTurn,
 } from "./presentation";
 import { renderView } from "../render";
 import { useEffect, useRef, useState } from "react";
@@ -44,8 +45,12 @@ export function createConversation({
 }) {
   function mergeOrdered(existing, incoming, prepend = false, beforeID = "") {
     if (!incoming.length) return existing;
-    const values = new Map(existing.map((item) => [item.id, item])),
-      order = existing.map((item) => item.id);
+    const values = new Map(existing.map((item) => [item.id, item]));
+    if (incoming.every((item) => values.has(item.id))) {
+      for (const item of incoming) values.set(item.id, item);
+      return existing.map((item) => values.get(item.id));
+    }
+    const order = existing.map((item) => item.id);
     let cursor =
       beforeID && order.includes(beforeID)
         ? order.indexOf(beforeID)
@@ -105,17 +110,22 @@ export function createConversation({
     expandedState()["item:" + id] = value;
     onReadingChange();
   }
-  function renderItems(root, items, continuingTurns = new Set()) {
+  function renderItems(root, items, continuingTurns = new Set(), view) {
     if (scope !== getScope()) {
       scope = getScope();
       expanded.clear();
       requestSeen.clear();
     }
-    const allItems = [
-      ...new Map(
-        [...items, ...getAllItems()].map((item) => [item.id, item]),
-      ).values(),
-    ];
+    const itemsByTurn =
+        view?.itemsByTurn ||
+        groupByTurn([
+          ...new Map(
+            [...items, ...getAllItems()].map((item) => [item.id, item]),
+          ).values(),
+        ]),
+      changesByTurn =
+        view?.changesByTurn ||
+        (getChangedFiles && groupByTurn(getChangedFiles()));
     const grouped = [];
     for (const item of items) {
       if (
@@ -172,7 +182,8 @@ export function createConversation({
             <TurnSummary
               key={scope + "|turn-" + turnID}
               id={turnID}
-              items={allItems.filter((value) => value.turn_id === turnID)}
+              items={itemsByTurn.get(turnID) || []}
+              changes={changesByTurn?.get(turnID) || (changesByTurn && [])}
             />,
           );
         return nodes;
@@ -352,13 +363,13 @@ export function createConversation({
       </p>
     ));
   }
-  function TurnSummary({ id, items }) {
+  function TurnSummary({ id, items, changes }) {
     const live = getLive(),
       meta = items.find((value) => value.turn)?.turn || {},
       status = id === live.turn_id ? live.status : meta.status;
     const files = new Set(
-        (getChangedFiles
-          ? getChangedFiles().filter((change) => change.turn_id === id)
+        (changes
+          ? changes
           : items.flatMap((value) =>
               value.type === "fileChange" ? value.data?.changes || [] : [],
             )

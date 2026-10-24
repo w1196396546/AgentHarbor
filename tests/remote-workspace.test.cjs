@@ -1038,6 +1038,79 @@ async function visibleActionIcons(page) {
 }
 
 for (const engine of engines) {
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"])
+    test(`${engine} ${locale}: long history keeps reading, focused drafts and request-only updates`, async (t) => {
+      const history = Array.from({ length: 120 }, (_, index) => ({
+        id: "history-perf-" + index,
+        type: "agentMessage",
+        turn_id: "past-turn-" + Math.floor(index / 4),
+        text: "## Synthetic history " + index + "\n\nStable **historical answer**.",
+        turn: { status: "completed" },
+      }));
+      history.splice(1, 0, {
+        id: "history-perf-command", type: "commandExecution", turn_id: "past-turn-0",
+        status: "completed", data: { command: "echo preserved", aggregatedOutput: "preserved" },
+      });
+      const owner = {
+        kind: "native", state: "connected", epoch: "history-perf-owner",
+        capabilities: { send: true, answer: true, configure: true, interrupt: true },
+      };
+      const f = await fixture(t, engine, {
+        locale, streaming: true,
+        catalog: { capabilities: { ...catalog.capabilities, streaming: true } },
+        state: { historyItems: history, live: {
+          status: "inProgress", turn_id: "active-perf-turn", owner, requests: [],
+          items: [{ id: "perf-answer", type: "agentMessage", turn_id: "active-perf-turn", text: "Initial answer" },
+            { id: "perf-command", type: "commandExecution", turn_id: "active-perf-turn", status: "inProgress", data: { command: "echo approval" } }],
+        } },
+      });
+      const { page, seen } = f;
+      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('[data-id="history-perf-0"]').waitFor();
+      await page.waitForFunction(() => window.fixtureStreams.length === 1);
+      await page.locator('[data-id="history-perf-command"] > summary').click();
+      await page.locator("#message").fill("Draft must stay focused.");
+      await page.locator("#message").focus();
+      await page.locator("#conversationScroll").evaluate((node) => { node.scrollTop = 0; });
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      const timings = await page.evaluate(() => {
+        const first = document.querySelector('[data-id="history-perf-0"]');
+        window.fixtureHistoryNode = first;
+        window.fixtureHistoryTop = first.getBoundingClientRect().top;
+        const samples = [];
+        for (let index = 0; index < 10; index++) {
+          const start = performance.now();
+          window.fixtureStreams.at(-1).emit({ items: [{
+            id: "perf-answer", type: "agentMessage", turn_id: "active-perf-turn", text: "Latest revision " + index,
+          }] });
+          samples.push(performance.now() - start);
+        }
+        return samples;
+      });
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      assert.equal(await page.locator("#message").inputValue(), "Draft must stay focused.");
+      assert.equal(await page.locator("#message").evaluate((node) => node === document.activeElement), true);
+      assert.equal(await page.locator('[data-id="history-perf-command"]').evaluate((node) => node.open), true);
+      assert.equal(await page.evaluate(() => window.fixtureHistoryNode === document.querySelector('[data-id="history-perf-0"]')), true);
+      assert(await page.evaluate(() => Math.abs(window.fixtureHistoryTop - window.fixtureHistoryNode.getBoundingClientRect().top) < 3));
+      assert.equal(await page.locator('[data-id="perf-answer"] .markdown').textContent(), "Latest revision 9");
+      assert.equal(await page.locator(".turn-summary").count(), 31);
+      await page.evaluate(() => window.fixtureStreams.at(-1).emit({ items: [], state: { requests: [{
+        id: "perf-request", method: "item/commandExecution/requestApproval",
+        params: { itemId: "perf-command", turnId: "active-perf-turn", command: "echo approval", availableDecisions: ["accept", "decline"] },
+      }] } }));
+      await page.locator("#requestDialog[open]").waitFor();
+      assert.equal(await page.locator('[data-id="perf-command"] .linked-request').count(), 1);
+      await page.evaluate(() => window.fixtureStreams.at(-1).emit({ items: [], state: {
+        owner: { kind: "native", state: "offline", epoch: "changed-owner", capabilities: {} }, requests: [],
+      } }));
+      await page.locator("#requestDialog").waitFor({ state: "hidden" });
+      assert.equal(await page.locator("#message").inputValue(), "Draft must stay focused.");
+      assert.equal(await page.locator('[data-id="perf-command"] .linked-request').count(), 0);
+      assert.equal(seen.posts.filter((post) => /\/(turn|answer|connect)$/.test(post.path)).length, 0);
+      t.diagnostic("120 historical messages, synchronous local fake stream median ms: " + timings.sort((a, b) => a - b)[5].toFixed(2));
+      await f.clean();
+    });
   test(`${engine}: structured timeline preserves approvals, navigation and unified turn changes`, async (t) => {
     const history = richItems();
     history[3].data.commandActions = [{ type: "read", path: "src/cart.ts" }];
@@ -2559,6 +2632,99 @@ for (const engine of engines) {
     assert.match(await row.textContent(), /Shared Windows title/);
     assert.equal(await page.locator("#breadcrumbProject").textContent(), "Windows App Project");
     await f.clean();
+  });
+
+  for (const locale of ["en-US", "zh-CN"])
+    for (const root of [project, "E:\\work\\shop"])
+      test(`${engine} ${locale} ${root}: a confirmed creation sends before any history read`, async (t) => {
+        for (const control of ["send", "new"]) {
+          const owner = {
+            kind: "native",
+            state: "connected",
+            epoch: "creation-receipt-owner",
+            capabilities: { send: true, queue: true, configure: true },
+          };
+          let detailsAtSend;
+          const f = await fixture(t, engine, {
+            locale,
+            projects: [root],
+            rows: [{ ...session, cwd: root }],
+            onCreate(state) {
+              const row = { ...session, source: "codex-app", cwd: root };
+              state.rows = [row];
+              state.live = {
+                status: "idle",
+                items: [],
+                requests: [],
+                options: defaults,
+                owner,
+              };
+              return { ...row, live: state.live };
+            },
+            onTurn(state, data, seen) {
+              detailsAtSend = seen.details.length;
+              state.live = {
+                ...state.live,
+                status: "inProgress",
+                turn_id: "receipt-first-turn",
+              };
+            },
+          });
+          const { page, seen } = f;
+          if (control === "new") {
+            await page.locator("#new").click();
+            await page.waitForFunction(
+              () => document.getElementById("sourceBadge").hidden === false,
+            );
+          }
+          await page.locator("#message").fill("Send once through the confirmed owner.");
+          await page.locator("#send").click();
+          await page.waitForFunction(
+            () => document.getElementById("message").value === "",
+          );
+          assert.equal(detailsAtSend, 0, "creation waited for a redundant history read");
+          const sends = seen.posts.filter((post) => post.path.endsWith("/turn"));
+          assert.equal(sends.length, 1);
+          assert.equal(sends[0].ownerEpoch, owner.epoch);
+          assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect")).length, 0);
+          assert.equal(await page.locator("#cwd").textContent(), root);
+          await f.clean();
+        }
+      });
+
+  test(`${engine}: incomplete creation owners still require a verified detail read`, async (t) => {
+    for (const invalid of ["epoch", "owner", "items"]) {
+      const owner = {
+        kind: "native",
+        state: "connected",
+        epoch: "detail-confirmed-owner",
+        capabilities: { send: true, configure: true },
+      };
+      let detailsAtSend;
+      const f = await fixture(t, engine, {
+        onCreate(state) {
+          const row = { ...session, source: "codex-app" };
+          state.rows = [row];
+          state.live = { status: "idle", items: [], requests: [], owner };
+          const live = { ...state.live, owner: { ...owner } };
+          if (invalid === "epoch") live.owner.epoch = "";
+          if (invalid === "owner") live.owner.state = "observing";
+          if (invalid === "items") delete live.items;
+          return { ...row, live };
+        },
+        onTurn(state, data, seen) {
+          detailsAtSend = seen.details.length;
+          state.live = { ...state.live, status: "inProgress", turn_id: "verified-turn" };
+        },
+      });
+      const { page, seen } = f;
+      await page.locator("#message").fill("Verify the owner before sending.");
+      await page.locator("#send").click();
+      await page.waitForFunction(() => document.getElementById("message").value === "");
+      assert.equal(detailsAtSend, 1);
+      assert.equal(seen.posts.find((post) => post.path.endsWith("/turn")).ownerEpoch, owner.epoch);
+      await f.clean();
+    }
   });
 
   test(`${engine}: background creation acquires its owner before first send and never falls back on failure`, async (t) => {
@@ -5750,10 +5916,11 @@ for (const engine of engines) {
     );
     await page.keyboard.press("Escape");
     await page.locator("#message").fill("Use the supported approval mode.");
-    await page.locator("#send").click();
-    await page.waitForResponse((response) =>
+    const supportedTurn = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/turn"),
     );
+    await page.locator("#send").click();
+    await supportedTurn;
     assert.equal(
       seen.posts.filter((post) => post.path.endsWith("/turn")).at(-1).data
         .permission,
@@ -5790,10 +5957,11 @@ for (const engine of engines) {
     await legacy.page
       .locator("#message")
       .fill("Use the legacy read-only mode.");
-    await legacy.page.locator("#send").click();
-    await legacy.page.waitForResponse((response) =>
+    const legacyTurn = legacy.page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/turn"),
     );
+    await legacy.page.locator("#send").click();
+    await legacyTurn;
     assert.equal(
       legacy.seen.posts.filter((post) => post.path.endsWith("/turn")).at(-1)
         .data.permission,
@@ -5937,10 +6105,11 @@ for (const engine of engines) {
       await existing.page
         .locator("#message")
         .fill("Keep this existing task read only.");
-      await existing.page.locator("#send").click();
-      await existing.page.waitForResponse((response) =>
+      const preservedTurn = existing.page.waitForResponse((response) =>
         new URL(response.url()).pathname.endsWith("/turn"),
       );
+      await existing.page.locator("#send").click();
+      await preservedTurn;
       assert.equal(
         existing.seen.posts.find((post) => post.path.endsWith("/turn")).data
           .permission,

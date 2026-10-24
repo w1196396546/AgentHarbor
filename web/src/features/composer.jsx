@@ -99,7 +99,7 @@ export function createComposer({
         state.liveRevision = 0;
         resetQueue();
         $("welcome").hidden = true;
-        await detail(generation);
+        await detail(generation, value);
         epoch = ownerEpoch();
         if (!current()) return;
         if (nativeSettings())

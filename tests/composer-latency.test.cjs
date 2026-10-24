@@ -155,3 +155,23 @@ test("a refresh failure after acceptance reports the read error without failing 
   assert.equal(f.state.sending, false);
   assert.deepEqual(f.notices, ["History temporarily unavailable"]);
 });
+
+test("a late creation receipt cannot select or send through a newer conversation", async () => {
+  const created = deferred();
+  const f = await fixture({ createThread: () => created.promise });
+  f.state.selected = "";
+  f.state.live = {};
+  const sending = f.submit();
+  f.state.generation++;
+  f.state.selected = "newer-selection";
+  f.state.live = { owner: { epoch: "newer-owner" } };
+  created.resolve({
+    id: "late-created",
+    live: { items: [], owner: { state: "connected", epoch: "late-owner" } },
+  });
+  await sending;
+  assert.equal(f.state.selected, "newer-selection");
+  assert.equal(f.state.live.owner.epoch, "newer-owner");
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.message.value, "First message");
+});
