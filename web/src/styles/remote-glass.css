@@ -2595,14 +2595,23 @@ body.inspector-resizing #changesResize::after {
   }
   #composer {
     position: relative;
-    padding-top: 54px;
+    padding-top: 0;
+  }
+  .conversation-content {
+    padding-bottom: 124px;
+  }
+  .latest-button {
+    left: auto;
+    right: 12px;
+    transform: none;
   }
   .composer-toolbar .composer-left {
     display: contents;
   }
   .composer-toolbar #permission {
     position: absolute;
-    top: 0;
+    top: auto;
+    bottom: calc(100% + 56px);
     left: 4px;
     z-index: 4;
     min-height: 44px;

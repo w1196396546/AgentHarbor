@@ -3,6 +3,8 @@ import { FieldSet, FieldLegend, FieldLabel } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { AskCard } from "../components/ui/ask-card";
+import { createReadIndexes } from "./indexes";
+import { normalizeInteractions, interactionItems } from "./interaction-history";
 
 export function createApprovals({
   $,
@@ -18,12 +20,146 @@ export function createApprovals({
   Action,
   textOf,
   getAgent,
+  onHistoryChanged,
 }) {
   let scope = "",
     selectedKey = "",
     renderedKey = "",
     pendingKeys = new Set();
   const drafts = new Map();
+  const history = createReadIndexes({
+    state,
+    getAgent,
+    api,
+    onChange: () => onHistoryChanged?.(),
+  });
+  let historyToken = "";
+
+  function historyPage() {
+    return history.read("interaction_history", "interactions", "interactions");
+  }
+  function getInteractionHistory() {
+    return history.supports("interaction_history")
+      ? normalizeInteractions(historyPage().items)
+      : [];
+  }
+  function syncInteractionHistory() {
+    if (!state.selected || !history.supports("interaction_history")) return;
+    const token = JSON.stringify([
+        history.currentScope(),
+        state.live?.turn_id,
+        state.live?.status,
+        state.currentRequests.map((request) => [request.id, request.method]),
+      ]),
+      page = historyPage();
+    if (token === historyToken || page.loading) return;
+    historyToken = token;
+    void history.load("interaction_history", "interactions", "interactions");
+  }
+  function interactionStatus(status) {
+    return t(
+      {
+        pending: "Pending",
+        approved: "Approved",
+        declined: "Declined",
+        answered: "Answered",
+        cancelled: "Cancelled",
+        expired: "Expired",
+      }[status] || "Status unknown",
+    );
+  }
+  function InteractionHistory({ item }) {
+    const sourceItems = item.data?.items || [item],
+      interactions = getInteractionHistory().filter(
+        (value) =>
+          value.status !== "pending" &&
+          sourceItems.some(
+            (source) =>
+              value.item_id === source.id &&
+              (!value.turn_id || value.turn_id === source.turn_id),
+          ),
+      );
+    if (!interactions.length) return null;
+    return (
+      <details className="raw-details interaction-history">
+        <summary>
+          {t("Interaction history")} ({interactions.length})
+        </summary>
+        {interactions.map((value) => (
+          <section key={value.request_id} className="linked-request">
+            <p>
+              <strong>{interactionStatus(value.status)}</strong>
+              {value.summary && " · " + value.summary}
+            </p>
+            {value.reason && <p className="tool-text">{value.reason}</p>}
+            {value.resolved_at_ms && (
+              <p className="note">
+                <time dateTime={new Date(value.resolved_at_ms).toISOString()}>
+                  {new Date(value.resolved_at_ms).toLocaleString()}
+                </time>
+              </p>
+            )}
+          </section>
+        ))}
+      </details>
+    );
+  }
+  function InteractionHistoryStatus() {
+    if (!history.supports("interaction_history")) return null;
+    const page = historyPage();
+    return (
+      <div className="interaction-history-status">
+        <p className="note" role="status">
+          {t("Interaction history")} ·{" "}
+          {t(
+            page.loading
+              ? "Loading…"
+              : !page.loaded || page.error
+                ? "Status unknown"
+                : page.scope === "full"
+                  ? "Full history"
+                  : "Loaded records only",
+          )}
+          {(page.truncated || page.hasMore || page.scope === "loaded") &&
+            " · " + t("Results are incomplete")}
+        </p>
+        {page.error && (
+          <p className="note" role="status">
+            {t(page.error)}
+          </p>
+        )}
+        {page.error && (
+          <Action
+            action={() =>
+              history.load(
+                "interaction_history",
+                "interactions",
+                "interactions",
+              )
+            }
+          >
+            {t("Retry")}
+          </Action>
+        )}
+        {page.hasMore && (
+          <Action
+            disabled={page.loading}
+            action={() =>
+              history.load(
+                "interaction_history",
+                "interactions",
+                "interactions",
+                undefined,
+                true,
+              )
+            }
+          >
+            {t("Load more interaction history")}
+          </Action>
+        )}
+      </div>
+    );
+  }
 
   function requestScope() {
     return JSON.stringify([
@@ -595,5 +731,15 @@ export function createApprovals({
     if (!$("requestDialog").open) $("requestDialog").showModal();
     $("pendingRequest").hidden = true;
   }
-  return { closeDialog, renderRequests, dismissRequest, openRequest };
+  return {
+    closeDialog,
+    renderRequests,
+    dismissRequest,
+    openRequest,
+    getInteractionHistory,
+    InteractionHistory,
+    InteractionHistoryStatus,
+    syncInteractionHistory,
+    interactionSearchItems: () => interactionItems(getInteractionHistory()),
+  };
 }

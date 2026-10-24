@@ -76,7 +76,7 @@ export function createAPI({
           : "Pair this browser first",
       );
     }
-    if (res.status === 503 && path !== "threads") {
+    if (res.status === 503 && path !== "threads" && !options.observation) {
       setDeviceOnline(false);
       throw new Error("Your computer is offline");
     }
@@ -121,7 +121,7 @@ export function createAPI({
         /^[A-Za-z0-9_-]{1,128}$/.test(value.created_thread_id)
       )
         error.createdThreadID = value.created_thread_id;
-      if (res.status === 503) {
+      if (res.status === 503 && !options.observation) {
         setDeviceOnline(false);
         if (!error.createdThreadID) error.message = "Your computer is offline";
       }

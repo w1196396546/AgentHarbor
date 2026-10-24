@@ -563,9 +563,9 @@ export function createSessions({
       state.settingsMutation = null;
       state.prefs = { ...response.options };
       state.live.options = { ...response.options };
+      state.liveRevision++;
       state.prefsLoaded = true;
       updateControls();
-      await detail(mutation.generation);
     } catch (error) {
       if (current()) {
         state.prefs = { ...(state.live.options || mutation.previous) };
@@ -593,7 +593,11 @@ export function createSessions({
         executor: "background",
       };
     try {
-      const catalog = await loadOptions(true, true);
+      const catalog = await api(
+        "options?" + new URLSearchParams({ project, scope: "creation" }),
+      );
+      if (catalog?.agent && catalog.agent.id !== getAgent().id)
+        throw new Error("The active agent changed. Refresh before continuing.");
       if (
         !catalog ||
         generation !== state.generation ||
@@ -683,8 +687,8 @@ export function createSessions({
       state.sending = false;
       updateControls();
     }
-    await select(value.id);
-    await list();
+    await select(value.id, false);
+    list().catch((error) => notice(error.message));
     updateControls();
   }
   function clearDraft() {

@@ -319,7 +319,17 @@ export function Workspace() {
                   data-label="Search this conversation"
                   data-placeholder="Search loaded messages"
                   autoComplete="off"
+                  maxLength={1024}
                 />
+                <select id="conversationSearchScope" data-label="Search scope">
+                  <option value="loaded" data-t="Loaded history"></option>
+                  <option
+                    id="conversationFullHistory"
+                    value="full"
+                    data-t="Full history"
+                    disabled
+                  ></option>
+                </select>
                 <select
                   id="conversationFilter"
                   data-label="Filter loaded records"
@@ -328,8 +338,13 @@ export function Workspace() {
                   <option value="failed" data-t="Failed"></option>
                   <option value="changes" data-t="Changes"></option>
                   <option value="artifacts" data-t="Artifacts"></option>
+                  <option
+                    value="interactions"
+                    data-t="Interaction history"
+                  ></option>
                 </select>
                 <select id="conversationTurn" data-label="Turn"></select>
+                <div id="conversationIndexStatus" aria-live="polite"></div>
                 <div id="conversationSearchResults" aria-live="polite"></div>
               </div>
               <Button

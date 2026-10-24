@@ -35,6 +35,7 @@ export function createConversation({
   turnLabel,
   getRequests = () => [],
   openRequest,
+  renderInteractionHistory,
   openProjectFile,
   openAttachment,
   getSubagents = () => [],
@@ -239,6 +240,7 @@ export function createConversation({
         </summary>
         <div className="activity-body">
           <Pending item={item} />
+          {renderInteractionHistory?.(item)}
           {children}
           {item.cut && <p className="note">{t("Output truncated")}</p>}
         </div>

@@ -372,6 +372,8 @@ export function searchItems(items, query, filter = "all") {
       item.type !== "error"
     )
       return false;
+    if (filter === "interactions" && item.type !== "interactionHistory")
+      return false;
     if (filter === "changes" && item.type !== "fileChange") return false;
     if (filter === "artifacts" && !itemResources(item).length) return false;
     if (!term) return true;

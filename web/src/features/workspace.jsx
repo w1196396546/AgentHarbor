@@ -34,6 +34,9 @@ export function createWorkspace({
   getReadingState,
   onReadingChange,
   getArtifacts,
+  readIndexes,
+  locateRecord,
+  openArtifact,
   Resource,
   Copy,
   jumpToItem,
@@ -249,11 +252,34 @@ export function createWorkspace({
     );
   }
 
+  let artifactScope = "",
+    artifactTurn = "",
+    artifactKind = "";
   function renderArtifacts() {
-    const artifacts = getArtifacts(),
+    if (artifactScope !== readIndexes.currentScope()) {
+      artifactScope = readIndexes.currentScope();
+      artifactTurn = artifactKind = "";
+    }
+    const supported = readIndexes.supports("artifact_index"),
+      page = readIndexes.read("artifact_index", "artifacts", "artifacts"),
+      indexedSources = new Set(page.items.map((artifact) => artifact.item_id)),
+      artifacts = [
+        ...(supported && page.loaded ? page.items : []),
+        ...getArtifacts().filter(
+          (artifact) =>
+            !supported || !page.loaded || !indexedSources.has(artifact.item_id),
+        ),
+      ],
       groups = new Map();
     for (const artifact of artifacts) {
-      const turn = artifact.turn_id || "";
+      const turn = artifact.turn_id || "",
+        kind =
+          artifact.kind ||
+          (artifact.part?.type?.toLowerCase().includes("image")
+            ? "image"
+            : "file");
+      if (artifactTurn && (turn || "unknown") !== artifactTurn) continue;
+      if (artifactKind && kind !== artifactKind) continue;
       if (!groups.has(turn)) groups.set(turn, []);
       groups.get(turn).push(artifact);
     }
@@ -261,16 +287,175 @@ export function createWorkspace({
     renderView(
       $("artifactsContent"),
       <>
-        <p className="note">{t("Artifacts from loaded messages only.")}</p>
-        {artifacts.length ? (
-          [...groups].map(([turn, values], index) => (
+        <p className="note">
+          {t(
+            supported && page.loaded && page.scope === "full"
+              ? "Artifacts from readable history."
+              : "Artifacts from loaded messages only.",
+          )}
+        </p>
+        {supported && (
+          <>
+            {page.loading && (
+              <p className="note">{t("Loading history index…")}</p>
+            )}
+            {page.error && (
+              <p className="note" role="status">
+                {t(page.error)}
+              </p>
+            )}
+            {(page.truncated ||
+              page.hasMore ||
+              (page.loaded && page.scope !== "full")) && (
+              <p className="note">{t("Results are incomplete.")}</p>
+            )}
+            <TreeAction
+              disabled={page.loading}
+              action={() =>
+                readIndexes.load("artifact_index", "artifacts", "artifacts")
+              }
+            >
+              {t(page.error ? "Retry" : "Load history artifacts")}
+            </TreeAction>
+            {page.hasMore && (
+              <TreeAction
+                disabled={page.loading}
+                action={() =>
+                  readIndexes.load(
+                    "artifact_index",
+                    "artifacts",
+                    "artifacts",
+                    undefined,
+                    true,
+                  )
+                }
+              >
+                {t("Load more artifacts")}
+              </TreeAction>
+            )}
+          </>
+        )}
+        {!!artifacts.length && (
+          <div className="changes-controls">
+            <select
+              aria-label={t("Turn")}
+              value={artifactTurn}
+              onChange={(event) => {
+                artifactTurn = event.currentTarget.value;
+                renderArtifacts();
+              }}
+            >
+              <option value="">{t("All turns")}</option>
+              {[
+                ...new Set(
+                  artifacts.map((artifact) => artifact.turn_id || "unknown"),
+                ),
+              ].map((turn) => (
+                <option key={turn} value={turn}>
+                  {turnLabel(turn === "unknown" ? "" : turn)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={t("Artifact type")}
+              value={artifactKind}
+              onChange={(event) => {
+                artifactKind = event.currentTarget.value;
+                renderArtifacts();
+              }}
+            >
+              <option value="">{t("All artifact types")}</option>
+              {[
+                ...new Set(
+                  artifacts.map(
+                    (artifact) =>
+                      artifact.kind ||
+                      (artifact.part?.type?.toLowerCase().includes("image")
+                        ? "image"
+                        : "file"),
+                  ),
+                ),
+              ].map((kind) => (
+                <option key={kind} value={kind}>
+                  {t(
+                    { image: "Image", file: "File", attachment: "Attachment" }[
+                      kind
+                    ] || "Unknown",
+                  )}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {groups.size ? (
+          [...groups].map(([turn, values]) => (
             <section key={turn || "unknown"}>
               <h3>{turnLabel(turn)}</h3>
               {values.map((artifact) => (
-                <div key={artifact.key}>
-                  <Resource part={artifact.part} cut={artifact.cut} />
-                  {artifact.item_id && (
-                    <TreeAction action={() => jumpToItem(artifact.item_id)}>
+                <div key={artifact.id || artifact.key}>
+                  {artifact.id ? (
+                    <div className="resource-card">
+                      <strong>{artifact.name || t("Artifact")}</strong>
+                      <span className="note">
+                        {[
+                          artifact.mime,
+                          Number.isFinite(artifact.size)
+                            ? artifact.size + " B"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      <span className="note">
+                        {t(
+                          {
+                            available: "Available",
+                            unavailable: "Unavailable",
+                            unknown: "Status unknown",
+                          }[artifact.availability] || "Status unknown",
+                        )}
+                      </span>
+                      {artifact.cut_reason && (
+                        <span className="note">
+                          {t(
+                            {
+                              deleted: "Resource was deleted.",
+                              outside_project:
+                                "Resource is outside the authorized project.",
+                              truncated:
+                                artifact.availability === "available"
+                                  ? "Preview truncated. Download the complete file."
+                                  : "Resource unavailable: output truncated.",
+                              too_large: "Resource exceeds the 20 MB limit.",
+                              unavailable:
+                                "Resource unavailable in the authorized project or attachments.",
+                            }[artifact.cut_reason] || "Status unknown",
+                          )}
+                        </span>
+                      )}
+                      <TreeAction
+                        disabled={artifact.availability !== "available"}
+                        action={() => openArtifact(artifact)}
+                      >
+                        {t(
+                          artifact.kind === "image"
+                            ? "View image"
+                            : "Open file",
+                        )}
+                      </TreeAction>
+                    </div>
+                  ) : (
+                    <Resource part={artifact.part} cut={artifact.cut} />
+                  )}
+                  {(artifact.item_id || artifact.turn_id) && (
+                    <TreeAction
+                      action={() =>
+                        locateRecord({
+                          item_id: artifact.item_id,
+                          turn_id: artifact.turn_id,
+                        })
+                      }
+                    >
                       {t("Jump to source")}
                     </TreeAction>
                   )}
@@ -284,7 +469,11 @@ export function createWorkspace({
               <Icon name="file" />
             </EmptyMedia>
             <EmptyDescription>
-              {t("No artifacts in loaded messages.")}
+              {t(
+                supported && page.loaded
+                  ? "No matching artifacts in this page."
+                  : "No artifacts in loaded messages.",
+              )}
             </EmptyDescription>
           </Empty>
         )}

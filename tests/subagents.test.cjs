@@ -137,6 +137,7 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
               ? [
                   {
                     id: "child-old",
+                    turn_id: options.turns ? "child-turn" : undefined,
                     type: "userMessage",
                     text: "Review these files",
                   },
@@ -144,11 +145,13 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
               : [
                   {
                     id: "child-answer",
+                    turn_id: options.turns ? "child-turn" : undefined,
                     type: "agentMessage",
                     text: "Reviewing the source now\n\n[review.txt](review.txt)",
                   },
                   {
                     id: "child-diff",
+                    turn_id: options.turns ? "child-turn" : undefined,
                     type: "fileChange",
                     data: {
                       changes: [{ path: "review.txt", diff: "+review result" }],
@@ -231,6 +234,61 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: child conversation details render beside the overview and preserve pagination`, async (t) => {
+    const { page, requests, errors } = await fixture(t, engine, "zh-CN", 390, {
+      turns: true,
+    });
+    await page.locator("#message").fill("Keep my draft");
+    await page.locator("#subagentsToggle").click();
+    await page.locator('#subagentsList [data-agent-id="child-one"]').click();
+    await page
+      .locator("#subagentsList .subagent-overview")
+      .filter({ hasText: "Reviewing the source now" })
+      .waitFor();
+    assert.deepEqual(
+      errors,
+      [],
+      "rendering the detailed history must not throw while its overview still renders",
+    );
+    const reply = page.locator("#subagentMessages [data-id=child-answer]");
+    await reply.waitFor();
+    assert.equal(await reply.isVisible(), true);
+    assert.equal(
+      await reply.getByRole("button").count(),
+      1,
+      "the detailed reply keeps its copy action",
+    );
+    assert.equal(
+      await page
+        .locator(
+          '#subagentMessages .turn-summary[data-turn="child-turn"] button:not(:disabled)',
+        )
+        .count(),
+      1,
+      "the turn summary keeps its copy action",
+    );
+    assert.equal(
+      await page.locator("#subagentMessages [data-id=child-diff]").isVisible(),
+      true,
+    );
+    await page.locator("#subagentOlder").click();
+    await page.locator("#subagentMessages [data-id=child-old]").waitFor();
+    assert.equal(await page.locator("#subagentOlder").isVisible(), false);
+    assert.equal(
+      await reply.count(),
+      1,
+      "loading earlier history retains the detailed reply",
+    );
+    assert.equal(await page.locator("#message").inputValue(), "Keep my draft");
+    assert.equal(await page.locator("#title").textContent(), "Parent task");
+    assert.equal(
+      requests.filter(
+        (request) => request.method !== "GET" && request.path !== "/api/pair",
+      ).length,
+      0,
+    );
+    assert.deepEqual(errors, []);
+  });
   for (const width of [320, 390])
     test(`${engine} ${width}px: long agent names keep status and chevron inside the dialog`, async (t) => {
       const { page, errors, setAgents } = await fixture(
@@ -396,6 +454,16 @@ for (const engine of engines) {
         bubble.y + bubble.height <= composer.y,
         "agents bubble is above composer",
       );
+      if (width <= 760) {
+        const permission = await page.locator("#permission").boundingBox();
+        const scroll = await page.locator("#conversationScroll").boundingBox();
+        assert(permission.y + permission.height <= bubble.y, "floating controls do not overlap");
+        assert(bubble.y + bubble.height <= scroll.y + scroll.height, "agents float over the conversation");
+        assert(permission.y >= scroll.y, "permission floats over the conversation");
+        await page.locator("#latest").evaluate((node) => { node.hidden = false; });
+        const latest = await page.locator("#latest").boundingBox();
+        assert(bubble.x + bubble.width <= latest.x, "latest output does not overlap agents");
+      }
       assert.equal(await page.locator("#sessions [data-id]").count(), 2);
       await page.locator("#message").fill("Keep my draft");
       await page.locator("#subagentsToggle").click();

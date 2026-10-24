@@ -3,6 +3,8 @@ import { createConversation } from "./conversation";
 import { createMarkdown } from "./markdown";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { Button } from "../components/ui/button";
+import { createReadIndexes } from "./indexes";
+import { agentTree, mergeAgentGraph } from "./agent-graph";
 
 export function createSubagents({
   state,
@@ -19,6 +21,7 @@ export function createSubagents({
   const { markdown } = createMarkdown({ t, run, Action, readOnly: true });
   const { renderItems, legacyItems, mergeOrdered } = createConversation({
     t,
+    Action,
     getAgent,
     markdown,
     projectName,
@@ -43,14 +46,56 @@ export function createSubagents({
     pending = false,
     controller = null,
     paged = false;
+  let graphAgents = [],
+    graphCut = false,
+    graphMergedItems = null,
+    graphReset = false;
+  const graph = createReadIndexes({
+    state,
+    getAgent,
+    api,
+    onChange: () => {
+      const page = graphPage();
+      if (!page.loading && page.loaded && page.items !== graphMergedItems) {
+        const merged = mergeAgentGraph(
+          graphReset ? [] : graphAgents,
+          page.items,
+        );
+        graphAgents = merged.agents;
+        graphCut = (!graphReset && graphCut) || merged.truncated;
+        graphReset = false;
+        graphMergedItems = page.items;
+        if (state.catalog.capabilities?.subagents !== true)
+          agents = graphAgents;
+      }
+      render();
+    },
+  });
+
+  function graphPage() {
+    return graph.read("agent_run_graph", "agent-graph", "agents");
+  }
+  function loadGraph(more = false) {
+    if (!more && !graphPage().loading) graphReset = true;
+    return graph.load(
+      "agent_run_graph",
+      "agent-graph",
+      "agents",
+      undefined,
+      more,
+    );
+  }
 
   function currentScope() {
-    return state.selected && state.catalog.capabilities?.subagents === true
+    return state.selected &&
+      (state.catalog.capabilities?.subagents === true ||
+        graph.supports("agent_run_graph"))
       ? [
           window.RemoteSecure?.deviceID?.() || state.device?.id || "",
           getAgent().id,
           state.selected,
           state.generation,
+          state.live?.owner?.epoch,
         ].join("|")
       : "";
   }
@@ -85,7 +130,9 @@ export function createSubagents({
         wait: "Wait for agents",
         closeAgent: "Close agent",
         resumeAgent: "Resume agent",
-      }[item.data?.tool] || item.data?.tool || "Agent",
+      }[item.data?.tool] ||
+        item.data?.tool ||
+        "Agent",
     );
   }
   function agentOperations(calls, id) {
@@ -108,16 +155,35 @@ export function createSubagents({
     jumpToItem(id);
   }
   function Overview({ agent, calls, detail = false }) {
-    const operations = agentOperations(calls, agent.id),
-      creation = operations.find((item) => item.data?.tool === "spawnAgent"),
-      task = creation?.data?.prompt,
-      parentID = agent.parent_id || creation?.data?.senderThreadId,
+    const indexed = graph.supports("agent_run_graph")
+        ? graphAgents.find((value) => value.id === agent.id)
+        : null,
+      observed = agentOperations(calls, agent.id),
+      operations =
+        indexed && Array.isArray(indexed.operations)
+          ? indexed.operations.map((operation) => ({
+              ...operation,
+              data: { tool: operation.operation },
+            }))
+          : observed,
+      creation = observed.find((item) => item.data?.tool === "spawnAgent"),
+      task = indexed?.task || creation?.data?.prompt,
+      parentID =
+        indexed?.parent_id || agent.parent_id || creation?.data?.senderThreadId,
       parent = agents.find((value) => value.id === parentID),
-      latest = operations.at(-1),
-      result = operations
-        .map((item) => item.data?.agentsStates?.[agent.id]?.message)
-        .reverse()
-        .find((value) => typeof value === "string" && value.trim()),
+      latest = indexed?.latest_operation
+        ? {
+            ...indexed.latest_operation,
+            data: { tool: indexed.latest_operation.operation },
+          }
+        : operations.at(-1),
+      result =
+        indexed?.result_summary ||
+        observed
+          .map((item) => item.data?.agentsStates?.[agent.id]?.message)
+          .reverse()
+          .find((value) => typeof value === "string" && value.trim()),
+      lastActivity = indexed?.last_activity_at_ms,
       reply = detail
         ? items
             .filter((item) => item.type === "agentMessage")
@@ -138,6 +204,7 @@ export function createSubagents({
             className="subagent-row"
             data-agent-id={agent.id}
             data-status={agent.status}
+            disabled={state.catalog.capabilities?.subagents !== true}
             onClick={() => openAgent(agent.id)}
           >
             <Icon name="agent" />
@@ -148,7 +215,8 @@ export function createSubagents({
         )}
         {parentID && (
           <p className="note">
-            {t("Parent agent")}: {parent
+            {t("Parent agent")}:{" "}
+            {parent
               ? agentName(parent)
               : parentID === state.selected
                 ? state.session?.title || t("Parent conversation")
@@ -167,6 +235,16 @@ export function createSubagents({
             {statusLabel(latest.status)}
           </p>
         )}
+        {Number.isFinite(lastActivity) &&
+          lastActivity > 0 &&
+          lastActivity <= 8640000000000000 && (
+            <p className="note">
+              {t("Last activity")}:{" "}
+              <time dateTime={new Date(lastActivity).toISOString()}>
+                {new Date(lastActivity).toLocaleString()}
+              </time>
+            </p>
+          )}
         {result && result !== reply && (
           <details className="raw-details">
             <summary>{t("Result summary")}</summary>
@@ -182,16 +260,23 @@ export function createSubagents({
         {!!operations.length && (
           <details className="raw-details">
             <summary>
-              {t("Loaded agent operations")} ({operations.length})
+              {t(
+                indexed
+                  ? "Historical agent operations"
+                  : "Loaded agent operations",
+              )}{" "}
+              ({operations.length})
             </summary>
             <ol>
               {operations.map((item) => (
                 <li key={item.id}>
-                  {jumpToItem ? (
+                  {jumpToItem &&
+                  (!indexed ||
+                    (item.item_id && item.thread_id === state.selected)) ? (
                     <Button
                       variant="ghost"
                       type="button"
-                      onClick={() => showOperation(item.id)}
+                      onClick={() => showOperation(item.item_id || item.id)}
                       title={t("Show original record")}
                     >
                       {operationLabel(item)} · {statusLabel(item.status)}
@@ -201,6 +286,10 @@ export function createSubagents({
                       {operationLabel(item)} · {statusLabel(item.status)}
                     </span>
                   )}
+                  {item.summary && <p className="tool-text">{item.summary}</p>}
+                  {item.result_summary && (
+                    <p className="tool-text">{item.result_summary}</p>
+                  )}
                 </li>
               ))}
             </ol>
@@ -209,13 +298,33 @@ export function createSubagents({
       </section>
     );
   }
+  function AgentBranch({ node, calls }) {
+    return (
+      <li>
+        <Overview agent={node.agent} calls={calls} />
+        {!!node.children.length && (
+          <ul>
+            {node.children.map((child) => (
+              <AgentBranch key={child.agent.id} node={child} calls={calls} />
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+  }
   function render() {
     const calls = mergeOrdered(state.history, state.live.items || []).filter(
         (item) => ["collabAgentToolCall", "collabToolCall"].includes(item.type),
       ),
       called = calls.length > 0;
+    const page = graphPage(),
+      supported = graph.supports("agent_run_graph");
     $("subagentsBar").hidden =
-      !scope || (!agents.length && !called && !listError);
+      !scope ||
+      (!agents.length &&
+        !called &&
+        !listError &&
+        !(supported && (page.loading || page.error)));
     $("subagentsCount").textContent = agents.length
       ? String(agents.length)
       : "";
@@ -235,22 +344,76 @@ export function createSubagents({
       : listError ||
         (loadingList && !agents.length
           ? t("Loading agents…")
-          : !agents.length
-            ? t("No agents in this conversation.")
-            : "");
+          : supported &&
+              state.catalog.capabilities?.subagents !== true &&
+              (!page.loaded || page.error)
+            ? t("Status unknown")
+            : !agents.length
+              ? t("No agents in this conversation.")
+              : "");
     if (selected) renderItems($("subagentMessages"), items);
     renderView(
       $("subagentsList"),
-      agents
-        .filter((agent) => !selected || agent.id === selected)
-        .map((agent) => (
-          <Overview
-            key={agent.id}
-            agent={agent}
-            calls={calls}
-            detail={!!selected}
-          />
-        )),
+      <>
+        {!selected && supported && (
+          <div className="agent-graph-status">
+            <p className="note" role="status">
+              {t("Agent run graph")} ·{" "}
+              {t(
+                page.loading
+                  ? "Loading…"
+                  : !page.loaded || page.error
+                    ? "Status unknown"
+                    : page.scope === "full"
+                      ? "Full history"
+                      : "Loaded records only",
+              )}
+              {(graphCut ||
+                page.truncated ||
+                page.hasMore ||
+                page.scope === "loaded") &&
+                " · " + t("Results are incomplete")}
+            </p>
+            {page.error && (
+              <p className="note" role="status">
+                {t(page.error)}
+              </p>
+            )}
+            {page.error && (
+              <Action action={() => loadGraph()}>{t("Retry")}</Action>
+            )}
+            {page.hasMore && (
+              <Action disabled={page.loading} action={() => loadGraph(true)}>
+                {t("Load more agent history")}
+              </Action>
+            )}
+          </div>
+        )}
+        {selected ? (
+          agents
+            .filter((agent) => agent.id === selected)
+            .map((agent) => (
+              <Overview key={agent.id} agent={agent} calls={calls} detail />
+            ))
+        ) : supported ? (
+          <ul className="subagent-tree">
+            {agentTree(
+              agents.map((agent) => ({
+                ...agent,
+                parent_id:
+                  graphAgents.find((value) => value.id === agent.id)
+                    ?.parent_id || agent.parent_id,
+              })),
+            ).map((node) => (
+              <AgentBranch key={node.agent.id} node={node} calls={calls} />
+            ))}
+          </ul>
+        ) : (
+          agents.map((agent) => (
+            <Overview key={agent.id} agent={agent} calls={calls} />
+          ))
+        )}
+      </>,
     );
   }
   function reset() {
@@ -260,6 +423,10 @@ export function createSubagents({
     controller = null;
     scope = token = selected = cursor = anchor = listError = detailError = "";
     agents = items = [];
+    graph.reset();
+    graphAgents = [];
+    graphCut = graphReset = false;
+    graphMergedItems = null;
     paged = false;
     listSeq++;
     detailSeq++;
@@ -281,6 +448,11 @@ export function createSubagents({
   }
   async function refresh() {
     if (!scope || scope !== currentScope()) return;
+    if (state.catalog.capabilities?.subagents !== true) {
+      await loadGraph();
+      schedule();
+      return;
+    }
     if (loadingList) {
       pending = true;
       return;
@@ -402,6 +574,7 @@ export function createSubagents({
     if (
       !scope ||
       scope !== currentScope() ||
+      state.catalog.capabilities?.subagents !== true ||
       !agents.some((agent) => agent.id === id)
     )
       return;
@@ -433,10 +606,12 @@ export function createSubagents({
       scope,
       state.live.turn_id || "",
       state.live.status || "",
+      graph.supports("agent_run_graph") ? state.live.items?.length || 0 : "",
     ].join("|");
     if (token !== nextToken) {
       token = nextToken;
       refresh();
+      if (state.catalog.capabilities?.subagents === true) void loadGraph();
     }
     render();
     schedule();
@@ -445,6 +620,7 @@ export function createSubagents({
     back();
     $("subagentsDialog").showModal();
     refresh();
+    if (state.catalog.capabilities?.subagents === true) void loadGraph();
   };
   $("subagentsBack").onclick = back;
   $("closeSubagents").onclick = () => $("subagentsDialog").close();

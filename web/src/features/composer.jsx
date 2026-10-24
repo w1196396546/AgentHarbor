@@ -6,6 +6,8 @@ export function createComposer({
   requireOwner,
   ownerEpoch,
   updateControls,
+  renderCurrent,
+  notice,
   createThread,
   resetQueue,
   detail,
@@ -33,6 +35,15 @@ export function createComposer({
         !state.tools.length)
     )
       return;
+    const contentKey = () =>
+        JSON.stringify([
+          $("message").value,
+          state.attachments.map((file) => file.id),
+          state.skills,
+          state.mentions,
+          state.tools,
+        ]),
+      submittedContent = contentKey();
     const draft = {
       text,
       attachments: state.attachments.map((file) => file.id),
@@ -68,13 +79,14 @@ export function createComposer({
     }
     let generation = state.generation,
       id = state.selected;
-    const epoch = ownerEpoch();
+    let epoch = ownerEpoch(),
+      pending = true;
     state.sending = true;
     updateControls();
     const current = () =>
       generation === state.generation &&
       id === state.selected &&
-      (!queued || epoch === ownerEpoch());
+      epoch === ownerEpoch();
     try {
       if (!id) {
         const value = await createThread();
@@ -88,6 +100,7 @@ export function createComposer({
         resetQueue();
         $("welcome").hidden = true;
         await detail(generation);
+        epoch = ownerEpoch();
         if (!current()) return;
         if (nativeSettings())
           for (const key of ["model", "effort", "mode", "permission"])
@@ -95,20 +108,36 @@ export function createComposer({
         else Object.assign(draft, state.prefs);
         ensureStream();
       }
+      const revision = state.liveRevision;
       const snapshot = await api(
         "threads/" + encodeURIComponent(id) + (queued ? "/queue" : "/turn"),
         draft,
       );
       if (!current()) return;
       if (queued && snapshot?.queue) applyQueue(snapshot);
-      clearDraft();
-      await detail(generation);
-      if (!current()) return;
-      if (queued) await refreshQueue(true);
-      if (!current()) return;
-      await list();
+      if (contentKey() === submittedContent) clearDraft();
+      if (!queued && snapshot?.turn_id && revision === state.liveRevision) {
+        state.live = {
+          ...state.live,
+          status: "starting",
+          turn_id: snapshot.turn_id,
+        };
+        state.liveRevision++;
+        renderCurrent();
+      }
+      pending = false;
+      state.sending = false;
+      updateControls();
+      const refreshed = await Promise.allSettled([
+        detail(generation),
+        ...(queued ? [refreshQueue(true)] : []),
+        list(),
+      ]);
+      if (current())
+        for (const result of refreshed)
+          if (result.status === "rejected") notice(result.reason.message);
     } finally {
-      if (generation === state.generation && id === state.selected) {
+      if (pending && generation === state.generation && id === state.selected) {
         state.sending = false;
         updateControls();
       }

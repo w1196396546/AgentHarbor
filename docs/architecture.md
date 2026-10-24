@@ -159,7 +159,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 
 网页新建显式发送 `POST /api/threads`、`executor: "background"`，连接端省略 executor 时也默认后台新建；本机 `createBackground` 校验共享项目及设置，通过官方 `thread/start` 创建、`thread/name/set` 持久化，并保留执行连接。macOS / Windows GUI 复用经过验证的 App 共享服务，不自动切换桌面聊天；Windows 无共享约束的命令行执行器仍保留新建后的 best-effort `codex://` 跟随。创建本身不发送首轮或伪造队列。Linux 或无共享约束的命令行模式可由本机 agentTools 持有独立执行进程；Remote 从不运行 Codex。
 
-创建前重新读取本次 options 并确认 `capabilities.background_creation: true`，此项目级预检不附带当前选中的历史会话 ID；失败为未知。旧客户端无此能力时明确要求更新，不能回退为桌面创建。已分配 ID 后失败返回 `created_thread_id`，网页绑定已有 ID、保留草稿及附件，不自动另建或重发。创建成功先进入新会话，再异步刷新列表。Windows 历史会话按不区分盘符大小写的路径边界匹配项目根目录。
+创建前重新读取本次 options 并确认 `capabilities.background_creation: true`，此项目级预检不附带当前选中的历史会话 ID；失败为未知。预检携 `scope=creation`，支持的客户端只校验项目并读取当前执行连接能力，不等待模型、技能、工具和配置目录；旧客户端可忽略此参数返回完整 options。精简响应不替换网页已经加载的完整目录。旧客户端无此能力时明确要求更新，不能回退为桌面创建。已分配 ID 后失败返回 `created_thread_id`，网页绑定已有 ID、保留草稿及附件，不自动另建或重发。创建成功选择已创建会话时不再重复连接 owner，再异步刷新列表。Windows 历史会话按不区分盘符大小写的路径边界匹配项目根目录。
 
 选择历史先显示只读分页详情。自动连接、手动连接及重试都要求 `live.owner.capabilities.background_connect: true`，并调用 `POST /api/threads/{id}/connect`、`executor: "background"`。本机先发现原 owner：已存在就跟随，无 owner 才 `thread/resume` 同一 ID；超时、协议错误或归属不确定时拒绝恢复。此连接不发起模型轮次，不依赖桌面当前页面。旧客户端只有 `connect: true` 时提示更新，不回退到深链接；明确的“在 Codex 中打开”链接仅用于用户主动打开应用。
 
@@ -176,6 +176,10 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表、文�
 `live.owner` 提供 kind/state/epoch/capabilities。后台 owner 使用 kind `background`；控制在加密请求内携 `X-Remote-Owner-Epoch` 及兼容别名 `X-Codex-Owner-Epoch`，由本机解密并检查。中转只路由密文，重建外层请求头，不透传浏览器明文 owner 头。归属变化或操作不确定时不自动重发。连接端通过现有本机 IPC 发布自有后台 owner，桌面可按同 ID 跟随；IPC 未提供跨应用原子 claim，另一个绕过 owner 发现的独立 CLI 同时恢复同 ID 不在保证范围内。
 
 后台使用本机 Codex 配置；已有原 owner 继续使用它的环境、工具和权限。App 注入的私有工具、开发者指令及 UI 上下文不保证在独立 app-server 中可用。普通发送继承实际会话设置，只应用明确选择的更改，不替用户降级自定义权限。只有用户明确发送才开始轮次；引导、停止、审批及队列保留轮次和 owner 约束。上下文窗口与压缩状态、真实标题通过详情和 SSE 同步，不伪造桌面状态。
+
+设置响应已包含 owner 确认的规范 options，网页直接应用并解除设置等待，不再额外读取历史。客户端仅切模式/权限时沿用已确认模型，仍校验字段与明确修改的权限 requirements，修改模型/强度时继续校验目录。发送响应在执行器明确接受后返回，自动命名在客户端后台执行；网页只清除与该次提交仍一致的草稿并立即解锁，详情、队列和侧栏并行刷新。刷新失败不变成发送失败，较新的 SSE 不被旧发送响应覆盖，不确定的发送仍不自动重发。
+
+附件每批最多两个并行上传，按选择顺序显示，继续保留 20 MiB 上限和导航隔离。新上传图片用本地临时 Blob 缩略图，卸载时释放；已有附件仍走加密读取。支持原生 TypedArray Base64 的浏览器使用原生编解码，旧浏览器保留原实现，端到端加密格式与校验不变。
 
 macOS / Windows GUI 要求共享 App 服务就绪后才连接中转；普通启动的 App 无法注入共享环境时，等待用户结束任务并退出，再由本机自动共享启动。Windows 连接端支持商店 / 手动安装 MSIX 清单发现及带官方签名的直接安装协议发现，以私有 ACL、进程身份验证和 capability 认证保护回环 WebSocket；原命名管道继续处理 owner、队列及控制确认。此实现面向 Windows 原生执行，WSL、便携版与企业重签名不在等价保证内；Windows 实机启动、发送及队列仍需验收。启动器不退出已有 App、不改包和全局配置，断开只关闭本连接。`executor: "native"` 旧路径仍用于明确的桌面打开请求；Linux 与无 GUI 连接端沿用原适配。公网接口和浏览器请求格式不变，跨平台构建不能代替运行验证。
 
@@ -208,10 +212,39 @@ macOS / Windows GUI 要求共享 App 服务就绪后才连接中转；普通启�
 
 `usage.last` 与 `usage.total` 展示最近请求和累计 Token 明细；`context` 独立表示窗口占用和压缩状态，不用累计用量推算上下文，也不表示账户额度。缺失为未知，真实零值保留。会话信息分别显示电脑在线、网页流、执行 owner 和任务状态；owner 上报的设置不以页面偏好补值，待确认偏好另列，owner 失联时明确标记上次上报状态。最近成功同步时间是当前浏览器的观测时间，不表示任务开始、完成或最近执行时间。
 
-右侧面板保留更改列表、文件树和轮次筛选，并增加按轮次归集已加载真实图片/文件的产物入口，可定位原消息、预览和下载。文件更改显示上游明确提供的重命名前后路径、二进制和截断状态，任务结束与更改仍在读取分别表示；当前文件预览与历史差异分开。会话内搜索只覆盖已加载正文和工具输出，支持失败、更改、产物筛选及轮次跳转，不声称全历史搜索。阅读锚点、展开状态和更改筛选以设备 / Agent / 会话隔离保存到有界本地元数据；不额外持久化正文、回答、附件或凭据，草稿和附件沿用原生命周期。刷新后只在当前授权列表仍包含该会话，且没有输入草稿、附件、技能、提及、工具选择或队列编辑时恢复只读详情，不自动连接 owner；锚点不在已加载记录时提示用户加载更早内容，主动滚动或返回最新会取消等待恢复，不自动抓取完整历史。
+右侧面板保留更改列表、文件树和轮次筛选，并增加按轮次归集已加载真实图片/文件的产物入口，可定位原消息、预览和下载。文件更改显示上游明确提供的重命名前后路径、二进制和截断状态，任务结束与更改仍在读取分别表示；当前文件预览与历史差异分开。会话内搜索默认覆盖已加载正文和工具输出，支持失败、更改、产物筛选及轮次跳转；完整历史模式仅在连接端声明下述版本化索引能力时启用。阅读锚点、展开状态和更改筛选以设备 / Agent / 会话隔离保存到有界本地元数据；不额外持久化正文、回答、附件或凭据，草稿和附件沿用原生命周期。刷新后只在当前授权列表仍包含该会话，且没有输入草稿、附件、技能、提及、工具选择或队列编辑时恢复只读详情，不自动连接 owner；锚点不在已加载记录时提示用户加载更早内容，主动滚动或返回最新会取消等待恢复，不自动抓取完整历史。
 
 资源读取继续通过加密 `project-file` / `attachments/{id}`。本机只允许授权项目内文件，以及与当前项目登记上传路径完全一致的附件；不开放任意本机路径。助手 Markdown 中的本机文件链接和图片通过与点击预览相同的 `localFileTarget` 识别并归集产物；`file:` 只接受空 host 或 `localhost`，仍交给原项目文件授权校验，远程 host 不作为本机文件。内联图片仅允许有界 PNG/JPEG/GIF/WebP 数据，资源被截断、已删除、需要授权或不可访问时按实际结果提示原因；外部 HTTP(S) 资源作为链接，不为预览抓取外部资源。中转仍不解析或保存资源明文。会话信息复用已有 options 目录和错误，不额外创建执行进程。
 
 可选 `options.mcp_servers` 为 `{name, tools_known, tools_error?, runtime_status?, auth_status?}[]`，现有 `tools` 列表不变。成功读取且无服务返回 `[]`；整体目录不可读为 `null` 并保留错误，旧客户端省略此字段。每个服务区分目录成功但无工具、未加载和读取失败；运行连接与认证状态只显示上游提供的值。来源为安装版 Codex CLI `0.163.0` 的 `app-server generate-json-schema`：`McpServerStatus`、`HookRunSummary`、`GuardianApprovalReview` 和 `PatchChangeKind`；自动审查 schema 标记为 unstable，未知或缺失字段继续保留降级。
 
 前端实现见 [conversation.jsx](../web/src/features/conversation.jsx)、[lifecycle.jsx](../web/src/features/lifecycle.jsx)、[workspace.jsx](../web/src/features/workspace.jsx)、[files.jsx](../web/src/features/files.jsx) 和 [subagents.jsx](../web/src/features/subagents.jsx)；共享统计与阅读元数据分别位于 `web/src/features/presentation.js`、`web/src/features/reading.js`。
+
+## 可选只读历史索引 v1
+
+这些端点仍由 agentTools 本机适配器执行，方法、会话 ID、搜索词、资源 ID、路径、正文和响应全部位于现有端到端加密请求内。Relay 只转发密文，不解析索引，也不保存新的搜索或资源目录。它们不连接或恢复 owner、不启动模型轮次，不调用发送、审批、队列或设置接口。
+
+能力目录保持 `options.capabilities` 的布尔风格，另有可选 `options.protocol_versions` 对象。网页仅在 `capabilities[name] === true` 且 `protocol_versions[name] === 1` 时读取对应能力，并校验响应的 `version: 1`；能力或版本缺失、未知版本均沿用原已加载记录、资源及子智能体展示。五个能力名为 `conversation_index`、`full_history_search`、`artifact_index`、`interaction_history`、`agent_run_graph`，其中前两个共同构成会话索引组。
+
+| 能力 | 加密本机端点 | v1 只读响应 |
+| --- | --- | --- |
+| `conversation_index` | `GET /api/threads/{id}/turns?cursor=` | `turns[{id,status,started_at_ms,duration_ms,complete,partial}]`，以及分页与范围字段 |
+| `full_history_search` | `POST /api/threads/{id}/search` | 请求 `{query,filter,turn_id,cursor,limit}`；响应 `matches[{id,turn_id,type,snippet,position?}]`，以及分页与范围字段 |
+| `artifact_index` | `GET /api/threads/{id}/artifacts?cursor=` | `artifacts[{id,item_id,turn_id?,kind,name,mime?,size?,availability,cut_reason?}]`，以及分页与范围字段 |
+| `artifact_index` | `GET /api/threads/{id}/artifacts/{artifactID}` | 安全的资源预览 JSON；`?raw=1` 或 `?download=1` 读取同一授权资源的字节 |
+| `interaction_history` | `GET /api/threads/{id}/interactions?cursor=` | `interactions[{request_id,method,item_id?,turn_id?,status,summary?,reason?,resolved_at_ms?}]`，以及分页与范围字段 |
+| `agent_run_graph` | `GET /api/threads/{id}/agent-graph?cursor=` | `agents[{id,parent_id,name,role?,status,task?,last_activity_at_ms?,result_summary?,operations,latest_operation?}]`，以及分页与范围字段 |
+
+索引页统一返回 `version`、`next_cursor`、`has_more`、`scope`，可选 `truncated`、`read_error`。`scope: full` 表示读取官方可访问历史源，不表示所有页已经扫描；`has_more`、截断及读错误必须同时展示。`scope: loaded` 明确限于当前实际读到的记录或内存观测。失败是 unknown / unavailable，不能用空列表冒充成功；保留已读结果并显示范围与不完整提示。游标是有界、不透明的本机值，绑定当前设备连接、Agent、会话、授权项目、owner / 读取代际及搜索条件；代际变化后重新读取，不把旧游标复用到新会话。网页按设备、Agent、会话、项目、读取代际和 owner epoch 隔离迟到响应，重复或不前进的游标停止分页；每集合最多保留 2000 个索引条目，超限明确提示。
+
+轮次索引优先读官方 `thread/turns/list`，单页 100 个轮次、`itemsView: notLoaded`；`complete` / `partial` 描述索引元数据是否完整，不能据此声称消息已经加载。开始时间仅由真实 `startedAt` 秒转换为毫秒，耗时仅用真实 `durationMs`；缺失为 `null` / unknown，不用浏览器时间。真实来源未提供的模型、强度及工具/文件计数不推测。内存记录回退明确为 `scope: loaded`、`complete: false`、`partial: true` 并附读错误。
+
+完整历史搜索每次只扫描一页真实历史，单源页最多 100 项、合并源最多 1000 项 / 4 MiB，结果 `limit` 为 1–100（默认 50）；结果页继续后可读下一源页，最多 256 源页，达到边界显示截断。搜索词和筛选条件绑定加密游标，内容续页同时校验源内容代际。网页显式切换“已加载 / 完整历史”范围，可继续加载结果和未加载轮次；点击结果按需拉取对应记录，保留输入草稿、附件和阅读锚点。搜索仅匹配可读历史，不接受控制方法或任意本机路径。
+
+产物 ID 为本机生成的不透明认证值，绑定会话、授权项目、owner、来源页、引用位置和内容代际，不能跨会话或项目使用。只索引实际历史中的资源引用；读取仍限制在当前授权项目文件或当前项目已登记的附件，不因历史文本扩大权限，也不接受浏览器传入本机路径。`availability` 为 `available`、`unavailable` 或 `unknown`；`cut_reason` 可为 `deleted`、`outside_project`、`unavailable`、`truncated`、`too_large`。资源最多 20 MiB，预览最多 256 KiB；截断预览不冒充完整下载。预览 JSON 仅提供安全文件名，原字节响应沿用内容类型与 sandbox 约束。网页可按轮次 / 类型分页筛选、预览、下载和跳回源记录；旧端仍仅归集已加载消息的资源。
+
+交互历史与 `live.requests` 当前待处理请求分开。`status` 仅取 `pending`、`approved`、`declined`、`answered`、`cancelled`、`expired`、`unknown`；请求消失或上游只说 completed 都不能推断 approved / answered，未观测生命周期通过 `available: false` / 读错误说明。`resolved_at_ms` 只在真实来源明确提供毫秒时返回；当前来源没有该字段时省略。历史仅有请求摘要、原因与状态，不保存或返回秘密答案、问询 content 或原始回答。工具卡片和会话搜索显示已观测的过去交互，当前请求继续原 `/answer` / `/steer`、owner epoch 和轮次校验，答案草稿只存在现有内存生命周期，不新增 dispatcher。
+
+关系图仅包含本机已确认、仍属于当前授权项目且未归档的后代，复用既有后代授权检查。每个 operation 为 `{id,item_id,turn_id,thread_id,operation,status,summary?,result_summary?}`，`operation` 为真实 `spawnAgent` / `sendInput` / `wait` / `closeAgent` / `resumeAgent`；任务和结果只取真实创建 prompt、返回结果，最近活动仅取真实会话时间。未知状态保持 unknown，关闭不代表完成。历史分页可重复同一 agent ID，网页按 operation ID 合并，不让后页缺失摘要覆盖已知值；树防循环并限制深度，操作总量最多 5000，超出显示不完整。跳回操作仅使用当前父会话的源 item；后代操作保留 thread ID，但不借此开放另一会话。子会话详情继续原授权只读 `/agents/{agentID}`，没有 `subagents` 能力时关系图本身不会开放详情。
+
+实现位于 [indexes.js](../web/src/features/indexes.js)、[approvals.jsx](../web/src/features/approvals.jsx)、[interaction-history.js](../web/src/features/interaction-history.js)、[subagents.jsx](../web/src/features/subagents.jsx)、[agent-graph.js](../web/src/features/agent-graph.js) 及既有 controller / conversation / workspace / files。纯观测回归见 [read-observation.test.cjs](../tests/read-observation.test.cjs)。本节描述源码协议，不代表已安装 App、真实模型会话、平台实机或公网部署已验证。

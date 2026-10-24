@@ -103,6 +103,14 @@ are historical evidence with their own limitations, not current release sign-off
 
 Built HTML uses content-versioned JS/CSS URLs so deployments bypass stale browser or proxy caches.
 
+Creation preflight requests project options with `scope=creation`, without replacing
+the full catalog; older clients can ignore the scope. Newly created conversations
+skip a redundant owner connection. Confirmed settings and sends release their UI
+controls before history/list refreshes; newer drafts and streamed state win over
+late responses. Attachment uploads run in ordered pairs, and new image chips use
+temporary local previews instead of downloading the image again. The encrypted
+wire format, authorization and uncertain-delivery retry rules remain unchanged.
+
 
 ## Execution details
 
@@ -129,8 +137,9 @@ unloaded and failed catalogs, with reported runtime and authentication state.
 Changes can be filtered by turn or browsed as a tree, with numbered diffs,
 reported rename/binary/truncation states and current-file previews. A sibling
 artifact view groups real files/images from loaded records and links to their
-source. Conversation search covers loaded prose and tool output only, with turn
-navigation and failure/change/artifact filters. Bounded reading metadata preserves
+source. Conversation search defaults to loaded prose and tool output, with turn
+navigation and failure/change/artifact filters. Versioned optional indexes add
+full-history search, turn navigation and historical resources as described below. Bounded reading metadata preserves
 anchors, disclosure state and change filters per device, Agent and session; it
 stores no extra messages, answers, attachments or credentials. Refresh restores a
 still-authorized conversation as read-only only when the composer has no draft,
@@ -142,10 +151,61 @@ or broader child-session access.
 
 Optional item `turn` metadata (`status`, `started_at_ms`, `duration_ms`) passes
 through both history and SSE. Timings come from the client, never browser receipt
-time. Summaries cover loaded records only; unpersisted upstream notifications may
+time. Loaded summaries cover loaded records only; unpersisted upstream notifications may
 be absent after client restart. Resources use encrypted project/registered attachment
 access, display unavailable/truncated states and never authorize arbitrary local
 paths. Assistant Markdown file/image targets share the existing local-file parser
 and encrypted authorization gate; external preview resources are never fetched.
 Hook durations use reported `durationMs`; timestamps without confirmed units remain
 in raw details. Older clients retain the existing fallback. See the [architecture contract](../docs/architecture.md#会话执行信息与资源展示).
+
+## Optional read indexes v1
+
+The encrypted options catalog advertises boolean capabilities plus an optional
+`protocol_versions` object. A feature is enabled only when both
+`capabilities[name] === true` and `protocol_versions[name] === 1`; responses must
+also declare `version: 1`. Missing or unsupported versions keep the existing
+loaded-record behavior. These reads never connect an owner or dispatch a turn,
+approval, queue update or file write. The relay forwards ciphertext only.
+
+| Capability | Encrypted client endpoint | Presentation |
+| --- | --- | --- |
+| `conversation_index` | `GET /api/threads/{id}/turns?cursor=` | Paged turn navigation, including unloaded history |
+| `full_history_search` | `POST /api/threads/{id}/search` | Explicit loaded/full search mode; body contains `query`, `filter`, `turn_id`, `cursor`, `limit` |
+| `artifact_index` | `GET /api/threads/{id}/artifacts?cursor=` and `/artifacts/{artifactID}` | Historical resources, availability, preview/download and source-record links |
+| `interaction_history` | `GET /api/threads/{id}/interactions?cursor=` | Observed past decisions/questions and reasons in tool cards and search |
+| `agent_run_graph` | `GET /api/threads/{id}/agent-graph?cursor=` | Confirmed descendant tree, task, activity, operations and result summaries |
+
+Index pages include `next_cursor`, `has_more`, `scope`, and optional `truncated` /
+`read_error`. `full` means the client reads real accessible history, while more
+pages or cut/error flags still mean incomplete results. `loaded` limits the claim
+to read records or observed memory. Read failure remains unknown and preserves
+previous results. `indexes.js` isolates requests by device, Agent, conversation,
+project, generation and owner epoch, limits collections to 2000 entries, and stops
+repeated cursors. The local client separately checks current authorization,
+archive state and source generation. Search reads bounded history pages and never
+accepts control operations; navigating results preserves drafts and attachments.
+
+Turn `complete` / `partial` describes index metadata, not whether every message is
+loaded. Timings and optional counts only come from real source fields. Artifact
+IDs are opaque and bound to the session/project/source generation; the browser
+does not supply new local paths. Resource reads reuse project or registered
+attachment authorization. The preview JSON exposes only a safe filename;
+`?raw=1` / `?download=1` use the same authorization for bytes. Availability is
+`available`, `unavailable` or `unknown`, with explicit missing, scope, size or cut
+reasons. The client limits files to 20 MiB and previews to 256 KiB.
+
+Interaction history includes request/method/item/turn IDs, an evidenced status,
+summary/reason and an optional real `resolved_at_ms`; it excludes secret answers.
+A missing request or generic upstream completion cannot prove approval. Pending
+requests retain the existing `/answer` / `/steer`, owner checks and in-memory
+answer drafts. Agent graph pages may repeat stable agent IDs; `agent-graph.js`
+merges operation IDs and known summaries, bounds cycles/depth and caps retained
+operations at 5000 with a visible incomplete state. Only current-parent operation
+links navigate to records. Graph metadata adds no child authorization; details
+still require the original `subagents` capability and read-only endpoint.
+
+See the [complete contract](../docs/architecture.md#可选只读历史索引-v1) for field
+shapes, source limits and trust boundaries. Focused pure observation regressions
+are in `tests/read-observation.test.cjs`; real App and public deployment checks
+remain separate from local type checking and regenerated embedded assets.

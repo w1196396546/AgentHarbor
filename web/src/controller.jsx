@@ -1,3 +1,4 @@
+import { createReadIndexes } from "./features/indexes";
 import { createReading } from "./features/reading";
 import {
   loadedItems,
@@ -166,18 +167,114 @@ export function startRemote() {
       ...loadedItems(state),
     ];
   }
+  const readIndexes = createReadIndexes({
+    state,
+    getAgent,
+    api: (...args) => api(...args),
+    onChange: () => {
+      renderSearch();
+      renderArtifacts();
+    },
+  });
+  function indexedTurns() {
+    const page = readIndexes.read("conversation_index", "turns", "turns");
+    return readIndexes.supports("conversation_index")
+      ? page
+      : { ...page, items: [], loaded: false };
+  }
+  function allTurnIDs() {
+    return [
+      ...new Set(
+        [
+          ...indexedTurns().items.map((turn) => turn.id),
+          ...conversationItems().map((item) => item.turn_id),
+        ].filter(Boolean),
+      ),
+    ];
+  }
   function turnLabel(id) {
     if (!id) return t("Unknown");
     if (id === state.live.turn_id) return t("Current turn");
-    const turns = [
-      ...new Set(
-        conversationItems()
-          .map((item) => item.turn_id)
-          .filter(Boolean),
-      ),
-    ];
-    const index = turns.indexOf(id);
+    if (indexedTurns().items.some((turn) => turn.id === id))
+      return t("Turn") + " · " + id.slice(0, 8);
+    const index = allTurnIDs().indexOf(id);
     return t("Turn") + " " + (index >= 0 ? index + 1 : t("Unknown"));
+  }
+  async function locateRecord(target) {
+    const wantedID =
+        target.position?.item_id ||
+        target.source_item_id ||
+        target.item_id ||
+        (target.type === "interactionHistory" ? "" : target.id) ||
+        "",
+      wantedTurn = target.position?.turn_id || target.turn_id || "",
+      requestScope = readIndexes.currentScope(),
+      seen = new Set();
+    const find = () => {
+      const item = conversationItems().find((item) =>
+        wantedID ? item.id === wantedID : item.turn_id === wantedTurn,
+      );
+      return item && jumpToItem(item.id);
+    };
+    if (!wantedID && !wantedTurn) {
+      notice("Status unknown");
+      return;
+    }
+    if (find()) return;
+    for (let count = 0; count < 16; count++) {
+      if (requestScope !== readIndexes.currentScope()) return;
+      const cursor = state.historyCursor,
+        anchor = state.historyAnchor;
+      if (!cursor || seen.has(cursor)) break;
+      seen.add(cursor);
+      const page = await api(
+        "sessions/" +
+          encodeURIComponent(state.selected) +
+          "/history?" +
+          new URLSearchParams({ cursor }),
+        undefined,
+        { observation: true },
+      );
+      if (
+        requestScope !== readIndexes.currentScope() ||
+        cursor !== state.historyCursor
+      )
+        return;
+      if (
+        !Array.isArray(page?.items) ||
+        page.items.length > 500 ||
+        typeof page.has_more !== "boolean" ||
+        (page.next_cursor &&
+          (typeof page.next_cursor !== "string" ||
+            page.next_cursor.length > 8192))
+      )
+        throw new Error("Unable to load older history.");
+      reading.capture();
+      state.history = mergeOrdered(state.history, page.items, true, anchor);
+      state.historyAnchor = page.items[0]?.id || anchor;
+      const next = page.next_cursor || "";
+      state.historyCursor =
+        page.has_more && next !== cursor && !seen.has(next) ? next : "";
+      $("older").hidden = !state.historyCursor;
+      renderTimeline();
+      renderChanges();
+      if (find()) return;
+      if (page.has_more && !state.historyCursor)
+        throw new Error(
+          "Pagination stopped because the history cursor did not advance.",
+        );
+    }
+    notice(
+      "The source is outside the loaded history. Load older messages to continue.",
+    );
+  }
+  function searchInput() {
+    return {
+      query: $("conversationSearch").value.trim(),
+      filter: $("conversationFilter").value,
+      turn_id: $("conversationTurn").value,
+      limit: 100,
+    };
   }
   function renderSearch() {
     const items = conversationItems(),
@@ -187,87 +284,238 @@ export function startRemote() {
       $("conversationSearch").value = "";
       $("conversationFilter").value = "all";
       $("conversationTurn").value = "";
+      $("conversationSearchScope").value = "loaded";
     }
-    const turns = [
-        ...new Set(items.map((item) => item.turn_id).filter(Boolean)),
-      ],
-      selectedTurn = $("conversationTurn").value;
+    const turnsPage = indexedTurns(),
+      turns = allTurnIDs(),
+      selectedTurn = $("conversationTurn").value,
+      canIndex = readIndexes.supports("conversation_index"),
+      canSearch = canIndex && readIndexes.supports("full_history_search");
+    $("conversationFullHistory").disabled = !canSearch;
+    if (!canSearch) $("conversationSearchScope").value = "loaded";
     renderView(
       $("conversationTurn"),
       <>
         <option value="">{t("All turns")}</option>
-        {turns.map((id, index) => (
-          <option key={id} value={id}>
-            {t("Turn") + " " + (index + 1)}
-          </option>
-        ))}
+        {turns.map((id) => {
+          const turn = turnsPage.items.find((turn) => turn.id === id);
+          return (
+            <option key={id} value={id}>
+              {turnLabel(id)}
+              {turn
+                ? " · " +
+                  t(
+                    {
+                      completed: "Completed",
+                      inProgress: "Running",
+                      starting: "Running",
+                      failed: "Failed",
+                      interrupted: "Interrupted",
+                      idle: "Ready",
+                    }[turn.status] || "Status unknown",
+                  ) +
+                  (turn.partial ? " · " + t("Partial history") : "")
+                : ""}
+            </option>
+          );
+        })}
       </>,
     );
     $("conversationTurn").value = turns.includes(selectedTurn)
       ? selectedTurn
       : "";
     $("conversationNavigator").hidden = !state.selected;
-    const query = $("conversationSearch").value,
-      filter = $("conversationFilter").value,
-      active = !!query.trim() || filter !== "all" || !!selectedTurn,
-      matches = searchItems(items, query, filter).filter(
-        (item) => !selectedTurn || item.turn_id === selectedTurn,
-      ),
+    renderView(
+      $("conversationIndexStatus"),
+      canIndex ? (
+        <>
+          <span className="note">
+            {t(
+              turnsPage.loaded &&
+                turnsPage.scope === "full" &&
+                !turnsPage.truncated &&
+                !turnsPage.hasMore
+                ? "Turn index covers readable history."
+                : "Turn index is incomplete.",
+            )}
+          </span>
+          {turnsPage.loading && (
+            <span className="note">{t("Loading history index…")}</span>
+          )}
+          {turnsPage.error && (
+            <span className="note" role="status">
+              {t(turnsPage.error)}
+            </span>
+          )}
+          {(!turnsPage.loaded || turnsPage.error) && (
+            <Action
+              disabled={turnsPage.loading}
+              action={() =>
+                readIndexes.load("conversation_index", "turns", "turns")
+              }
+            >
+              {t(turnsPage.error ? "Retry" : "Load turn index")}
+            </Action>
+          )}
+          {turnsPage.hasMore && (
+            <Action
+              disabled={turnsPage.loading}
+              action={() =>
+                readIndexes.load(
+                  "conversation_index",
+                  "turns",
+                  "turns",
+                  undefined,
+                  true,
+                )
+              }
+            >
+              {t("Load more turns")}
+            </Action>
+          )}
+        </>
+      ) : null,
+    );
+    const body = searchInput(),
+      { query, filter } = body,
+      active = !!query || filter !== "all" || !!selectedTurn,
+      full = $("conversationSearchScope").value === "full" && canSearch;
+    if (full) {
+      const page = readIndexes.read(
+        "full_history_search",
+        "search",
+        "matches",
+        body,
+      );
+      renderView(
+        $("conversationSearchResults"),
+        <>
+          <p className="note">
+            {t(
+              page.loaded
+                ? page.scope === "full"
+                  ? "Search scope: full readable history."
+                  : "Search scope: loaded history."
+                : "Full history search is ready.",
+            )}{" "}
+            · {page.items.length} {t("matches")}
+          </p>
+          <Action
+            disabled={page.loading || !active}
+            action={() =>
+              readIndexes.load("full_history_search", "search", "matches", body)
+            }
+          >
+            {t(page.loading ? "Searching…" : "Search history")}
+          </Action>
+          {page.error && (
+            <p className="note" role="status">
+              {t(page.error)}
+            </p>
+          )}
+          {(page.truncated ||
+            page.hasMore ||
+            (page.loaded && page.scope !== "full")) && (
+            <p className="note">{t("Results are incomplete.")}</p>
+          )}
+          {page.items.map((match) => (
+            <Action
+              key={match.id}
+              className="search-result"
+              action={() => locateRecord(match)}
+            >
+              <span>{turnLabel(match.turn_id)}</span>
+              <span>
+                {String(match.snippet || match.type || t("Unknown")).slice(
+                  0,
+                  600,
+                )}
+              </span>
+            </Action>
+          ))}
+          {page.hasMore && (
+            <Action
+              disabled={page.loading}
+              action={() =>
+                readIndexes.load(
+                  "full_history_search",
+                  "search",
+                  "matches",
+                  body,
+                  true,
+                )
+              }
+            >
+              {t("Load more matches")}
+            </Action>
+          )}
+          <InteractionHistoryStatus />
+        </>,
+      );
+      return;
+    }
+    const interactionItems = interactionSearchItems();
+    const matches = searchItems(
+        [...items, ...interactionItems],
+        query,
+        filter,
+      ).filter((item) => !selectedTurn || item.turn_id === selectedTurn),
       changes =
         filter === "changes"
           ? changedFiles().filter(
               (file) =>
                 !file.item_id &&
                 (!selectedTurn || file.turn_id === selectedTurn) &&
-                (!query.trim() ||
+                (!query ||
                   (file.path + "\n" + (file.diff || ""))
                     .toLocaleLowerCase()
-                    .includes(query.trim().toLocaleLowerCase())),
+                    .includes(query.toLocaleLowerCase())),
             )
           : [];
     renderView(
       $("conversationSearchResults"),
-      active ? (
-        <>
-          <p className="note">
-            {t("Loaded messages and tool output only.")} ·{" "}
-            {matches.length + changes.length} {t("matches")}
-          </p>
-          {matches.slice(0, 100).map((item) => (
-            <Action
-              key={item.id}
-              className="search-result"
-              action={() => jumpToItem(item.id)}
-            >
-              <span>
-                {t("Turn")} {turns.indexOf(item.turn_id) + 1 || t("Unknown")}
-              </span>
-              <span>
-                {String(
-                  item.text ||
-                    item.data?.command ||
-                    item.data?.aggregatedOutput ||
-                    item.type,
-                ).slice(0, 150)}
-              </span>
-            </Action>
-          ))}
-          {changes.slice(0, Math.max(0, 100 - matches.length)).map((file) => (
-            <Action
-              key={file.key}
-              className="search-result"
-              action={() => openTurnChanges(file.turn_id)}
-            >
-              {file.path}
-            </Action>
-          ))}
-          {matches.length + changes.length > 100 && (
+      <>
+        {active && (
+          <>
             <p className="note">
-              {t("Showing first 100 matches. Refine your search.")}
+              {t("Loaded messages and tool output only.")} ·{" "}
+              {matches.length + changes.length} {t("matches")}
             </p>
-          )}
-        </>
-      ) : null,
+            {matches.slice(0, 100).map((item) => (
+              <Action
+                key={item.id}
+                className="search-result"
+                action={() => locateRecord(item)}
+              >
+                <span>{turnLabel(item.turn_id)}</span>
+                <span>
+                  {String(
+                    item.text ||
+                      item.data?.command ||
+                      item.data?.aggregatedOutput ||
+                      item.type,
+                  ).slice(0, 150)}
+                </span>
+              </Action>
+            ))}
+            {changes.slice(0, Math.max(0, 100 - matches.length)).map((file) => (
+              <Action
+                key={file.key}
+                className="search-result"
+                action={() => openTurnChanges(file.turn_id)}
+              >
+                {file.path}
+              </Action>
+            ))}
+            {matches.length + changes.length > 100 && (
+              <p className="note">
+                {t("Showing first 100 matches. Refine your search.")}
+              </p>
+            )}
+          </>
+        )}
+        <InteractionHistoryStatus />
+      </>,
     );
   }
   function renderTimeline() {
@@ -671,6 +919,7 @@ export function startRemote() {
     renderPlan(live.plan);
     renderChanges();
     renderRequests(state.currentRequests);
+    syncInteractionHistory();
     $("working").hidden =
       !state.running ||
       !!state.currentRequests.length ||
@@ -1009,6 +1258,7 @@ export function startRemote() {
     turnLabel,
     getRequests: () => state.currentRequests,
     openRequest: (...args) => openRequest(...args),
+    renderInteractionHistory: (item) => <InteractionHistory item={item} />,
     openProjectFile: (...args) => openProjectFile(...args),
     openAttachment: (...args) => openAttachment(...args),
     getSubagents: () => getSubagents(),
@@ -1021,7 +1271,7 @@ export function startRemote() {
   });
   const { syncSubagents, resetSubagents, getSubagents, openSubagent } =
     createSubagents({
-      jumpToItem,
+      jumpToItem: (id) => run(() => locateRecord({ item_id: id })),
       onAgentsChanged: () => renderCurrent(),
       state,
       $,
@@ -1073,22 +1323,35 @@ export function startRemote() {
     requireOwner: (...args) => requireOwner(...args),
     detail: (...args) => detail(...args),
   });
-  const { closeDialog, renderRequests, dismissRequest, openRequest } =
-    createApprovals({
-      getAgent,
-      $,
-      state,
-      ownerCan: (...args) => ownerCan(...args),
-      ownerEpoch: (...args) => ownerEpoch(...args),
-      t,
-      requireOwner: (...args) => requireOwner(...args),
-      api: (...args) => api(...args),
-      detail: (...args) => detail(...args),
-      run: (...args) => run(...args),
-      safeURL: (...args) => safeURL(...args),
-      Action: (...args) => Action(...args),
-      textOf: (...args) => textOf(...args),
-    });
+  const {
+    closeDialog,
+    renderRequests,
+    dismissRequest,
+    openRequest,
+    getInteractionHistory,
+    interactionSearchItems,
+    InteractionHistory,
+    InteractionHistoryStatus,
+    syncInteractionHistory,
+  } = createApprovals({
+    onHistoryChanged: () => {
+      renderCurrent();
+      renderSearch();
+    },
+    getAgent,
+    $,
+    state,
+    ownerCan: (...args) => ownerCan(...args),
+    ownerEpoch: (...args) => ownerEpoch(...args),
+    t,
+    requireOwner: (...args) => requireOwner(...args),
+    api: (...args) => api(...args),
+    detail: (...args) => detail(...args),
+    run: (...args) => run(...args),
+    safeURL: (...args) => safeURL(...args),
+    Action: (...args) => Action(...args),
+    textOf: (...args) => textOf(...args),
+  });
   const {
     closeReasoning,
     renderReasoning,
@@ -1165,6 +1428,7 @@ export function startRemote() {
     openTurnChanges,
     closeChanges,
     renderChanges,
+    renderArtifacts,
     renderPlanAction,
     refreshWorkspaceChanges,
     refreshPendingPlan,
@@ -1198,6 +1462,9 @@ export function startRemote() {
     Resource,
     Copy,
     jumpToItem,
+    locateRecord,
+    readIndexes,
+    openArtifact: (artifact) => openProjectFile(artifact.name, 0, artifact),
     state,
     $,
     t,
@@ -1365,6 +1632,8 @@ export function startRemote() {
     clearDraft: (...args) => clearDraft(...args),
     refreshQueue,
     list: (...args) => list(...args),
+    renderCurrent: (...args) => renderCurrent(...args),
+    notice,
   });
   const { switchAgent } = createAgentLifecycle({
     saveReading: () => reading.save(),
@@ -1388,7 +1657,12 @@ export function startRemote() {
   });
   $("conversationSearch").oninput = renderSearch;
   $("conversationFilter").onchange = renderSearch;
-  $("conversationTurn").onchange = renderSearch;
+  $("conversationTurn").onchange = () => {
+    renderSearch();
+    const turn = $("conversationTurn").value;
+    if (turn) run(() => locateRecord({ turn_id: turn }));
+  };
+  $("conversationSearchScope").onchange = renderSearch;
   bindWorkspace({
     openRequest,
     $,

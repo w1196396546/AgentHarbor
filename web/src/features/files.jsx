@@ -265,9 +265,16 @@ export function createFiles({
         (detail ? " " + t(detail.replace(/\s+/g, " ").slice(0, 300)) : ""),
     );
   }
-  async function projectFileBlob(path, extra = {}) {
+  async function projectFileBlob(path, extra = {}, artifact = null) {
     const response = await window.RemoteSecure.fetch(
-      projectFileURL(path, extra),
+      artifact
+        ? "threads/" +
+            encodeURIComponent(state.selected) +
+            "/artifacts/" +
+            encodeURIComponent(artifact.id) +
+            "?" +
+            new URLSearchParams(extra)
+        : projectFileURL(path, extra),
       {
         headers: { "X-Remote-Agent": getAgent().id },
       },
@@ -275,7 +282,7 @@ export function createFiles({
     if (!response.ok) throw await resourceError(response);
     return response.blob();
   }
-  async function openProjectFile(path, line = 0) {
+  async function openProjectFile(path, line = 0, artifact = null) {
     if (!state.selected) throw new Error("Choose a session");
     const root = state.cwd || state.project || "";
     if (/^[A-Za-z]:[\\/]/.test(root)) {
@@ -283,7 +290,25 @@ export function createFiles({
       if (!/^(?:[A-Za-z]:|\/)/.test(relative)) path = relative;
     }
     const id = state.selected,
-      generation = state.generation;
+      generation = state.generation,
+      agentID = getAgent().id,
+      deviceID = state.device?.id,
+      ownerEpoch = state.live.owner?.epoch;
+    const current = () =>
+      id === state.selected &&
+      generation === state.generation &&
+      agentID === getAgent().id &&
+      deviceID === state.device?.id &&
+      ownerEpoch === state.live.owner?.epoch;
+    if (
+      artifact &&
+      (typeof artifact.id !== "string" ||
+        !artifact.id ||
+        artifact.availability !== "available")
+    )
+      throw new Error(
+        "Resource unavailable in the authorized project or attachments.",
+      );
     openPanel(state.sideTab);
     for (const url of state.filePreviewURLs || []) URL.revokeObjectURL(url);
     state.filePreviewURLs = [];
@@ -300,14 +325,25 @@ export function createFiles({
     );
     try {
       const value = await api(
-        "project-file?" + new URLSearchParams({ thread: id, path }),
+        artifact
+          ? "threads/" +
+              encodeURIComponent(id) +
+              "/artifacts/" +
+              encodeURIComponent(artifact.id)
+          : "project-file?" + new URLSearchParams({ thread: id, path }),
+        undefined,
+        artifact ? { observation: true } : {},
       );
+      if (!current() || seq !== state.previewSeq) return;
       if (
-        id !== state.selected ||
-        generation !== state.generation ||
-        seq !== state.previewSeq
+        artifact &&
+        (value.version !== 1 ||
+          value.id !== artifact.id ||
+          value.availability !== "available")
       )
-        return;
+        throw new Error(
+          "Resource unavailable in the authorized project or attachments.",
+        );
       $("filePreviewName").textContent = value.path || value.name || path;
       $("filePreviewName").title = value.path || path;
       $("filePreviewMeta").textContent = [
@@ -325,13 +361,9 @@ export function createFiles({
       $("filePreviewDownload").onclick = (event) => {
         event.preventDefault();
         run(async () => {
-          const blob = await projectFileBlob(path, { download: "1" });
-          if (
-            id !== state.selected ||
-            generation !== state.generation ||
-            seq !== state.previewSeq
-          )
-            return;
+          if (!current() || seq !== state.previewSeq) return;
+          const blob = await projectFileBlob(path, { download: "1" }, artifact);
+          if (!current() || seq !== state.previewSeq) return;
           const url = URL.createObjectURL(blob);
           state.filePreviewURLs.push(url);
           const a = document.createElement("a");
@@ -345,13 +377,8 @@ export function createFiles({
       const content = $("filePreviewContent");
       clearView(content);
       if (value.image) {
-        const blob = await projectFileBlob(path, { raw: "1" });
-        if (
-          id !== state.selected ||
-          generation !== state.generation ||
-          seq !== state.previewSeq
-        )
-          return;
+        const blob = await projectFileBlob(path, { raw: "1" }, artifact);
+        if (!current() || seq !== state.previewSeq) return;
         const url = URL.createObjectURL(blob);
         state.filePreviewURLs.push(url);
         renderView(
@@ -392,11 +419,7 @@ export function createFiles({
             ?.scrollIntoView({ block: "center" });
       }
     } catch (error) {
-      if (
-        id === state.selected &&
-        generation === state.generation &&
-        seq === state.previewSeq
-      )
+      if (current() && seq === state.previewSeq)
         renderView(
           $("filePreviewContent"),
           <p className="note">{t(error.message)}</p>,

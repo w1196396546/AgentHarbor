@@ -15,6 +15,7 @@ export function createAttachments({
   run,
   getAgent,
 }) {
+  const previews = new Map();
   async function upload(files) {
     requireOwner("send");
     if (!state.project) {
@@ -23,39 +24,72 @@ export function createAttachments({
     }
     const project = state.project,
       generation = state.generation;
-    for (const file of files) {
+    files = Array.from(files);
+    for (let offset = 0; offset < files.length; offset += 2) {
       if (state.generation !== generation) break;
-      if (file.size > 20 * 1024 * 1024) {
+      const batch = files.slice(offset, offset + 2).filter((file) => {
+        if (file.size <= 20 * 1024 * 1024) return true;
         notice("Attachments must be 20 MB or smaller.");
-        continue;
-      }
-      state.uploading++;
+        return false;
+      });
+      state.uploading += batch.length;
       updateControls();
       try {
-        const form = new FormData();
-        form.append("file", file);
-        const result = await api(
-          "attachments?" + new URLSearchParams({ project }),
-          form,
+        const uploaded = await Promise.all(
+          batch.map(async (file) => {
+            try {
+              const form = new FormData();
+              form.append("file", file);
+              return {
+                file,
+                result: await api(
+                  "attachments?" + new URLSearchParams({ project }),
+                  form,
+                ),
+              };
+            } catch (e) {
+              notice(e.message);
+              return null;
+            }
+          }),
         );
-        if (state.project === project && state.generation === generation) {
-          state.attachments.push(result);
-          renderAttachments();
-        } else
-          await api("attachments/" + encodeURIComponent(result.id), undefined, {
-            method: "DELETE",
-          });
-      } catch (e) {
-        notice(e.message);
+        for (const entry of uploaded) {
+          if (!entry) continue;
+          const { file, result } = entry;
+          if (state.project === project && state.generation === generation) {
+            if (result.image)
+              previews.set(result.id, URL.createObjectURL(file));
+            state.attachments.push(result);
+          } else {
+            try {
+              await api(
+                "attachments/" + encodeURIComponent(result.id),
+                undefined,
+                {
+                  method: "DELETE",
+                },
+              );
+            } catch (e) {
+              notice(e.message);
+            }
+          }
+        }
+        renderAttachments();
       } finally {
-        state.uploading--;
+        state.uploading -= batch.length;
         updateControls();
       }
     }
   }
   function AttachmentImage({ id, name }) {
-    const [src, setSrc] = useState("");
+    const preview = previews.get(id);
+    const [src, setSrc] = useState(preview || "");
     useEffect(() => {
+      if (preview)
+        return () => {
+          URL.revokeObjectURL(preview);
+          previews.delete(id);
+        };
       let active = true,
         url = "";
       const controller = new AbortController();

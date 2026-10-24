@@ -10,12 +10,14 @@
     return Uint8Array.from(value.match(/../g), byte => parseInt(byte, 16));
   }
   function base64(bytes) {
+    if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
     let value = '';
     for (let offset = 0; offset < bytes.length; offset += 8192) value += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
     return btoa(value);
   }
   function unbase64(value) {
     if (typeof value !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw invalid();
+    if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(value);
     return Uint8Array.from(atob(value), byte => byte.charCodeAt(0));
   }
   async function key(secret, id, purpose) {
