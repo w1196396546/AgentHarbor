@@ -111,6 +111,16 @@ late responses. Attachment uploads run in ordered pairs, and new image chips use
 temporary local previews instead of downloading the image again. The encrypted
 wire format, authorization and uncertain-delivery retry rules remain unchanged.
 
+Confirmed creation receipts appear immediately under the selected App project,
+even while native indexing is delayed. These bounded, device/Agent-scoped rows
+yield to the native catalog once indexed and are discarded on archive. Windows
+project identity recognizes extended drive/UNC paths, separators and case without
+matching sibling directories; filesystem authorization remains on the desktop.
+Refreshing the options catalog invalidates a pending creation preflight, but never
+discards an already-dispatched creation receipt or retries its write. An explicitly
+offline owner displays unknown status without changing the last observed turn or
+inferring that execution stopped or completed.
+
 
 ## Execution details
 

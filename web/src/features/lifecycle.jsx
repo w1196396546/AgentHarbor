@@ -14,8 +14,10 @@ export function createLifecycle({
   updateControls,
   renderCurrent,
   getLanguage,
+  forgetCreatedThread = () => {},
 }) {
   function archiveConversation(id) {
+    forgetCreatedThread(id);
     state.listSeq++;
     state.sessions = state.sessions.filter((session) => session.id !== id);
     renderSessions();

@@ -1,4 +1,5 @@
 import { createReadIndexes } from "./features/indexes";
+import { owningProject } from "./project-paths";
 import { createReading } from "./features/reading";
 import {
   loadedItems,
@@ -538,6 +539,7 @@ export function startRemote() {
   const notice = (text = "") => {
     $("notice").textContent = t(text);
   };
+  let namingNotice = null;
   function translate() {
     document.documentElement.lang = lang;
     document
@@ -591,6 +593,7 @@ export function startRemote() {
     clearTimeout(state.timer);
     clearTimeout(state.workspaceTimer);
     state.device = null;
+    clearCreatedThreads();
     state.deviceConnectionUnknown = false;
     state.agentDiscovered = false;
     closeStream();
@@ -656,33 +659,38 @@ export function startRemote() {
     setNavigation(false);
   }
   function setStatus(status, requests) {
+    const ownerOffline =
+      state.selected && state.live.owner?.state === "offline";
+    if (ownerOffline) status = "unknown";
     const label = state.archivedSelection
       ? "Archived"
-      : requests?.length
-        ? !ownerCan(
-            requests[0]?.method === "agentMessage/questions"
-              ? "steer"
-              : "answer",
-          )
-          ? "Waiting in original app"
-          : ["question", "elicitation"].includes(
-                getAgent().requestKind(requests[0]),
-              )
-            ? "Waiting for you"
-            : "Waiting for approval"
-        : state.live.retrying
-          ? "Retrying…"
-          : status === "completed"
-            ? "Completed"
-            : status === "inProgress" || status === "starting"
-              ? "Running"
-              : status === "failed"
-                ? "Failed"
-                : status === "interrupted"
-                  ? "Interrupted"
-                  : status === "idle" || !state.selected
-                    ? "Ready"
-                    : "Status unknown";
+      : ownerOffline
+        ? "Status unknown"
+        : requests?.length
+          ? !ownerCan(
+              requests[0]?.method === "agentMessage/questions"
+                ? "steer"
+                : "answer",
+            )
+            ? "Waiting in original app"
+            : ["question", "elicitation"].includes(
+                  getAgent().requestKind(requests[0]),
+                )
+              ? "Waiting for you"
+              : "Waiting for approval"
+          : state.live.retrying
+            ? "Retrying…"
+            : status === "completed"
+              ? "Completed"
+              : status === "inProgress" || status === "starting"
+                ? "Running"
+                : status === "failed"
+                  ? "Failed"
+                  : status === "interrupted"
+                    ? "Interrupted"
+                    : status === "idle" || !state.selected
+                      ? "Ready"
+                      : "Status unknown";
     $("state").textContent = t(label);
     $("state").dataset.state = status || "idle";
     const connection = state.deviceConnectionUnknown
@@ -844,14 +852,7 @@ export function startRemote() {
       }
     }
     if (session.cwd) {
-      const owner =
-        state.projects
-          .filter(
-            (p) =>
-              session.cwd === p ||
-              session.cwd.startsWith(p.replace(/[\\/]$/, "") + "/"),
-          )
-          .sort((a, b) => b.length - a.length)[0] || "";
+      const owner = owningProject(state.projects, session.cwd);
       if (owner !== state.project) {
         state.project = owner;
         state.optionsLoaded = false;
@@ -901,11 +902,14 @@ export function startRemote() {
         ? t("New session")
         : title || t("Untitled session");
     const row = state.sessions.find((session) => session.id === state.selected),
-      status = state.currentRequests.length
-        ? "waiting"
-        : state.running
-          ? "running"
-          : live.status;
+      status =
+        live.owner?.state === "offline"
+          ? "unknown"
+          : state.currentRequests.length
+            ? "waiting"
+            : state.running
+              ? "running"
+              : live.status;
     if (
       row &&
       state.session &&
@@ -959,8 +963,25 @@ export function startRemote() {
       !live.cut &&
       !live.diff_cut &&
       ![...state.history, ...(live.items || [])].some((item) => item.cut);
-    if (typeof live.title_notice === "string" && live.title_notice.trim())
-      notice(live.title_notice);
+    const titleNotice =
+        typeof live.title_notice === "string" ? live.title_notice.trim() : "",
+      noticeScope = JSON.stringify([
+        state.device?.id,
+        getAgent().id,
+        state.selected,
+      ]);
+    if (titleNotice) {
+      if (
+        namingNotice?.scope !== noticeScope ||
+        namingNotice.text !== titleNotice
+      ) {
+        notice(titleNotice);
+        namingNotice = { scope: noticeScope, text: titleNotice };
+      }
+    } else if (namingNotice) {
+      if ($("notice").textContent === t(namingNotice.text)) notice();
+      namingNotice = null;
+    }
     updateControls();
     updateLatest();
     refreshWorkspaceChanges();
@@ -1267,7 +1288,7 @@ export function startRemote() {
     markdown: (...args) => markdown(...args),
     Action: (...args) => Action(...args),
     openChanges: (...args) => openChanges(...args),
-    projectName: (...args) => projectName(...args),
+    projectName: (path) => projectName(path, false),
   });
   const { syncSubagents, resetSubagents, getSubagents, openSubagent } =
     createSubagents({
@@ -1280,7 +1301,7 @@ export function startRemote() {
       api: (...args) => api(...args),
       run: (...args) => run(...args),
       Action: (...args) => Action(...args),
-      projectName: (...args) => projectName(...args),
+      projectName: (path) => projectName(path, false),
     });
   const {
     loadProjectFiles,
@@ -1296,7 +1317,7 @@ export function startRemote() {
     Action: (...args) => Action(...args),
     openPanel: (...args) => openPanel(...args),
     run: (...args) => run(...args),
-    projectName: (...args) => projectName(...args),
+    projectName: (path) => projectName(path, false),
   });
   const {
     renderQueue,
@@ -1316,7 +1337,7 @@ export function startRemote() {
     api: (...args) => api(...args),
     updateControls: (...args) => updateControls(...args),
     t,
-    projectName: (...args) => projectName(...args),
+    projectName: (path) => projectName(path, false),
     ownerCan: (...args) => ownerCan(...args),
     getLanguage: () => lang,
     Action: (...args) => Action(...args),
@@ -1386,7 +1407,7 @@ export function startRemote() {
     notice,
     updateControls: (...args) => updateControls(...args),
     api: (...args) => api(...args),
-    projectName: (...args) => projectName(...args),
+    projectName: (path) => projectName(path, false),
     $,
     t,
     run: (...args) => run(...args),
@@ -1401,7 +1422,7 @@ export function startRemote() {
       openReasoning: (...args) => openReasoning(...args),
       permissionMenu: (...args) => permissionMenu(...args),
       api: (...args) => api(...args),
-      projectName: (...args) => projectName(...args),
+      projectName: (path) => projectName(path, false),
       notice,
       Action: (...args) => Action(...args),
       canConfigure: (...args) => canConfigure(...args),
@@ -1515,6 +1536,8 @@ export function startRemote() {
     showWorkspace,
     list,
     createThread,
+    forgetCreatedThread,
+    clearCreatedThreads,
     applyPreferences,
     create,
     discardDraft,
@@ -1597,6 +1620,7 @@ export function startRemote() {
       updateControls: (...args) => updateControls(...args),
       renderCurrent: (...args) => renderCurrent(...args),
       getLanguage: () => lang,
+      forgetCreatedThread,
     });
   const { renderDevice, updateConnection, checkDevice, setDeviceOnline } =
     createDevices({
@@ -1636,6 +1660,7 @@ export function startRemote() {
     notice,
   });
   const { switchAgent } = createAgentLifecycle({
+    clearCreatedThreads,
     saveReading: () => reading.save(),
     state,
     $,

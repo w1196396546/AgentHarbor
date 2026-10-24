@@ -1,3 +1,10 @@
+import {
+  isWindowsProjectPath,
+  normalizeProjectPath,
+  projectContainsPath,
+  sameProjectPath,
+} from "../project-paths";
+
 export function externalURL(value) {
   if (typeof value !== "string") return null;
   try {
@@ -81,18 +88,10 @@ export function numberedDiff(text, kind) {
 }
 
 export function normalizeFilePath(path, cwd = "") {
-  let value = String(path || "").replaceAll("\\", "/");
-  const root = String(cwd || "")
-    .replaceAll("\\", "/")
-    .replace(/\/$/, "");
-  const windows = /^[A-Za-z]:\//.test(root);
-  if (
-    root &&
-    (windows ? value.toLowerCase() : value).startsWith(
-      (windows ? root.toLowerCase() : root) + "/",
-    )
-  )
-    value = value.slice(root.length + 1);
+  let value = normalizeProjectPath(path);
+  const root = normalizeProjectPath(cwd);
+  if (root && !sameProjectPath(root, value) && projectContainsPath(root, value))
+    value = value.slice(root.length + (root.endsWith("/") ? 0 : 1));
   return value.replace(/^(\.\/)+/, "");
 }
 
@@ -143,7 +142,9 @@ export function gitPath(value) {
 export function collectChanges(state) {
   const cwd = state.cwd || state.project || "",
     normalize = (path) => normalizeFilePath(path, cwd),
-    windows = /^[A-Za-z]:[\\/]/.test(cwd),
+    windows = isWindowsProjectPath(cwd),
+    pathKey = (value) =>
+      windows ? normalize(value).toLowerCase() : normalize(value),
     files = new Map(),
     liveIDs = new Set((state.live.items || []).map((item) => item.id)),
     items = new Map(
@@ -227,7 +228,7 @@ export function collectChanges(state) {
       renamed.some(
         (file) =>
           file.turn_id === change.turn_id &&
-          normalize(change.path) === file.old_path &&
+          pathKey(change.path) === pathKey(file.old_path) &&
           change.kind === "delete",
       )
     )

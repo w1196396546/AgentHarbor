@@ -2,16 +2,24 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { test } = require("node:test");
+const { build } = require("esbuild");
+const presentation = build({
+  entryPoints: [path.resolve(__dirname, "../web/src/features/presentation.js")],
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  write: false,
+}).then(
+  (result) =>
+    import(
+      "data:text/javascript;base64," +
+        Buffer.from(result.outputFiles[0].text).toString("base64")
+    ),
+);
 
 test("presentation keeps diff positions and only exposes supplied web targets", async () => {
-  const source = await fs.readFile(
-    path.resolve(__dirname, "../web/src/features/presentation.js"),
-    "utf8",
-  );
   const { numberedDiff, searchAction, externalURL, commandSummary } =
-    await import(
-      "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-    );
+    await presentation;
   const rows = numberedDiff(
     "diff --git a/a b/a\n--- /dev/null\n+++ b/a\n@@ -0,0 +8,2 @@\n+one\n+two\n",
     "add",
@@ -70,10 +78,6 @@ test("presentation keeps diff positions and only exposes supplied web targets", 
 });
 
 test("shared changes count command writes once per turn and preserve real renames", async () => {
-  const source = await fs.readFile(
-    path.resolve(__dirname, "../web/src/features/presentation.js"),
-    "utf8",
-  );
   const {
     collectChanges,
     gitPath,
@@ -82,9 +86,7 @@ test("shared changes count command writes once per turn and preserve real rename
     itemResources,
     searchItems,
     errorDetails,
-  } = await import(
-    "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-  );
+  } = await presentation;
   const state = {
     cwd: "C:\\repo",
     history: [
@@ -243,6 +245,113 @@ test("shared changes count command writes once per turn and preserve real rename
       itemID: "",
       turnID: "",
     },
+  );
+});
+
+test("Windows extended and UNC changes share relative paths, casing and rename identity", async () => {
+  const { normalizeFilePath, collectChanges } = await presentation;
+  for (const [cwd, absolute, equivalent] of [
+    [
+      "\\\\?\\E:\\work\\Shop",
+      "e:/WORK/shop/src/File.txt",
+      "\\\\?\\e:\\work\\SHOP\\SRC\\file.txt",
+    ],
+    [
+      "E:\\work\\Shop",
+      "\\\\?\\e:\\WORK\\shop\\src\\File.txt",
+      "E:/work/SHOP/SRC/file.txt",
+    ],
+    [
+      "\\\\?\\UNC\\Server\\Share\\Shop",
+      "\\\\server\\share\\SHOP\\src\\File.txt",
+      "//SERVER/SHARE/shop/SRC/file.txt",
+    ],
+    [
+      "\\\\Server\\Share\\Shop",
+      "\\\\?\\UNC\\server\\share\\SHOP\\src\\File.txt",
+      "//SERVER/SHARE/shop/SRC/file.txt",
+    ],
+  ]) {
+    assert.equal(normalizeFilePath(absolute, cwd), "src/File.txt");
+    const files = collectChanges({
+      cwd,
+      history: [],
+      live: {
+        turn_id: "one",
+        items: [
+          {
+            id: "native-change",
+            type: "fileChange",
+            data: { changes: [{ path: absolute, diff: "NATIVE" }] },
+          },
+        ],
+      },
+      workspaceChanges: [
+        { path: equivalent, turn_id: "one", diff: "CONFIRMED" },
+      ],
+    });
+    assert.equal(files.length, 1, cwd);
+    assert.equal(files[0].diff, "CONFIRMED");
+    assert.equal(files[0].item_id, "native-change");
+    const renamed = collectChanges({
+      cwd,
+      history: [],
+      live: {
+        turn_id: "rename",
+        items: [
+          {
+            id: "native-rename",
+            type: "fileChange",
+            data: {
+              changes: [
+                {
+                  path: absolute,
+                  kind: { type: "update", move_path: "src/New.txt" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      workspaceChanges: [
+        { path: equivalent, turn_id: "rename", kind: "delete" },
+        {
+          path: "SRC/new.txt",
+          turn_id: "rename",
+          kind: "add",
+          diff: "RENAMED",
+        },
+      ],
+    });
+    assert.equal(
+      renamed.length,
+      1,
+      "a casing difference restored a renamed source deletion",
+    );
+    assert.equal(renamed[0].old_path, "src/File.txt");
+  }
+  assert.equal(
+    normalizeFilePath(
+      "\\\\?\\E:\\work\\shop-copy\\secret.txt",
+      "E:\\work\\shop",
+    ),
+    "E:/work/shop-copy/secret.txt",
+  );
+  assert.equal(
+    normalizeFilePath("F:\\work\\shop\\secret.txt", "E:\\work\\shop"),
+    "F:/work/shop/secret.txt",
+  );
+  assert.equal(
+    normalizeFilePath(
+      "\\\\server\\share-other\\secret.txt",
+      "\\\\server\\share",
+    ),
+    "//server/share-other/secret.txt",
+  );
+  assert.equal(normalizeFilePath("\\\\?\\E:\\file.txt", "E:\\"), "file.txt");
+  assert.equal(
+    normalizeFilePath("/Work/secret.txt", "/work"),
+    "/Work/secret.txt",
   );
 });
 

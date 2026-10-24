@@ -19,6 +19,7 @@ export function createAgentLifecycle({
   updateControls,
   t,
   saveReading = () => {},
+  clearCreatedThreads = () => {},
 }) {
   const drafts = new Map();
 
@@ -29,6 +30,7 @@ export function createAgentLifecycle({
       return;
     }
     saveReading();
+    clearCreatedThreads();
     state.reportedOptions = null;
     drafts.set(previous, {
       text: $("message").value,

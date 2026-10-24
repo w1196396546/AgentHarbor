@@ -27,7 +27,7 @@ for (const engine of engines)
           posts = [],
           agentHeaders = [],
           project = "C:\\work\\my-project",
-          optionThreads = [];
+          optionQueries = [];
         let paired = false,
           created = false,
           turns = 0;
@@ -51,7 +51,7 @@ for (const engine of engines)
           if (u.pathname.startsWith("/api/")) {
             const data = req.postData() ? req.postDataJSON() : {};
             if (u.pathname === "/api/options")
-              optionThreads.push(u.searchParams.get("thread"));
+              optionQueries.push(Object.fromEntries(u.searchParams));
             if (req.headers()["x-remote-agent"])
               agentHeaders.push({
                 path: u.pathname,
@@ -267,15 +267,21 @@ for (const engine of engines)
           .locator("#projects button")
           .filter({ hasText: project })
           .click();
-        const previousOptionCount = optionThreads.length;
+        const previousOptionCount = optionQueries.length;
         await page.locator("#new").click();
-        await page.locator("#composer:visible").waitFor();
+        await page
+          .locator('#sessions [data-id="remote-session"][aria-current="true"]')
+          .waitFor({ state: "attached" });
+        const creationChecks = optionQueries
+          .slice(previousOptionCount)
+          .filter((query) => query.scope === "creation");
+        assert.equal(creationChecks.length, 1);
         assert.equal(
-          optionThreads.at(-1),
-          null,
+          creationChecks[0].thread,
+          undefined,
           "new conversation capability check reused the selected session ID",
         );
-        assert(optionThreads.length > previousOptionCount);
+        assert.equal(creationChecks[0].project, project);
         await page.locator("#message").fill("Please inspect this project.");
         await page.locator("#send").click();
         await page.locator(".request").waitFor();

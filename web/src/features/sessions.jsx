@@ -1,6 +1,11 @@
 import { renderView, clearView } from "../render";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { PanelRow } from "../components/ui/panel";
+import {
+  owningProject,
+  projectContainsPath,
+  sameProjectPath,
+} from "../project-paths";
 
 export function createSessions({
   $,
@@ -36,16 +41,68 @@ export function createSessions({
   restoreSession = () => "",
 }) {
   let listRequests = 0,
-    restoredScope = "";
+    restoredScope = "",
+    createdScope = "";
+  const createdSessions = new Map();
+  function clearCreatedThreads() {
+    createdSessions.clear();
+    createdScope = "";
+  }
+  function pendingCreatedSessions() {
+    const scope = JSON.stringify([state.device?.id, getAgent().id]);
+    if (scope !== createdScope) {
+      createdScope = scope;
+      createdSessions.clear();
+    }
+    return createdSessions;
+  }
+  function forgetCreatedThread(id) {
+    pendingCreatedSessions().delete(id);
+  }
+  function rememberCreatedThread(value, project) {
+    const row = {
+      title: "New session",
+      cwd: project,
+      last: new Date().toISOString(),
+      ...value,
+    };
+    if (!Object.hasOwn(row, "project_id")) {
+      const owner = state.sidebarProjects?.find((candidate) =>
+        candidate.root_paths?.some((root) => sameProjectPath(root, project)),
+      );
+      if (owner) row.project_id = owner.id;
+    }
+    const pending = pendingCreatedSessions();
+    pending.set(row.id, row);
+    if (pending.size > 100) pending.delete(pending.keys().next().value);
+    // The creation receipt is authoritative even before the native index catches up.
+    state.listSeq++;
+    if (!state.listProject || projectContainsPath(state.listProject, row.cwd)) {
+      state.sessions = [
+        row,
+        ...state.sessions.filter((session) => session.id !== row.id),
+      ];
+      renderSessions();
+    }
+    return row;
+  }
   function setNavigation(open) {
     document.body.classList.toggle("nav-open", open);
     $("navBackdrop").hidden = !open;
     $("sidebarToggle").setAttribute("aria-expanded", String(open));
   }
-  function projectName(path) {
+  function projectName(path, containingProject = true) {
+    const owner = containingProject
+      ? owningProject(
+          state.sidebarProjects?.flatMap(
+            (project) => project.root_paths || [],
+          ) || [],
+          path,
+        )
+      : path;
     return (
       state.sidebarProjects?.find((project) =>
-        project.root_paths?.includes(path),
+        project.root_paths?.some((root) => sameProjectPath(root, owner)),
       )?.name ||
       path?.split(/[\\/]/).filter(Boolean).pop() ||
       t("All projects")
@@ -85,9 +142,27 @@ export function createSessions({
       state.projects = value.projects || [];
       state.sidebarProjects = value.sidebar_projects || null;
       state.pinnedIDs = value.pinned_ids || [];
-      state.sessions = append ? [...state.sessions, ...rows] : rows;
       const archived = new Set(value.archived_ids || []);
-      state.sessions = state.sessions.filter(
+      const pending = pendingCreatedSessions();
+      for (const session of rows) pending.delete(session.id);
+      for (const id of archived) pending.delete(id);
+      if (!value.history_unavailable)
+        for (const [id, session] of pending)
+          if (!owningProject(state.projects, session.cwd)) pending.delete(id);
+      const pendingRows = [...pending.values()]
+        .filter(
+          (session) => !project || projectContainsPath(project, session.cwd),
+        )
+        .map(
+          (session) =>
+            state.sessions.find((row) => row.id === session.id) || session,
+        );
+      const merged = new Map(
+        [...pendingRows, ...(append ? state.sessions : []), ...rows].map(
+          (session) => [session.id, session],
+        ),
+      );
+      state.sessions = [...merged.values()].filter(
         (session) => !archived.has(session.id),
       );
       if (archived.has(state.selected)) archiveConversation(state.selected);
@@ -181,7 +256,10 @@ export function createSessions({
       groups.set("pinned", { name: t("Pinned"), icon: "pin", sessions: [] });
       for (const project of state.sidebarProjects.filter(
         (project) =>
-          !state.listProject || project.root_paths?.includes(state.listProject),
+          !state.listProject ||
+          project.root_paths?.some((root) =>
+            sameProjectPath(root, state.listProject),
+          ),
       ))
         groups.set("project:" + project.id, {
           name: project.name,
@@ -207,15 +285,7 @@ export function createSessions({
     } else {
       for (const session of rows) {
         const owner =
-          state.projects
-            .filter(
-              (path) =>
-                session.cwd === path ||
-                session.cwd.startsWith(path.replace(/[\\/]$/, "") + "/"),
-            )
-            .sort((a, b) => b.length - a.length)[0] ||
-          session.cwd ||
-          "";
+          owningProject(state.projects, session.cwd) || session.cwd || "";
         if (!groups.has(owner))
           groups.set(owner, {
             name: projectName(owner),
@@ -499,21 +569,7 @@ export function createSessions({
     const generation = state.generation,
       current = () => id === state.selected && generation === state.generation;
     if (state.session?.cwd) {
-      const windowsPath = /^[a-z]:[\\/]/i.test(state.session.cwd),
-        cwd = state.session.cwd.replaceAll("\\", "/"),
-        normalize = (value) => {
-          const path = value.replaceAll("\\", "/");
-          return windowsPath ? path.toLowerCase() : path;
-        };
-      state.project =
-        state.projects
-          .filter((path) => {
-            const root = normalize(path).replace(/\/$/, "");
-            return (
-              normalize(cwd) === root || normalize(cwd).startsWith(root + "/")
-            );
-          })
-          .sort((a, b) => b.length - a.length)[0] || "";
+      state.project = owningProject(state.projects, state.session.cwd);
     }
     await Promise.all([
       loadOptions(),
@@ -585,6 +641,7 @@ export function createSessions({
   }
   async function createThread() {
     const generation = state.generation,
+      optionsSeq = state.optionsSeq,
       project = state.project,
       selected = state.selected,
       options = {
@@ -601,6 +658,7 @@ export function createSessions({
       if (
         !catalog ||
         generation !== state.generation ||
+        optionsSeq !== state.optionsSeq ||
         project !== state.project ||
         selected !== state.selected
       )
@@ -609,7 +667,17 @@ export function createSessions({
         throw new Error(
           "Background conversations are unavailable. Update agentTools on your computer and reconnect.",
         );
-      return await api("threads", options);
+      const value = await api("threads", options);
+      if (
+        !value ||
+        typeof value.id !== "string" ||
+        !value.id ||
+        generation !== state.generation ||
+        project !== state.project ||
+        selected !== state.selected
+      )
+        throw new Error("Connection failed.");
+      return rememberCreatedThread(value, project);
     } catch (error) {
       if (generation === state.generation && error.createdThreadID)
         await recoverCreatedThread(error.createdThreadID);
@@ -625,12 +693,15 @@ export function createSessions({
     state.liveRevision = 0;
     state.detailSeq++;
     state.optionsSeq++;
-    state.session = {
-      id,
-      source: getAgent().sourceID,
-      title: "New session",
-      cwd: state.project,
-    };
+    state.session = rememberCreatedThread(
+      {
+        id,
+        source: getAgent().sourceID,
+        title: "New session",
+        cwd: state.project,
+      },
+      state.project,
+    );
     state.live = {
       status: "unknown",
       items: [],
@@ -715,6 +786,8 @@ export function createSessions({
     showWorkspace,
     list,
     createThread,
+    forgetCreatedThread,
+    clearCreatedThreads,
     applyPreferences,
     create,
     discardDraft,

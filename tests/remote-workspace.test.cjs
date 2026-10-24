@@ -451,6 +451,7 @@ async function fixture(t, engine, options = {}) {
           json: {
             sessions: state.historyUnavailable ? [] : rows,
             projects: state.projects,
+            sidebar_projects: state.sidebarProjects,
             total: rows.length,
             next: rows.length,
             has_more: false,
@@ -2483,6 +2484,80 @@ for (const engine of engines) {
       1,
       "a rejected settings update was retried automatically",
     );
+    await f.clean();
+  });
+
+  test(`${engine}: Windows extended paths keep their App project after shared owner details`, async (t) => {
+    for (const [root, cwd] of [
+      ["E:\\work\\shop", "\\\\?\\e:\\WORK\\shop\\nested"],
+      ["\\\\Server\\Share\\Shop", "\\\\?\\UNC\\server\\share\\SHOP\\nested"],
+    ]) {
+      const original = {...session, cwd, source: "codex-app", project_id: "shop"};
+      const f = await fixture(t, engine, {
+        projects: [root], rows: [original],
+        state: {
+          sidebarProjects: [{id: "shop", name: "Windows App Project", root_paths: [root]}],
+          live: {status: "idle", items: [], requests: [], owner: {kind: "native", state: "connected", epoch: "windows-shared-owner", capabilities: {send: true, configure: true}}},
+        },
+      });
+      const {page, seen} = f;
+      await page.locator('[data-path="project:shop"] [data-id="remote-rich"]').click();
+      await page.waitForFunction(() => document.getElementById("breadcrumbProject").textContent === "Windows App Project");
+      await page.locator("#refresh").click();
+      await page.waitForFunction(() => !document.getElementById("refresh").disabled);
+      assert.equal(await page.locator("#breadcrumbProject").textContent(), "Windows App Project");
+      assert.equal(seen.options.at(-1).project, root);
+      await page.locator("#message").fill("Use the shared owner without moving this conversation.");
+      await page.locator("#send").click();
+      await page.waitForFunction(() => document.getElementById("message").value === "");
+      assert.equal(seen.posts.find((post) => post.path.endsWith("/turn")).ownerEpoch, "windows-shared-owner");
+      assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect") || post.path === "/api/threads").length, 0);
+      await f.clean();
+    }
+  });
+
+  test(`${engine}: shared Windows creation is visible before details or native indexing and keeps the confirmed owner`, async (t) => {
+    const root = "E:\\work\\shop",
+      created = {...session, id: "new-shared-windows", title: "New session", source: "codex-app", cwd: "\\\\?\\e:\\WORK\\shop"},
+      owner = {kind: "native", state: "connected", epoch: "created-shared-owner", capabilities: {send: true, configure: true}};
+    let releaseDetails;
+    const detailsReady = new Promise((resolve) => {releaseDetails = resolve;});
+    const f = await fixture(t, engine, {
+      streaming: true,
+      projects: [root], rows: [{...session, cwd: root, project_id: "shop"}],
+      catalog: {capabilities: {...catalog.capabilities, streaming: true}},
+      state: {sidebarProjects: [{id: "shop", name: "Windows App Project", root_paths: [root]}]},
+      onCreate(state) {
+        state.live = {status: "idle", items: [], requests: [], owner};
+        return created;
+      },
+      onTurn(state) {state.live = {...state.live, status: "inProgress", turn_id: "shared-turn"};},
+    });
+    const {page, seen, state} = f;
+    await page.route("**/api/sessions/" + created.id, async (route) => {
+      await detailsReady;
+      return route.fulfill({json: {session: created, history_items: [], live: state.live, options: defaults}});
+    });
+    await page.locator("#new").click();
+    const row = page.locator('[data-path="project:shop"] [data-id="' + created.id + '"]');
+    await row.waitFor();
+    assert.equal(seen.posts.filter((post) => post.path === "/api/threads").length, 1);
+    assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect")).length, 0);
+    releaseDetails();
+    await page.waitForFunction(() => window.fixtureStreams.length === 1);
+    await page.locator("#message").fill("Continue once through the confirmed shared owner.");
+    await page.locator("#send").click();
+    await page.waitForFunction(() => document.getElementById("message").value === "");
+    await page.waitForFunction(() => !document.getElementById("refresh").disabled);
+    await page.locator("#refresh").click();
+    await page.waitForFunction(() => !document.getElementById("refresh").disabled);
+    assert.equal(await row.count(), 1, "an empty native index erased the confirmed creation");
+    const turn = seen.posts.find((post) => post.path.endsWith("/turn"));
+    assert.equal(turn.ownerEpoch, owner.epoch);
+    assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect")).length, 0);
+    await page.evaluate(() => window.fixtureStreams[0].emit({items: [], state: {title: "Shared Windows title", title_notice: ""}}));
+    assert.match(await row.textContent(), /Shared Windows title/);
+    assert.equal(await page.locator("#breadcrumbProject").textContent(), "Windows App Project");
     await f.clean();
   });
 
@@ -5558,10 +5633,12 @@ for (const engine of engines) {
     await page
       .locator("#message")
       .fill("Review the cart using approval assistance.");
-    await page.locator("#send").click();
-    await page.waitForResponse((response) =>
-      new URL(response.url()).pathname.endsWith("/turn"),
-    );
+    await Promise.all([
+      page.waitForResponse((response) =>
+        new URL(response.url()).pathname.endsWith("/turn"),
+      ),
+      page.locator("#send").click(),
+    ]);
     assert.equal(
       seen.posts.filter((post) => post.path.endsWith("/turn")).at(-1).data
         .permission,
@@ -5608,10 +5685,12 @@ for (const engine of engines) {
     await page
       .locator("#message")
       .fill("Run with explicitly confirmed full access.");
-    await page.locator("#send").click();
-    await page.waitForResponse((response) =>
-      new URL(response.url()).pathname.endsWith("/turn"),
-    );
+    await Promise.all([
+      page.waitForResponse((response) =>
+        new URL(response.url()).pathname.endsWith("/turn"),
+      ),
+      page.locator("#send").click(),
+    ]);
     assert.equal(
       seen.posts.filter((post) => post.path.endsWith("/turn")).at(-1).data
         .permission,
@@ -5621,10 +5700,12 @@ for (const engine of engines) {
     await page.locator("#refresh").click();
     await menu(page, "permission", "Ask for approval");
     await page.locator("#message").fill("Ask before external actions.");
-    await page.locator("#send").click();
-    await page.waitForResponse((response) =>
-      new URL(response.url()).pathname.endsWith("/turn"),
-    );
+    await Promise.all([
+      page.waitForResponse((response) =>
+        new URL(response.url()).pathname.endsWith("/turn"),
+      ),
+      page.locator("#send").click(),
+    ]);
     assert.equal(
       seen.posts.filter((post) => post.path.endsWith("/turn")).at(-1).data
         .permission,
@@ -6272,7 +6353,9 @@ for (const engine of engines) {
         `user bubble exposed implementation text: ${helper}`,
       );
     const chips = await page
-      .locator('#live [data-id="user-1"] .message-user-attachments .file-name')
+      .locator(
+        '#live [data-id="user-1"] .message-user-attachments :is(.file-name, .resource-card > strong)',
+      )
       .allTextContents();
     assert(
       chips.includes(attachedName),
@@ -6581,6 +6664,15 @@ for (const engine of engines) {
       posts,
       "a naming warning retried the accepted message",
     );
+    await page.evaluate(() =>
+      window.fixtureStreams[0].emit({
+        items: [], remove: [],
+        state: {title: "Confirmed desktop title", title_notice: ""},
+      }),
+    );
+    assert.equal(await page.locator("#notice").textContent(), "", "a recovered native title left a stale naming warning");
+    assert.equal(await row.innerText(), "Confirmed desktop title");
+    const confirmedTitle = "Confirmed desktop title";
     await page.locator('#sessions button[data-id="' + second.id + '"]').click();
     await page.waitForFunction(() => window.fixtureStreams.length === 2);
     await page.evaluate(() =>
@@ -6595,7 +6687,7 @@ for (const engine of engines) {
       second.title,
       "a stale stream renamed the current conversation",
     );
-    assert.equal(await row.innerText(), title);
+    assert.equal(await row.innerText(), confirmedTitle);
     await f.clean();
   });
 
@@ -6972,23 +7064,41 @@ for (const engine of engines) {
         .locator("#changesContent .diff-file")
         .filter({ has: page.locator("summary > span", { hasText: name }) });
     assert.deepEqual(
-      await file("new.txt").locator(".diff-line.add").allTextContents(),
+      await file("new.txt")
+        .locator(".diff-line.add > span:not(.diff-number)")
+        .allTextContents(),
       ["+REMOTE_REDESIGN_WRITE_OK"],
+    );
+    assert.deepEqual(
+      await file("new.txt")
+        .locator(".diff-line.add > .diff-number")
+        .allTextContents(),
+      ["", "1"],
+      "added content must have a new line number and no old line number",
     );
     assert.equal(
       await file("new.txt").locator("summary .additions").innerText(),
       "+1",
     );
     assert.deepEqual(
-      await file("removed.txt").locator(".diff-line.delete").allTextContents(),
+      await file("removed.txt")
+        .locator(".diff-line.delete > span:not(.diff-number)")
+        .allTextContents(),
       ["-first removed line", "-second removed line"],
+    );
+    assert.deepEqual(
+      await file("removed.txt")
+        .locator(".diff-line.delete > .diff-number")
+        .allTextContents(),
+      ["1", "", "2", ""],
+      "deleted content must retain old line numbers without new line numbers",
     );
     assert.equal(
       await file("removed.txt").locator("summary .deletions").innerText(),
       "−2",
     );
     const unifiedLines = await file("unified.txt")
-      .locator(".diff-line")
+      .locator(".diff-line > span:not(.diff-number)")
       .allTextContents();
     assert(
       unifiedLines.includes("+already unified"),
@@ -7004,7 +7114,7 @@ for (const engine of engines) {
     );
     assert.deepEqual(
       await file("plus-content.txt")
-        .locator(".diff-line.add")
+        .locator(".diff-line.add > span:not(.diff-number)")
         .allTextContents(),
       ["++literal content"],
       "literal leading plus in raw file content was not preserved",
