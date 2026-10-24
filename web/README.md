@@ -104,7 +104,8 @@ for layout changes; simulated mobile viewports do not verify a real phone keyboa
 Keep Agent/owner headers inside the encrypted request and preserve device and
 request-generation guards. Use fake clients for protocol fixtures, never production
 pairing credentials or desktop sessions. See [architecture](../docs/architecture.md)
-for trust boundaries and [development conventions](../AGENTS.md) for scope and checks.
+for trust boundaries. Repository-local development instructions are kept outside
+the public repository.
 
 [Design QA](../design-qa.md) and [question compatibility QA](../docs/shared-questions-qa.md)
 are historical evidence with their own limitations, not current release sign-off.

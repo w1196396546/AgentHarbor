@@ -11,3 +11,6 @@ node_modules/
 /anywhereToAgent
 /anywhereToAgent.exe
 .claude/
+
+# Local development instructions may contain private deployment details.
+/AGENTS.md
