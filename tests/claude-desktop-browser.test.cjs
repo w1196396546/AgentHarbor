@@ -46,7 +46,13 @@ function owner() {
 async function fixture(
   t,
   engine,
-  { width = 1280, question = false, plan = false } = {},
+  {
+    width = 1280,
+    question = false,
+    plan = false,
+    settings = false,
+    locale = "en",
+  } = {},
 ) {
   const browser = await (engine === "webkit" ? webkit : chromium).launch();
   t.after(() => browser.close());
@@ -61,7 +67,7 @@ async function fixture(
   page.on("pageerror", (e) => errors.push(e.message));
   const state = {
     queue:
-      question || plan
+      question || plan || settings
         ? []
         : [
             {
@@ -86,7 +92,7 @@ async function fixture(
     request_id: "plan-request",
   };
   state.live = {
-    status: "inProgress",
+    status: settings ? "idle" : "inProgress",
     turn_id: "original-turn",
     items: [],
     requests: question
@@ -108,7 +114,16 @@ async function fixture(
           },
         ]
       : [],
-    owner: owner(),
+    owner: settings
+      ? {
+          ...owner(),
+          capabilities: {
+            ...owner().capabilities,
+            configure: true,
+            send: true,
+          },
+        }
+      : owner(),
     options,
     queue: state.queue,
     queue_revision: 1,
@@ -144,7 +159,9 @@ async function fixture(
                 id: "native-model",
                 name: "Native model",
                 is_default: true,
-                reasoning_efforts: [{ reasoningEffort: "high" }],
+                reasoning_efforts: ["low", "medium", "high"].map(
+                  (reasoningEffort) => ({ reasoningEffort }),
+                ),
                 default_effort: "high",
               },
             ],
@@ -200,6 +217,13 @@ async function fixture(
         });
       if (u.pathname.endsWith("/agents"))
         return route.fulfill({ json: { agents: [] } });
+      if (u.pathname.endsWith("/settings")) {
+        state.live = {
+          ...state.live,
+          options: { ...state.live.options, ...data },
+        };
+        return route.fulfill({ json: { options: state.live.options } });
+      }
       if (u.pathname.endsWith("/events"))
         return route.fulfill({
           contentType: "text/event-stream",
@@ -245,6 +269,8 @@ async function fixture(
       }
       if (u.pathname.endsWith("/queue") && req.method() === "POST") {
         assert.match(data.request_id, /^[a-f0-9-]{36}$/);
+        for (const key of ["model", "effort", "mode", "permission"])
+          assert.equal(Object.hasOwn(data, key), false);
         state.queue.push({
           id: data.request_id,
           text: data.text,
@@ -301,7 +327,7 @@ async function fixture(
       return route.fulfill({ status: 404 });
     }
   });
-  await page.goto("https://remote.test/?locale=en");
+  await page.goto("https://remote.test/?locale=" + locale);
   await page.locator("#workspace:visible").waitFor();
   if (width < 760) await page.locator("#sidebarToggle").click();
   await page.locator('#sessions button[data-id="' + session.id + '"]').click();
@@ -311,6 +337,45 @@ async function fixture(
   return { page, state, posts, errors };
 }
 for (const engine of engines) {
+  for (const locale of ["en", "zh", "zh-TW", "ja", "de"])
+    test(
+      engine +
+        ": Desktop native effort choices save through the original owner (" +
+        locale +
+        ")",
+      async (t) => {
+        const { page, posts, errors } = await fixture(t, engine, {
+          settings: true,
+          locale,
+        });
+        await page.waitForFunction(
+          () => !document.querySelector("#effort").disabled,
+        );
+        await page.locator("#message").fill("Preserve this native draft");
+        await page.locator("#effort").click();
+        const range = page.locator("#reasoningRange");
+        assert(await range.isEnabled());
+        assert.equal(await range.getAttribute("max"), "2");
+        assert.equal(await range.inputValue(), "2");
+        await range.press("ArrowLeft");
+        await page.waitForFunction(
+          () => !document.querySelector("#effort").disabled,
+        );
+        assert.equal(await range.inputValue(), "1");
+        const saved = posts.filter((post) => post.path.endsWith("/settings"));
+        assert.equal(saved.length, 1);
+        assert.deepEqual(saved[0].data, { effort: "medium" });
+        assert.equal(
+          saved[0].headers["x-remote-owner-epoch"],
+          "native-owner-epoch",
+        );
+        assert.equal(
+          await page.locator("#message").inputValue(),
+          "Preserve this native draft",
+        );
+        assert.deepEqual(errors, []);
+      },
+    );
   test(
     engine + ": Desktop native queue granular permissions work in browser",
     async (t) => {

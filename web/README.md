@@ -131,6 +131,16 @@ full-detail confirmation path. Metadata never replaces history cursors, and newe
 connection receipts or streamed owners take precedence over late detail reads.
 Native `project_id` and sidebar project roots preserve the selected original
 project for worktrees outside its directory, including immediately created rows.
+Clients advertising `controls_options` provide `scope=controls` for model, effort,
+mode and permission controls, including the existing permission requirements.
+The session list can advertise the two read capabilities (`controls_options` and
+`connection_metadata`) before initial history selection, avoiding a full inventory
+bootstrap; it never grants owner mutations.
+The full skills and MCP inventory loads independently after controls are ready;
+missing inventory fields remain not loaded, and a failed supplemental read does
+not disable confirmed controls. Late catalogs retain the existing selection and
+options-sequence guards. Queued native-owner messages inherit its current settings
+without replaying stale page preferences.
 
 Confirmed creation receipts appear immediately under the selected App project,
 even while native indexing is delayed. These bounded, device/Agent-scoped rows

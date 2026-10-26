@@ -127,6 +127,7 @@ async function fixture(t, engine, config = {}) {
       optionsError: 0,
       holdList: null,
       holdDetail: null,
+      holdInventory: null,
       created: {},
       selectedOptions: { ...config.selectedOptions },
       released: 0,
@@ -181,6 +182,16 @@ async function fixture(t, engine, config = {}) {
           });
         const options = catalog(agent),
           selected = state.selectedOptions[url.searchParams.get("thread")];
+        if (config.controlsOptions && agent === "codex") {
+          options.capabilities.controls_options = true;
+          if (url.searchParams.get("scope") === "controls") {
+            delete options.skills;
+            delete options.tools;
+          } else if (url.searchParams.has("thread") && state.holdInventory)
+            await new Promise((resolve) => {
+              state.holdInventory.resolve = resolve;
+            });
+        }
         if (selected) options.defaults = { ...selected };
         return route.fulfill({ json: options });
       }
@@ -278,6 +289,15 @@ async function fixture(t, engine, config = {}) {
       }
       if (url.pathname.endsWith("/owner"))
         return route.fulfill({ json: { owner: owner(agent) } });
+      if (url.pathname.endsWith("/settings")) {
+        const id = decodeURIComponent(url.pathname.split("/").at(-2));
+        state.selectedOptions[id] = {
+          ...baseOptions(agent),
+          ...state.selectedOptions[id],
+          ...data,
+        };
+        return route.fulfill({ json: { options: state.selectedOptions[id] } });
+      }
       if (url.pathname.endsWith("/changes"))
         return route.fulfill({ json: { changes: [], pending: false } });
       if (url.pathname.endsWith("/plan"))
@@ -380,6 +400,47 @@ function assertNoLifecycleWrites(seen) {
   );
 }
 for (const engine of engines) {
+  test(
+    engine +
+      ": native control settings are ready while supplemental inventory is held",
+    async (t) => {
+      const { page, state, seen, errors, release } = await fixture(t, engine, {
+        controlsOptions: true,
+      });
+      await page.waitForFunction(
+        () => !document.querySelector("#model").disabled,
+      );
+      state.holdInventory = {};
+      await page.locator('#sessions button[data-id="codex-original"]').click();
+      await page.waitForFunction(() =>
+        document.querySelector("#title").textContent.includes("Codex original"),
+      );
+      await page.waitForFunction(
+        () => !document.querySelector("#model").disabled,
+      );
+      assert.equal(typeof state.holdInventory?.resolve, "function");
+      for (const id of ["model", "effort", "mode", "permission"])
+        assert(await page.locator("#" + id).isEnabled());
+      const controlsRead = seen.find(
+        (call) =>
+          call.path === "/api/options" &&
+          new URLSearchParams(call.query).get("thread") === "codex-original" &&
+          new URLSearchParams(call.query).get("scope") === "controls",
+      );
+      assert(controlsRead);
+      await page.locator("#mode").click();
+      await page.locator('#menu [role="menuitemradio"]').first().click();
+      await page.waitForFunction(
+        () => !document.querySelector("#mode").disabled,
+      );
+      assert.deepEqual(
+        seen.find((call) => call.path.endsWith("/settings")).data,
+        { mode: "default" },
+      );
+      release("holdInventory");
+      assert.deepEqual(errors, []);
+    },
+  );
   for (const failedState of ["connecting", "disconnected", "unavailable"])
     test(
       engine +

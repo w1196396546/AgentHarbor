@@ -156,6 +156,9 @@ export function createSessions({
         rows.push(...value.sessions);
         if (!(value.next > offset)) break;
       }
+      for (const capability of ["controls_options", "connection_metadata"])
+        if (typeof value.capabilities?.[capability] === "boolean")
+          state.catalog.capabilities[capability] = value.capabilities[capability];
       state.projects = value.projects || [];
       state.sidebarProjects = value.sidebar_projects || null;
       state.pinnedIDs = value.pinned_ids || [];
@@ -443,10 +446,11 @@ export function createSessions({
     }
     if (state.project) query.set("project", state.project);
     if (state.selected && !projectOnly) query.set("thread", state.selected);
+    const controls = state.catalog.capabilities?.controls_options === true;
+    if (controls) query.set("scope", "controls");
     state.optionsLoaded = false;
     updateControls();
-    try {
-      const result = await api("options?" + query);
+    const apply = (result) => {
       if (seq !== state.optionsSeq) return;
       if (result.agent && result.agent.id !== getAgent().id)
         throw new Error("The active agent changed. Refresh before continuing.");
@@ -469,6 +473,18 @@ export function createSessions({
       ensureStream();
       refreshQueue();
       $("capabilityIssue").hidden = !result.errors?.length;
+      return result;
+    };
+    try {
+      const result = apply(await api("options?" + query));
+      if (result && controls) {
+        query.delete("scope");
+        api("options?" + query).then(apply).catch((error) => {
+          if (seq !== state.optionsSeq) return;
+          $("capabilityIssue").hidden = false;
+          notice(error.message);
+        });
+      }
       return result;
     } catch (e) {
       if (seq !== state.optionsSeq) return;

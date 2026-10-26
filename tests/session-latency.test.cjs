@@ -74,6 +74,9 @@ function fixture(api) {
     ownerEpoch: () => "epoch",
     requireOwner: () => {},
     updateControls: () => {},
+    renderRequests: () => {},
+    ensureStream: () => {},
+    refreshQueue: () => {},
     notice: () => {},
     detail: async () => {
       reads++;
@@ -122,6 +125,72 @@ test("confirmed settings unlock controls without waiting for history", async () 
   assert.equal(f.state.settingsMutation, null);
   assert.equal(f.state.liveRevision, 1);
   assert.equal(f.reads(), 0);
+});
+
+test("advertised control options unlock settings while supplemental tools are pending", async () => {
+  let releaseInventory;
+  const calls = [],
+    f = fixture(async (path) => {
+      calls.push(path);
+      const query = new URLSearchParams(path.split("?")[1]);
+      if (query.get("scope") === "controls")
+        return {
+          agent: { id: "codex" },
+          models: [{ id: "confirmed" }],
+          capabilities: { controls_options: true, tools: true },
+        };
+      return new Promise((resolve) => {
+        releaseInventory = resolve;
+      });
+    });
+  f.state.catalog.capabilities.controls_options = true;
+  const loading = f.sessions.loadOptions();
+  await new Promise(setImmediate);
+  assert.equal(
+    new URLSearchParams(calls[0].split("?")[1]).get("scope"),
+    "controls",
+  );
+  await loading;
+  assert.equal(f.state.optionsLoaded, true);
+  assert.deepEqual(f.state.catalog.models, [{ id: "confirmed" }]);
+  assert.equal(calls.length, 2);
+  assert.equal(new URLSearchParams(calls[1].split("?")[1]).has("scope"), false);
+  releaseInventory({
+    agent: { id: "codex" },
+    models: [{ id: "confirmed" }],
+    skills: [],
+    tools: [{ name: "supplemental-tool" }],
+    capabilities: { controls_options: true, tools: true },
+  });
+  await new Promise(setImmediate);
+  assert.equal(f.state.catalog.tools[0].name, "supplemental-tool");
+  assert.equal(f.state.optionsLoaded, true);
+});
+
+test("failed or superseded supplemental catalogs cannot disable confirmed controls", async () => {
+  for (const stale of [false, true]) {
+    let completeInventory;
+    const f = fixture(async (path) => {
+      if (new URLSearchParams(path.split("?")[1]).get("scope") === "controls")
+        return { capabilities: { controls_options: true }, models: [] };
+      return new Promise((resolve, reject) => {
+        completeInventory = stale ? resolve : reject;
+      });
+    });
+    f.state.catalog.capabilities.controls_options = true;
+    const loading = f.sessions.loadOptions();
+    await new Promise(setImmediate);
+    assert.equal(f.state.optionsLoaded, true);
+    await loading;
+    const confirmed = f.state.catalog;
+    if (stale) {
+      f.state.optionsSeq++;
+      completeInventory({ models: [{ id: "old-model" }] });
+    } else completeInventory(new Error("Tool inventory unavailable"));
+    await new Promise(setImmediate);
+    assert.equal(f.state.catalog, confirmed);
+    assert.equal(f.state.optionsLoaded, true);
+  }
 });
 
 test("a superseded creation preflight cannot authorize creation or misreport unavailability", async () => {

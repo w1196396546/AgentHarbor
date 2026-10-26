@@ -6944,6 +6944,7 @@ for (const engine of engines) {
     const confirmedTitle = "Confirmed desktop title";
     await page.locator('#sessions button[data-id="' + second.id + '"]').click();
     await page.waitForFunction(() => window.fixtureStreams.length === 2);
+    await page.locator("#title").filter({ hasText: second.title }).waitFor();
     await page.evaluate(() =>
       window.fixtureStreams[0].emit({
         items: [],

@@ -167,6 +167,27 @@ test("a refresh failure after acceptance reports the read error without failing 
   assert.deepEqual(f.notices, ["History temporarily unavailable"]);
 });
 
+test("native follow-ups inherit owner settings instead of replaying stale page preferences", async () => {
+  const f = await fixture({ shouldQueue: () => true });
+  f.state.prefs = {
+    model: "previous-model",
+    effort: "high",
+    mode: "default",
+    permission: "default",
+  };
+  await f.submit();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].url, "threads/thread/queue");
+  assert.deepEqual(f.calls[0].value.attachments, ["file"]);
+  assert.match(f.calls[0].value.request_id, /^[a-f0-9-]{36}$/);
+  for (const key of ["model", "effort", "mode", "permission"])
+    assert.equal(
+      Object.hasOwn(f.calls[0].value, key),
+      false,
+      "native queued input must inherit " + key,
+    );
+});
+
 test("a late creation receipt cannot select or send through a newer conversation", async () => {
   const created = deferred();
   const f = await fixture({ createThread: () => created.promise });

@@ -1270,7 +1270,7 @@ export function startRemote() {
           </>
         )}
         <h3>{t("Skills")}</h3>
-        {!state.optionsLoaded ? (
+        {!state.optionsLoaded || !Array.isArray(catalog.skills) ? (
           <p>{t("Catalog not loaded")}</p>
         ) : catalog.skills?.length ? (
           catalog.skills.map((skill) => (
@@ -1284,7 +1284,7 @@ export function startRemote() {
           <p>{t("No entries reported")}</p>
         )}
         <h3>{t("Tools")}</h3>
-        {!state.optionsLoaded ? (
+        {!state.optionsLoaded || !Array.isArray(catalog.tools) ? (
           <p>{t("Catalog not loaded")}</p>
         ) : !servers.length ? (
           <p>

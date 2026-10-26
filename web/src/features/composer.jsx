@@ -55,7 +55,7 @@ export function createComposer({
     };
     for (const key of ["attachments", "skills", "mentions", "tools"])
       if (!draft[key].length) delete draft[key];
-    if (nativeSettings() && !shouldQueue())
+    if (nativeSettings())
       for (const key of ["model", "effort", "mode", "permission"])
         delete draft[key];
     requireOwner(shouldQueue() ? "queue_add" : "send");
