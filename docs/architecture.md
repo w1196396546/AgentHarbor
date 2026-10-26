@@ -1,6 +1,6 @@
 # 架构与授权边界
 
-anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远程网页和服务端管理页。agentTools 内置连接端、Agent 注册表与执行适配器，目前提供 Codex 适配器。两者通过 WebSocket 协议通信，分别构建和部署；服务器不导入 agentTools 的网关、账号或本机进程代码。
+anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远程网页和服务端管理页。agentTools 内置连接端、Agent 注册表与执行适配器，可按本机配置启用 Codex 与 Claude Desktop。两者通过 WebSocket 协议通信，分别构建和部署；服务器不导入 agentTools 的网关、账号或本机进程代码。
 
 ## 阅读范围与验证记录
 
@@ -14,7 +14,7 @@ anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远
 | --- | --- | --- |
 | agentTools“远程连接”页 | 选择预设/自部署服务、Codex 原生项目目录与可选额外目录、连接状态、生成二维码/授权码、已授权浏览器与撤销 | 用户电脑 |
 | agentTools 连接端 | 主动 WSS 连接、配对、签发和校验浏览器授权、转发到本机执行引擎 | 用户电脑 |
-| 本机 Agent 适配器（当前 Codex） | 读取原生历史、新建/继续/停止任务、工具审批、文件和更改、SSE 事件 | 用户电脑 |
+| 本机 Agent 适配器 | 读取原生历史、新建/继续/停止任务、工具审批、文件和更改、SSE 事件 | 用户电脑 |
 | Remote | 设备路由、浏览器入口、请求/响应和事件中转、设备凭证哈希、私有浏览器会话映射 | 公网服务器 |
 | Remote 管理页 | 服务监听、公网地址、新设备注册设置、服务状态 | 公网服务器 |
 
@@ -50,9 +50,9 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 
 中转的设备登记、授权、密文转发和 HTTP 隧道不依赖某个 Agent。Agent ID、会话路径、owner epoch 和能力均在端到端密文内，中转不解析、不保存，不把它们加入公开 WebSocket 注册元数据。新增适配器不要求在服务端添加执行分支。
 
-本机 `internal/remoteclient/agent` 定义 `Descriptor`、`Config`、`Runtime` 与 `Adapter`；`engine.Registry` 按稳定 ID 选择适配器。每条连接使用一个配置中的 active Agent，当前内置 `codex`；未知或未安装的适配器启动失败，不自动回落。加密 `GET /api/agents` 返回 `{agents:[{id,name}],default_agent}`，只列出当前 active Agent。后续添加适配器时须提供客户端实现及网页的对应能力适配，单独注册名称不会产生可用执行能力。
+本机 `internal/remoteclient/agent` 定义 `Descriptor`、`Config`、`Runtime` 与 `Adapter`；`engine.Registry` 按稳定 ID 选择适配器。同一设备连接可启用 Codex 与 Claude Desktop 两个独立本机 Agent，由客户端配置声明默认 Agent。各自连接、失败、重试和断开互不影响；未知适配器拒绝配置。加密 `GET /api/agents` 返回 `{agents:[{id,name,state?,problem?}],default_agent}`，列出本连接全部已选适配器；`state` 为 `connecting`、`connected`、`disconnected` 或 `unavailable`，无 state 的旧客户端继续兼容。新增适配器须提供客户端实现及网页能力适配，单独注册名称不会产生执行能力。
 
-加密请求可带 `X-Remote-Agent`；不带时兼容当前 active Agent，带其它 ID 时返回 `409`，防止旧会话操作被投递到另一种执行引擎。`X-Remote-Owner-Epoch` 是通用 owner 代际字段，Codex 保留旧 `X-Codex-Owner-Epoch` 兼容。网页所见能力仍来自真实适配器，不能仅靠 Agent 名称宣称支持队列、计划或审批。一次连接同时运行多个 Agent 不属于当前契约。
+加密请求可带 `X-Remote-Agent`；不带时兼容客户端默认 Agent，带已选 ID 时路由到对应引擎，未连接的已选 Agent 返回 `503`，未知 ID 返回 `409`，防止旧会话操作被投递到另一种执行引擎。`X-Remote-Owner-Epoch` 是通用 owner 代际字段，Codex 保留旧 `X-Codex-Owner-Epoch` 兼容。网页所见能力仍来自真实适配器，不能仅靠 Agent 名称宣称支持队列、计划或审批。网页侧栏提供明确的 Agent 选择及各自状态；故障条目可查看原因但禁止操作，状态刷新不重置健康 Agent。连接、重试和启动仅在本机 agentTools 执行，网页不调用这些生命周期接口。选项、草稿、项目及创建 UUID 按设备和 Agent 隔离。切换会取消旧请求并推进 generation，迟到列表、详情和事件不得覆盖新选择。Agent 发现、会话列表和其它上游接口失败会显示原错误；上游 503 只触发设备状态核对，不把已确认在线的电脑直接改成离线，也不重放写操作。只有设备接口的明确状态决定电脑离线；探测失败显示未知。
 
 服务端目录按运行职责划分：
 
@@ -67,6 +67,16 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 | `web/src/agents` | 网页 Agent 适配入口；现有 Codex 控制及展示逻辑保留其专属语义 |
 
 名称兼容：二进制和新部署模板使用 `anywhereToAgent`，Go module 使用 `anywheretoagent`。既有 `relay-state.json` schema、`admin-token`、`codex-remote` / `__Host-codex-remote` 浏览器 cookie 以及 `codex-relay-admin` 管理 cookie 保持不变，重命名不会清除浏览器授权。通用写请求标记为 `X-Remote-Request: 1`、管理标记为 `X-Remote-Admin: 1`，同时接受原 `X-Codex-Remote` / `X-Codex-Admin`，来源校验不变。中转向旧客户端转发时仍附带旧请求标记；浏览器提供的明文 Agent、owner、游标与任意其它头全部剥离。新安装默认使用系统配置目录下 `anywhereToAgent`；原 `codex-remote` 路径已存在时继续使用原位置；显式数据目录优先，服务不会迁移、合并或删除目录。Compose 的新入口变量为 `ANYWHERE_TO_AGENT_PUBLIC_URL`，原 `CODEX_REMOTE_PUBLIC_URL` 继续作为后备值。
+
+### 原生 owner 的细分能力
+
+网页允许 owner 独立声明 `queue_add`、`queue_cancel`、`queue_reorder`、`queue_edit`、`queue_resume`。缺少某个细分字段时兼容旧 `queue`；明确 `false` 不回退。目录可通过 `queue_read` 开放读取，但不因此授权任何写操作。未知队列保留最近观测记录并显示暂停，不能按空队列处理。重排提交原消息 ID 和 `{over: adjacentUUID}`，不删除重建消息。
+
+`live.pending_plan_approval: true` 和匹配的 `live.pending_plan.id` 表示执行器正在等待原生计划审批，即使当前轮次仍处于运行状态。执行继续使用 `execute-plan`，修订发送 `revise-plan {plan_id,feedback}`；它回应原请求，不另发普通任务。两个入口仍需要当前 owner 的 `plan` 能力和 epoch。普通已完成计划保持原流程。
+
+空会话目录可声明 `creation_request_id`，网页在 POST 前按设备、Agent、项目保存稳定 UUID 与创建参数；未知结果仅由用户明确重试同 UUID。已分配 ID 的错误回执恢复原会话，不另建或自动发送首条消息。回执使用有界同标签页 sessionStorage，不包含消息或凭据；存储不可用、数据损坏或未知请求参数改变时拒绝创建。`creation_default_permissions_only` 会明确拒绝非默认模式或权限预选并保留草稿，不静默忽略设置。
+
+所有能力、UUID、计划与 owner 数据均位于原有加密请求中。中继服务器仍不执行 Agent、不解析或批准这些操作；网页能力声明也不能替代本机范围、组织策略或权限校验。
 
 ## 一次配对与长期授权
 

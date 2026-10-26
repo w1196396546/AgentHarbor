@@ -1,3 +1,8 @@
+import {
+  ownerCapability,
+  messageCapability,
+  queueActionCapability,
+} from "./owner-capabilities";
 export function createOwners({
   t,
   state,
@@ -34,9 +39,12 @@ export function createOwners({
       nativeSession()
     );
   }
-  function ownerCan(capability) {
+  function ownerAvailable() {
+    const agent = state.agents?.find((value) => value.id === getAgent().id);
     if (
       !state.agentDiscovered ||
+      state.agentReadPending ||
+      (agent?.state && agent.state !== "connected") ||
       state.device?.online === false ||
       state.archivedSelection ||
       state.ownerUnavailable
@@ -45,8 +53,15 @@ export function createOwners({
     if (!state.selected) return true;
     const owner = state.live.owner;
     if (!owner) return !nativeSession();
+    return owner.state === "connected";
+  }
+  function ownerCan(capability) {
+    if (!ownerAvailable()) return false;
+    const owner = state.live.owner;
+    if (!state.selected || !owner) return true;
     return (
-      owner.state === "connected" && owner.capabilities?.[capability] === true
+      owner.capabilities?.[ownerCapability(owner.capabilities, capability)] ===
+      true
     );
   }
   function canConfigure() {
@@ -67,7 +82,8 @@ export function createOwners({
   }
   function actionCapability(path, method) {
     if (method === "GET" || method === "HEAD") return "";
-    if (/^attachments(?:\?|$)/.test(path) && method === "POST") return "send";
+    if (/^attachments(?:\?|$)/.test(path) && method === "POST")
+      return messageCapability(state);
     const match = path.match(/^threads\/([^/]+)\/(.+?)(?:\?|$)/);
     if (!match || decodeURIComponent(match[1]) !== state.selected) return "";
     const action = match[2];
@@ -79,12 +95,12 @@ export function createOwners({
           ? "interrupt"
           : action === "answer"
             ? "answer"
-            : action === "execute-plan"
+            : ["execute-plan", "revise-plan"].includes(action)
               ? "plan"
               : /\/steer$/.test(action) || action === "steer"
                 ? "steer"
                 : action.startsWith("queue")
-                  ? "queue"
+                  ? queueActionCapability(action, method)
                   : "";
   }
   function chooseComposeProject() {
@@ -110,7 +126,7 @@ export function createOwners({
     const owner = state.live.owner,
       epoch = ownerEpoch(),
       changed = state.ownerEpoch !== undefined && state.ownerEpoch !== epoch,
-      blocked = !!state.selected && !ownerCan("send"),
+      blocked = !!state.selected && !ownerAvailable(),
       background = owner?.capabilities?.background_connect === true,
       canConnect = background && owner.state !== "connected",
       needsUpdate =

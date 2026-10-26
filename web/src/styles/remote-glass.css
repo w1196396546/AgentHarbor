@@ -2672,6 +2672,14 @@ body.inspector-resizing #changesResize::after {
   .conversation-heading {
     padding-inline: 6px;
   }
+  #changesToggle {
+    max-width: 88px;
+  }
+  #changesToggle > [data-t] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .breadcrumb h1 {
     max-width: 100px;
   }

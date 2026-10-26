@@ -1,4 +1,5 @@
 import { renderView, clearView } from "../render";
+import { messageCapability } from "./owner-capabilities";
 
 export function bindWorkspace({
   $,
@@ -87,7 +88,7 @@ export function bindWorkspace({
   $("refresh").onclick = () =>
     run(async () => {
       state.optionsLoaded = false;
-      await list();
+      await checkDevice(true);
       if (state.selected) {
         await detail(state.generation);
         await Promise.all([
@@ -242,7 +243,7 @@ export function bindWorkspace({
     }
   };
   $("attach").onclick = () => {
-    if (ownerCan("send")) $("fileInput").click();
+    if (ownerCan(messageCapability(state))) $("fileInput").click();
   };
   $("fileInput").onchange = () => {
     run(() => upload([...$("fileInput").files]));

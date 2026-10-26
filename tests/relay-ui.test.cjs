@@ -45,6 +45,7 @@ for (const engine of engines) {
     await page.locator('#pairKey').fill(pairCode);await page.locator('#pairForm button').click();await page.waitForFunction(()=>document.getElementById('notice').textContent.includes('过期'));
     await page.locator('#pairKey').fill(pairCode);await page.locator('#pairForm button').click();
     await page.locator('#deviceOffline:visible').waitFor();assert.equal(await page.locator('#pairKey').inputValue(),'');
+    await page.waitForFunction(()=>document.getElementById('deviceName').textContent==='我的 Mac');
     assert.equal(await page.locator('#deviceName').innerText(),'我的 Mac');
     await page.locator('#workspace .theme-toggle').click();
     assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),true,'workspace toggle must follow the pairing theme');

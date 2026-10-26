@@ -122,6 +122,15 @@ controls before history/list refreshes; newer drafts and streamed state win over
 late responses. Attachment uploads run in ordered pairs, and new image chips use
 temporary local previews instead of downloading the image again. The encrypted
 wire format, authorization and uncertain-delivery retry rules remain unchanged.
+API timeouts and cancellation remain active until the complete encrypted response
+body is read, so changing Agents or cancelling a connection releases pending reads.
+Clients advertising `connection_metadata` provide lightweight `scope=connection`
+session and owner metadata. Explicit history selection connects that confirmed
+owner while the complete history loads independently; older clients retain the
+full-detail confirmation path. Metadata never replaces history cursors, and newer
+connection receipts or streamed owners take precedence over late detail reads.
+Native `project_id` and sidebar project roots preserve the selected original
+project for worktrees outside its directory, including immediately created rows.
 
 Confirmed creation receipts appear immediately under the selected App project,
 even while native indexing is delayed. These bounded, device/Agent-scoped rows
@@ -231,3 +240,75 @@ See the [complete contract](../docs/architecture.md#可选只读历史索引-v1)
 shapes, source limits and trust boundaries. Focused pure observation regressions
 are in `tests/read-observation.test.cjs`; real App and public deployment checks
 remain separate from local type checking and regenerated embedded assets.
+
+
+## Native owner queue and pending plans
+
+Owners may publish explicit `queue_add`, `queue_cancel`, `queue_reorder`, `queue_edit`,
+`queue_resume` capabilities; an omitted granular key falls back to legacy `queue`.
+Explicit false never falls back. Catalog `queue_read` or any enabled queue action
+allows the existing read panel without implying editable or resumable messages.
+Queue reorder sends `{over: adjacentUUID}` to `queue/{messageID}/reorder`; no message
+is recreated. An unknown queue snapshot preserves observed rows and displays its
+paused/error state. Composer uploads and sends use `queue_add` when a turn, request
+or queue is pending. Strict steering retains its separate owner capability.
+
+An owner can report `live.pending_plan_approval: true` and `live.pending_plan` to
+identify a current native approval, even while the turn is running. The browser
+allows its existing plan actions only while the pending ID matches the current
+live ID and owner capability. Execute retains `execute-plan`; revision sends
+`{plan_id, feedback}` to `revise-plan`, so it answers the original pending request
+instead of dispatching a second turn. Ordinary completed-plan behavior is unchanged.
+Desktop uses its original permission/input checks; the webpage grants no additional
+execution rights.
+
+
+Native blank creation may advertise `creation_request_id:true` and
+`creation_default_permissions_only:true`. Before an authorized create POST the
+page saves a UUID plus the exact non-secret creation options in tab-local
+`sessionStorage`, keyed by device, Agent, and project. An uncertain manual retry
+reuses that UUID; an allocated original ID is recovered instead of creating
+another conversation. Late responses cannot select another scope. At most 100
+unresolved creation records are retained, without evicting older unknown work;
+storage failure blocks a new create. This does not automatically retry writes.
+The tab must remain available: closing its browser session or clearing website
+storage discards browser receipts, so verify the native conversation before
+creating again. Default-only creation rejects preselected Plan or elevated
+permissions with the draft preserved; change those after the owner connects.
+
+
+## Multiple enabled Agents and Desktop creation permissions
+
+The sidebar Agent selector uses the encrypted `/api/agents` inventory and routes
+requests with `X-Remote-Agent`. Its selection is remembered per device in the
+current browser session. Draft text, attachment references, project and explicit
+new-conversation settings are isolated by device and Agent. Switching advances
+request generations and cancels previous reads; a late response cannot replace
+the current Agent. Agent read and mutation errors (including upstream 503 replies) preserve a confirmed online computer and recheck the authoritative device route;
+a failed device probe remains unknown and explicit offline remains offline. These checks never retry a mutation.
+
+Desktop catalogs declare creation-only `creation_default_permission: "auto"` and
+`creation_permissions: ["auto", "default"]`. New drafts use Auto unless the user
+explicitly selects Manual/default. Creation validates the advertised choices and
+includes the permission in its UUID receipt fingerprint. Existing conversation
+settings are not migrated. Auto is the native automatic approval mode, separate
+from bypass/full access; unsupported creation modes fail while preserving drafts.
+Older catalogs retain their existing default-only creation contract.
+
+## Independent Agent connection states
+
+Encrypted `/api/agents` descriptors optionally include `state` (`connecting`,
+`connected`, `disconnected`, `unavailable`) and a bounded textual `problem`.
+The selector shows each state and the active problem. Older descriptors without
+state retain their existing behavior. Initial discovery prefers a connected slot;
+subsequent status refreshes preserve the explicitly selected slot, draft and ID.
+An unavailable slot stays inspectable but cannot read options/history or submit
+operations. The central API and owner/stream guards enforce this, including
+a stale click after the visible control changed.
+
+Device checks, focus return and manual refresh update this inventory. A failure
+closes only the selected slot's stream and invalidates its pending generations;
+it does not reset a healthy peer. Recovery refreshes the same selected ID before
+allowing owner actions. Connection and retry remain in desktop agentTools; the
+webpage never invokes Agent startup. Polling a healthy selected Agent refreshes
+its list once and does not reload options/detail on a peer-only status change.

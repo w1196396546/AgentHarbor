@@ -46,3 +46,14 @@ export function owningProject(projects, cwd) {
       )[0] || ""
   );
 }
+
+export function sessionProject(projects, sidebarProjects, session) {
+  const project = sidebarProjects?.find(
+    (project) => project.id === session?.project_id,
+  );
+  return (
+    project?.root_paths?.find((root) =>
+      projects.some((shared) => sameProjectPath(shared, root)),
+    ) || owningProject(projects, session?.cwd)
+  );
+}

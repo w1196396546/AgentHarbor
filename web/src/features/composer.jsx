@@ -1,3 +1,4 @@
+import { queueAvailable } from "./owner-capabilities";
 export function createComposer({
   $,
   state,
@@ -57,7 +58,7 @@ export function createComposer({
     if (nativeSettings() && !shouldQueue())
       for (const key of ["model", "effort", "mode", "permission"])
         delete draft[key];
-    requireOwner(shouldQueue() ? "queue" : "send");
+    requireOwner(shouldQueue() ? "queue_add" : "send");
     const key = JSON.stringify({
         thread: state.selected,
         project: state.project,
@@ -65,7 +66,7 @@ export function createComposer({
       }),
       retry = !!state.queueDraftID && key === state.queueDraftKey,
       queued = shouldQueue() || retry;
-    if (queued && !state.catalog.capabilities?.queue)
+    if (queued && !queueAvailable(state.catalog.capabilities))
       throw new Error("Update agentTools on your computer to queue messages.");
     if (queued) {
       if (!retry) {

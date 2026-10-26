@@ -741,6 +741,7 @@ async function fixture(t, engine, options = {}) {
       }
       if (/^\/api\/sessions\/[^/]+$/.test(u.pathname)) {
         seen.details.push(u.pathname);
+        if (options.beforeDetail) await options.beforeDetail(u.searchParams, state, seen);
         if (state.archivedDetail)
           return route.fulfill({
             status: 410,
@@ -761,6 +762,8 @@ async function fixture(t, engine, options = {}) {
         const row =
           state.rows.find((r) => r.id === u.pathname.split("/").at(-1)) ||
           session;
+        if (u.searchParams.get("scope") === "connection")
+          return route.fulfill({ json: { session: row, live: state.live } });
         return route.fulfill({
           json: {
             session: row,
@@ -4310,6 +4313,103 @@ for (const engine of engines) {
       ).length,
       0,
     );
+    await f.clean();
+  });
+
+  test(`${engine}: an outside native worktree keeps its original project when creating another conversation`, async (t) => {
+    const row = { ...session, cwd: "/worktrees/shop-task", project_id: "native-shop" },
+      f = await fixture(t, engine, {
+        rows: [row],
+        state: { sidebarProjects: [{ id: "native-shop", name: "Native Shop",
+          root_paths: [project, row.cwd] }] },
+      });
+    const { page, seen } = f;
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
+    await page.waitForFunction(() => !document.getElementById("model").disabled);
+    await page.locator("#new").click();
+    await page.waitForFunction(() => !document.getElementById("new").disabled);
+    const created = seen.posts.find((post) => post.path === "/api/threads");
+    assert(created, "the native origin project was lost after reading worktree details");
+    assert.equal(created.data.project, project);
+    await f.clean();
+  });
+
+  test(`${engine}: connection metadata enables one send while full history remains pending`, async (t) => {
+    let release, started;
+    const held = new Promise((resolve) => { release = resolve; }),
+      pending = new Promise((resolve) => { started = resolve; });
+    t.after(() => release());
+    const connected = { kind: "native", state: "connected", epoch: "fast-owner",
+      capabilities: { send: true, configure: true } };
+    const f = await fixture(t, engine, {
+      streaming: true, connectSnapshot: true,
+      catalog: { capabilities: { ...catalog.capabilities, connection_metadata: true } },
+      state: { live: { status: "unknown", items: [], requests: [],
+        owner: { kind: "native", state: "observing",
+          capabilities: { background_connect: true } } } },
+      beforeDetail(query) {
+        if (query.get("scope") !== "connection") { started(); return held; }
+      },
+      onConnect(state) { state.live = { ...state.live, status: "idle", owner: connected }; },
+      onTurn(state) { state.live = { ...state.live, status: "inProgress", turn_id: "accepted-fast" }; },
+    });
+    const { page, seen } = f;
+    const connection = page.waitForResponse((response) => response.url().endsWith("/connect"));
+    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await pending;
+    await connection;
+    await page.waitForFunction(() => document.getElementById("connectOwner").hidden);
+    await page.locator("#message").fill("Send while the history download is pending.");
+    const accepted = page.waitForResponse((response) => response.url().endsWith("/turn"));
+    await page.locator("#send").click();
+    await accepted;
+    await page.waitForFunction(() => document.getElementById("message").value === "");
+    assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect")).length, 1);
+    const sends = seen.posts.filter((post) => post.path.endsWith("/turn"));
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0].ownerEpoch, "fast-owner");
+    release();
+    await page.waitForFunction(() => document.getElementById("connectOwner").hidden);
+    assert.equal(seen.posts.filter((post) => post.path.endsWith("/turn")).length, 1);
+    await f.clean();
+  });
+
+  test(`${engine}: late connection metadata and history preserve the newer streamed owner`, async (t) => {
+    let releaseMetadata, metadataStarted, releaseHistory, historyStarted;
+    const metadata = new Promise((resolve) => { releaseMetadata = resolve; }),
+      requestedMetadata = new Promise((resolve) => { metadataStarted = resolve; }),
+      history = new Promise((resolve) => { releaseHistory = resolve; }),
+      requestedHistory = new Promise((resolve) => { historyStarted = resolve; });
+    t.after(() => { releaseMetadata(); releaseHistory(); });
+    const f = await fixture(t, engine, {
+      streaming: true,
+      catalog: { capabilities: { ...catalog.capabilities, streaming: true, connection_metadata: true } },
+      state: { live: { status: "unknown", items: [], requests: [],
+        owner: { kind: "native", state: "observing",
+          capabilities: { background_connect: true } } } },
+      beforeDetail(query) {
+        if (query.get("scope") === "connection") { metadataStarted(); return metadata; }
+        historyStarted(); return history;
+      },
+    });
+    const { page, seen } = f;
+    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await Promise.all([requestedMetadata, requestedHistory]);
+    await page.waitForFunction(() => window.fixtureStreams.length > 0);
+    await page.evaluate(() => window.fixtureStreams.at(-1).emit({ items: [], state: {
+      status: "idle", title: "Current streamed owner", owner: { kind: "native",
+        state: "connected", epoch: "newer-stream", capabilities: { send: true, configure: true } } } }));
+    releaseMetadata(); releaseHistory();
+    await page.waitForFunction(() => document.getElementById("title").textContent === "Current streamed owner");
+    await page.locator("#message").fill("Use the current streamed owner.");
+    const accepted = page.waitForResponse((response) => response.url().endsWith("/turn"));
+    await page.locator("#send").click();
+    await accepted;
+    await page.waitForFunction(() => document.getElementById("message").value === "");
+    const sends = seen.posts.filter((post) => post.path.endsWith("/turn"));
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0].ownerEpoch, "newer-stream");
+    assert.equal(seen.posts.filter((post) => post.path.endsWith("/connect")).length, 0);
     await f.clean();
   });
 

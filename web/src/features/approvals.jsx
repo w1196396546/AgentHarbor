@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { AskCard } from "../components/ui/ask-card";
 import { createReadIndexes } from "./indexes";
 import { normalizeInteractions, interactionItems } from "./interaction-history";
+import { questionFormAnswers } from "./question-answers";
 
 export function createApprovals({
   $,
@@ -356,7 +357,11 @@ export function createApprovals({
               {q.header && <p className="question-header">{q.header}</p>}
               {(q.options || []).map((option) => (
                 <FieldLabel key={option.label} className="option-label">
-                  <AnswerInput type="radio" name={q.id} value={option.label} />
+                  <AnswerInput
+                    type={q.multiSelect ? "checkbox" : "radio"}
+                    name={q.id}
+                    value={option.label}
+                  />
                   <span className="option-copy">
                     <strong>{option.label}</strong>
                     {option.description && <small>{option.description}</small>}
@@ -383,15 +388,9 @@ export function createApprovals({
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         run(async () => {
-          const answers = {};
-          for (const q of p.questions || []) {
-            const value = String(
-              form.get(q.id + "-text") || form.get(q.id) || "",
-            ).trim();
-            if (!value) throw new Error("Answer every question.");
-            answers[q.id] = value;
-          }
-          await answer({ answers });
+          await answer({
+            answers: questionFormAnswers(p.questions || [], form),
+          });
         }, event.nativeEvent.submitter);
       };
     } else if (elicitation) {

@@ -4,7 +4,21 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { File } = require("node:buffer");
 const { test } = require("node:test");
-const { transformSync } = require("esbuild");
+const { buildSync, transformSync } = require("esbuild");
+
+const capabilities = { exports: {} };
+vm.runInNewContext(
+  buildSync({
+    entryPoints: [
+      path.resolve(__dirname, "../web/src/features/owner-capabilities.js"),
+    ],
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    write: false,
+  }).outputFiles[0].text,
+  { module: capabilities },
+);
 
 function fixture() {
   const requests = [],
@@ -44,6 +58,7 @@ function fixture() {
     },
     jsx: (type, props, ...children) => ({ type, props, children }),
     require: (name) => {
+      if (name === "./owner-capabilities") return capabilities.exports;
       if (name === "react")
         return {
           useState: (value) => [value, () => {}],

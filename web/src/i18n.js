@@ -49,6 +49,12 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["Disconnected", "已断开", "已中斷", "切断済み", "Getrennt"],
+  ["The selected Agent is not connected. Connect it in agentTools on your computer.", "所选智能体尚未连接，请在电脑端 agentTools 中连接。", "所選智慧代理尚未連線，請在電腦端 agentTools 中連線。", "選択したエージェントは未接続です。コンピューターの agentTools で接続してください。", "Der ausgewählte Agent ist nicht verbunden. Verbinde ihn in agentTools auf deinem Computer."],
+  ["Accept edits", "允许编辑", "允許編輯", "編集を許可", "Änderungen erlauben"],
+  ["Automatic approval review", "Auto 自动审批", "Auto 自動審批", "Auto 自動承認", "Auto-Genehmigungsprüfung"],
+  ["This mode is unavailable when creating a conversation. Change it after connecting. Your draft is preserved.", "新建会话暂不支持此模式，请连接后再更改。草稿已保留。", "建立對話暫不支援此模式，請連線後再變更。草稿已保留。", "新規会話ではこのモードを使用できません。接続後に変更してください。下書きは保持されています。", "Dieser Modus ist beim Erstellen nicht verfügbar. Ändere ihn nach dem Verbinden. Dein Entwurf bleibt erhalten."],
+  ["Agent", "智能体", "智慧代理", "エージェント", "Agent"],
   ["Agents", "智能体", "智慧代理", "エージェント", "Agenten"],
   ["Back to agents", "返回智能体列表", "返回智慧代理清單", "エージェント一覧に戻る", "Zurück zu den Agenten"],
   ["Loading agents…", "正在加载智能体…", "正在載入智慧代理…", "エージェントを読み込み中…", "Agenten werden geladen…"],
@@ -315,6 +321,9 @@ for (const [key, zh, tw, ja, de] of [
   ['Messages wait until the current task finishes. Use Steer to send one now.', '消息将在当前任务结束后发送，点击“引导”可提前发送。', '訊息將在目前工作結束後傳送，點選「引導」可提前傳送。', 'メッセージは現在のタスク完了後に送信されます。今すぐ送信することもできます。', 'Nachrichten warten bis zum Ende des aktuellen Auftrags. Mit „Jetzt senden“ sendest du sie sofort.'],
   ['Update agentTools on your computer to queue messages.', '请更新电脑上的 agentTools，以使用消息队列。', '請更新電腦上的 agentTools，以使用訊息佇列。', 'キュー機能を使うには、パソコンの agentTools を更新してください。', 'Aktualisiere agentTools auf deinem Computer, um die Warteschlange zu verwenden.'],
   ['Unable to load queued messages.', '无法读取消息队列。', '無法讀取訊息佇列。', 'メッセージキューを読み込めませんでした。', 'Die Warteschlange konnte nicht geladen werden.'],
+  ['Move queued message up', '上移待发送消息', '上移待傳送訊息', '待機メッセージを上へ移動', 'Wartende Nachricht nach oben verschieben'],
+  ['Move queued message down', '下移待发送消息', '下移待傳送訊息', '待機メッセージを下へ移動', 'Wartende Nachricht nach unten verschieben'],
+  ['Messages wait until the current task finishes.', '消息将在当前任务结束后发送。', '訊息將在目前工作結束後傳送。', 'メッセージは現在のタスク完了後に送信されます。', 'Nachrichten warten bis zum Ende des aktuellen Auftrags.'],
   ['Message', '消息', '訊息', 'メッセージ', 'Nachricht']
 ]) {
   for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;
@@ -702,3 +711,10 @@ for (const [key, zh, tw, ja, de] of [
   ['The agent graph changed while reading. Refresh the index.','读取期间智能体关系已变化，请刷新索引。','讀取期間代理關係已變更，請重新整理索引。','読み込み中にエージェントの関係が変更されました。索引を更新してください。','Die Agentenbeziehungen wurden beim Lesen geändert. Aktualisiere den Index.'],
   ['Some agent history is unavailable.','部分智能体历史不可用。','部分代理歷史無法使用。','一部のエージェント履歴を利用できません。','Ein Teil des Agentenverlaufs ist nicht verfügbar.'],
 ]) for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;
+
+for (const [key, zh, tw, ja, de] of [
+ ['Unable to preserve the creation request. Review your computer before creating another conversation.','无法保存创建回执，请先在电脑上确认结果再新建会话。','無法儲存建立回執，請先在電腦上確認結果再新增對話。','作成リクエストを保存できません。別の会話を作る前にパソコンで結果を確認してください。','Die Erstellungsanfrage konnte nicht gespeichert werden. Prüfe das Ergebnis am Computer, bevor du eine weitere Unterhaltung erstellst.'],
+ ['The previous creation is unconfirmed. Restore its settings and retry, or review the conversation on your computer.','上次创建结果尚未确认，请恢复原设置后重试，或在电脑上查看会话。','上次建立結果尚未確認，請恢復原設定後重試，或在電腦上查看對話。','前回の作成結果が未確認です。元の設定に戻して再試行するか、パソコンで会話を確認してください。','Die vorherige Erstellung ist unbestätigt. Stelle die ursprünglichen Einstellungen wieder her und versuche es erneut, oder prüfe die Unterhaltung am Computer.'],
+ ['Create with default mode and permissions, then change them after connecting. Your draft is preserved.','请先用默认模式和权限创建，连接后再修改；草稿已保留。','請先用預設模式和權限建立，連線後再修改；草稿已保留。','既定のモードと権限で作成し、接続後に変更してください。下書きは保持されています。','Erstelle mit Standardmodus und Standardberechtigungen und ändere sie nach dem Verbinden. Dein Entwurf bleibt erhalten.'],
+ ['The conversation was already created. Review it before sending your message.','会话已经创建，请先确认该会话，再明确发送消息。','對話已經建立，請先確認該對話，再明確傳送訊息。','会話は既に作成されています。メッセージを送る前に会話を確認してください。','Die Unterhaltung wurde bereits erstellt. Prüfe sie, bevor du deine Nachricht sendest.'],
+]) for (const [code,value] of [['zh',zh],['zh-TW',tw],['ja',ja],['de',de]]) window.REMOTE_I18N[code][key]=value;

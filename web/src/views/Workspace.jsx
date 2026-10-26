@@ -39,6 +39,21 @@ export function Workspace() {
             <span className="brand-mark" data-icon="codex"></span>
             <strong>anywhereToAgent</strong>
           </a>
+          <div className="px-3 pb-2">
+            <Label htmlFor="agentSelect" data-t="Agent"></Label>
+            <select
+              id="agentSelect"
+              data-label="Agent"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              disabled
+            ></select>
+            <p
+              id="agentConnectionStatus"
+              className="mt-1 text-xs text-muted-foreground break-words"
+              role="status"
+              hidden
+            ></p>
+          </div>
           <SearchField className="search-box">
             <span data-icon="search">
               <Icon name="search" />

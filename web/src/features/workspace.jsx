@@ -1,3 +1,7 @@
+import {
+  planBlockedWhileRunning,
+  planRevisionRequest,
+} from "./owner-capabilities";
 import { renderView, clearView } from "../render";
 import { Empty, EmptyMedia, EmptyDescription } from "../components/ui/empty";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
@@ -632,6 +636,12 @@ export function createWorkspace({
   }
   async function refreshPendingPlan(force = false) {
     if (!state.selected) return;
+    if (state.live.pending_plan_approval === true) {
+      state.pendingPlan = state.live.pending_plan || null;
+      renderPlanAction();
+      state.planToken = "";
+      return;
+    }
     if (state.running) {
       state.pendingPlan = null;
       renderPlanAction();
@@ -646,6 +656,13 @@ export function createWorkspace({
     state.planFetch = request;
     try {
       const value = await api("threads/" + encodeURIComponent(id) + "/plan");
+      if (state.live.pending_plan_approval === true) {
+        if (id === state.selected && generation === state.generation) {
+          state.pendingPlan = state.live.pending_plan || null;
+          renderPlanAction();
+        }
+        return;
+      }
       if (
         id !== state.selected ||
         generation !== state.generation ||
@@ -675,7 +692,8 @@ export function createWorkspace({
     }
   }
   function renderPlanAction() {
-    $("planAction").hidden = !state.pendingPlan || state.running;
+    $("planAction").hidden =
+      !state.pendingPlan || planBlockedWhileRunning(state);
     $("executePlan").disabled =
       !ownerCan("plan") || state.sending || state.planExecuting;
     $("continuePlanning").disabled =
@@ -683,7 +701,12 @@ export function createWorkspace({
   }
   function requestPlanRevision() {
     if (!ownerCan("plan")) return;
-    if (!state.selected || !state.pendingPlan || state.running || state.sending)
+    if (
+      !state.selected ||
+      !state.pendingPlan ||
+      planBlockedWhileRunning(state) ||
+      state.sending
+    )
       return;
     const dialog = $("revisePlanDialog");
     if (dialog.dataset.planId !== state.pendingPlan.id)
@@ -705,7 +728,7 @@ export function createWorkspace({
     if (!dialog.open || state.sending || state.settingsMutation || !feedback)
       return;
     if (
-      state.running ||
+      planBlockedWhileRunning(state) ||
       !state.pendingPlan ||
       dialog.dataset.threadId !== state.selected ||
       dialog.dataset.generation !== String(state.generation) ||
@@ -720,7 +743,7 @@ export function createWorkspace({
     const id = state.selected,
       generation = state.generation,
       planId = state.pendingPlan.id;
-    const payload = {
+    const fallback = {
       ...(nativeSettings() ? {} : state.prefs),
       mode: "plan",
       text:
@@ -730,6 +753,7 @@ export function createWorkspace({
         "\n\n" +
         feedback,
     };
+    const revision = planRevisionRequest(state, feedback, fallback);
     state.sending = true;
     $("confirmRevisePlan").disabled = true;
     $("cancelRevisePlan").disabled = true;
@@ -738,7 +762,10 @@ export function createWorkspace({
     updateControls();
     renderPlanAction();
     try {
-      await api("threads/" + encodeURIComponent(id) + "/turn", payload);
+      await api(
+        "threads/" + encodeURIComponent(id) + "/" + revision.action,
+        revision.payload,
+      );
       if (id !== state.selected || generation !== state.generation) return;
       if (state.pendingPlan?.id === planId) state.pendingPlan = null;
       state.planToken = "";
@@ -765,7 +792,7 @@ export function createWorkspace({
     if (!ownerCan("plan")) return;
     if (
       !state.pendingPlan ||
-      state.running ||
+      planBlockedWhileRunning(state) ||
       state.planExecuting ||
       state.settingsMutation
     )
@@ -782,7 +809,7 @@ export function createWorkspace({
       state.planExecuting ||
       state.sending ||
       state.settingsMutation ||
-      state.running ||
+      planBlockedWhileRunning(state) ||
       !state.pendingPlan ||
       $("executePlanDialog").dataset.planId !== state.pendingPlan.id ||
       $("executePlanDialog").dataset.ownerEpoch !== ownerEpoch()

@@ -1,10 +1,12 @@
 import { renderView, clearView } from "../render";
+import { createCreationRequests } from "./creation-requests";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { PanelRow } from "../components/ui/panel";
 import {
   owningProject,
   projectContainsPath,
   sameProjectPath,
+  sessionProject,
 } from "../project-paths";
 
 export function createSessions({
@@ -29,6 +31,7 @@ export function createSessions({
   renderChanges,
   connectOriginalOwner,
   detail,
+  connectionMetadata,
   loadProjectFiles,
   requireOwner,
   ownerEpoch,
@@ -44,6 +47,8 @@ export function createSessions({
     restoredScope = "",
     createdScope = "";
   const createdSessions = new Map();
+  let creationRequests;
+  const creationWrites = new Map();
   function clearCreatedThreads() {
     createdSessions.clear();
     createdScope = "";
@@ -77,7 +82,7 @@ export function createSessions({
     if (pending.size > 100) pending.delete(pending.keys().next().value);
     // The creation receipt is authoritative even before the native index catches up.
     state.listSeq++;
-    if (!state.listProject || projectContainsPath(state.listProject, row.cwd)) {
+    if (!state.listProject || matchesProject(row, state.listProject)) {
       state.sessions = [
         row,
         ...state.sessions.filter((session) => session.id !== row.id),
@@ -90,6 +95,14 @@ export function createSessions({
     document.body.classList.toggle("nav-open", open);
     $("navBackdrop").hidden = !open;
     $("sidebarToggle").setAttribute("aria-expanded", String(open));
+  }
+  function matchesProject(session, project) {
+    return (
+      sameProjectPath(
+        project,
+        sessionProject(state.projects, state.sidebarProjects, session),
+      ) || projectContainsPath(project, session.cwd)
+    );
   }
   function projectName(path, containingProject = true) {
     const owner = containingProject
@@ -126,6 +139,8 @@ export function createSessions({
             project,
             offset: String(append ? state.next : 0),
           }),
+        undefined,
+        { observation: true },
       );
       if (seq !== state.listSeq || project !== state.listProject) return;
       const rows = [...value.sessions];
@@ -134,6 +149,8 @@ export function createSessions({
         value = await api(
           "sessions?" +
             new URLSearchParams({ project, offset: String(offset) }),
+          undefined,
+          { observation: true },
         );
         if (seq !== state.listSeq || project !== state.listProject) return;
         rows.push(...value.sessions);
@@ -148,11 +165,10 @@ export function createSessions({
       for (const id of archived) pending.delete(id);
       if (!value.history_unavailable)
         for (const [id, session] of pending)
-          if (!owningProject(state.projects, session.cwd)) pending.delete(id);
+          if (!sessionProject(state.projects, state.sidebarProjects, session))
+            pending.delete(id);
       const pendingRows = [...pending.values()]
-        .filter(
-          (session) => !project || projectContainsPath(project, session.cwd),
-        )
+        .filter((session) => !project || matchesProject(session, project))
         .map(
           (session) =>
             state.sessions.find((row) => row.id === session.id) || session,
@@ -435,6 +451,18 @@ export function createSessions({
       if (result.agent && result.agent.id !== getAgent().id)
         throw new Error("The active agent changed. Refresh before continuing.");
       state.catalog = { ...result, agent: getAgent() };
+      if (
+        !state.selected &&
+        !state.prefs.permission &&
+        result.creation_default_permission &&
+        result.creation_permissions?.includes(
+          result.creation_default_permission,
+        )
+      )
+        state.prefs = {
+          ...state.prefs,
+          permission: result.creation_default_permission,
+        };
       state.optionsLoaded = true;
       updateControls();
       renderRequests(state.currentRequests);
@@ -569,12 +597,22 @@ export function createSessions({
     const generation = state.generation,
       current = () => id === state.selected && generation === state.generation;
     if (state.session?.cwd) {
-      state.project = owningProject(state.projects, state.session.cwd);
+      state.project = sessionProject(
+        state.projects,
+        state.sidebarProjects,
+        state.session,
+      );
     }
+    const metadata =
+      connect &&
+      !created &&
+      state.catalog.capabilities?.connection_metadata === true;
     await Promise.all([
       loadOptions(),
+      ...(metadata ? [detail(generation)] : []),
       (async () => {
-        await detail(generation, created);
+        if (metadata) await connectionMetadata(generation);
+        else await detail(generation, created);
         if (current() && connect) await connectOriginalOwner();
       })(),
     ]);
@@ -644,43 +682,98 @@ export function createSessions({
       optionsSeq = state.optionsSeq,
       project = state.project,
       selected = state.selected,
+      scope = [state.device?.id, getAgent().id, project],
+      current = () =>
+        generation === state.generation &&
+        project === state.project &&
+        selected === state.selected &&
+        scope[0] === state.device?.id &&
+        scope[1] === getAgent().id,
       options = {
         project,
         ...(!selected ? state.prefs : {}),
         executor: "background",
       };
+    let reservation;
     try {
       const catalog = await api(
         "options?" + new URLSearchParams({ project, scope: "creation" }),
       );
       if (catalog?.agent && catalog.agent.id !== getAgent().id)
         throw new Error("The active agent changed. Refresh before continuing.");
-      if (
-        !catalog ||
-        generation !== state.generation ||
-        optionsSeq !== state.optionsSeq ||
-        project !== state.project ||
-        selected !== state.selected
-      )
+      if (!catalog || optionsSeq !== state.optionsSeq || !current())
         throw new Error("Connection failed.");
-      if (catalog?.capabilities?.background_creation !== true)
+      if (catalog.capabilities?.background_creation !== true)
         throw new Error(
           "Background conversations are unavailable. Update agentTools on your computer and reconnect.",
         );
-      const value = await api("threads", options);
-      if (
-        !value ||
-        typeof value.id !== "string" ||
-        !value.id ||
-        generation !== state.generation ||
-        project !== state.project ||
-        selected !== state.selected
-      )
+      if (Array.isArray(catalog.creation_permissions)) {
+        const permission =
+          options.permission || catalog.creation_default_permission;
+        if (
+          !catalog.creation_permissions.includes(permission) ||
+          (options.mode && options.mode !== "default")
+        )
+          throw new Error(
+            "This mode is unavailable when creating a conversation. Change it after connecting. Your draft is preserved.",
+          );
+        options.permission = permission;
+      }
+      if (catalog.capabilities.creation_default_permissions_only === true) {
+        if (
+          (options.permission && options.permission !== "default") ||
+          (options.mode && options.mode !== "default")
+        )
+          throw new Error(
+            "Create with default mode and permissions, then change them after connecting. Your draft is preserved.",
+          );
+        delete options.permission;
+        delete options.mode;
+      }
+      if (catalog.capabilities.creation_request_id === true) {
+        creationRequests ||= createCreationRequests(sessionStorage);
+        reservation = creationRequests.reserve(scope, options);
+        if (reservation.id) {
+          const error = new Error(
+            "The conversation was already created. Review it before sending your message.",
+          );
+          error.createdThreadID = reservation.id;
+          throw error;
+        }
+        options.request_id = reservation.request_id;
+      }
+      const requestID = reservation?.request_id;
+      let writing = requestID && creationWrites.get(requestID);
+      if (!writing) {
+        writing = api("threads", options);
+        if (requestID) creationWrites.set(requestID, writing);
+      }
+      let value;
+      try {
+        value = await writing;
+      } finally {
+        if (requestID && creationWrites.get(requestID) === writing)
+          creationWrites.delete(requestID);
+      }
+      if (reservation && typeof value?.id === "string" && value.id)
+        creationRequests.confirm(scope, reservation.request_id, value.id);
+      if (!value || typeof value.id !== "string" || !value.id || !current())
         throw new Error("Connection failed.");
-      return rememberCreatedThread(value, project);
+      const row = rememberCreatedThread(value, project);
+      if (reservation) creationRequests.complete(scope, reservation.request_id);
+      return row;
     } catch (error) {
-      if (generation === state.generation && error.createdThreadID)
+      if (reservation && error.createdThreadID)
+        creationRequests.confirm(
+          scope,
+          reservation.request_id,
+          error.createdThreadID,
+        );
+      if (current() && error.createdThreadID) {
         await recoverCreatedThread(error.createdThreadID);
+        if (reservation)
+          creationRequests.complete(scope, reservation.request_id);
+      }
       throw error;
     }
   }

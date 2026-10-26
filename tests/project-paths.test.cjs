@@ -12,6 +12,29 @@ const paths = fs
       ),
   );
 
+test("native project identity preserves an outside worktree only for a currently shared root", async () => {
+  const { sessionProject } = await paths,
+    session = { cwd: "/worktrees/shop", project_id: "native-project" },
+    sidebar = [
+      {
+        id: "native-project",
+        root_paths: ["/projects/shop", "/worktrees/shop"],
+      },
+    ];
+  assert.equal(
+    sessionProject(["/projects/shop"], sidebar, session),
+    "/projects/shop",
+  );
+  assert.equal(sessionProject([], sidebar, session), "");
+  assert.equal(
+    sessionProject(["/worktrees"], sidebar, {
+      ...session,
+      project_id: "unknown",
+    }),
+    "/worktrees",
+  );
+});
+
 test("project identity matches Windows extended drive and UNC forms without widening path boundaries", async () => {
   const { sameProjectPath, projectContainsPath, owningProject } = await paths;
   assert(sameProjectPath("E:\\work\\shop", "\\\\?\\e:\\WORK\\shop\\"));

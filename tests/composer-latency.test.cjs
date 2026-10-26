@@ -5,12 +5,23 @@ const { test } = require("node:test");
 
 const composer = fs
   .readFile(path.resolve(__dirname, "../web/src/features/composer.jsx"), "utf8")
-  .then(
-    (source) =>
-      import(
-        "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-      ),
-  );
+  .then(async (source) => {
+    const helper = await fs.readFile(
+      path.resolve(__dirname, "../web/src/features/owner-capabilities.js"),
+      "utf8",
+    );
+    const moduleURL =
+      "data:text/javascript;base64," + Buffer.from(helper).toString("base64");
+    return import(
+      "data:text/javascript;base64," +
+        Buffer.from(
+          source.replaceAll(
+            '"./owner-capabilities"',
+            JSON.stringify(moduleURL),
+          ),
+        ).toString("base64")
+    );
+  });
 
 function deferred() {
   let resolve, reject;

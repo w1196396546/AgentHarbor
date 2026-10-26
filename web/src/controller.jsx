@@ -1,5 +1,9 @@
+import {
+  queueAvailable,
+  messageCapability,
+} from "./features/owner-capabilities";
 import { createReadIndexes } from "./features/indexes";
-import { owningProject } from "./project-paths";
+import { sessionProject } from "./project-paths";
 import { createReading } from "./features/reading";
 import {
   loadedItems,
@@ -82,6 +86,7 @@ export function startRemote() {
 
   const state = {
     device: null,
+    agents: [],
     deviceTimer: null,
     deviceChecking: false,
     project: "",
@@ -632,6 +637,7 @@ export function startRemote() {
     renderSessions();
     renderProjects();
     renderDevice();
+    renderAgents();
     renderQueue();
   }
   async function run(action, control) {
@@ -660,6 +666,7 @@ export function startRemote() {
     clearCreatedThreads();
     state.deviceConnectionUnknown = false;
     state.agentDiscovered = false;
+    state.agents = [];
     closeStream();
     state.sending = false;
     state.selected = "";
@@ -778,18 +785,31 @@ export function startRemote() {
   }
   const effortName = (value) => getAgent().effortName(value, t);
   function permissionLabel(value = state.prefs.permission) {
+    if (getAgent().id !== "codex")
+      return (
+        state.catalog.permissions?.find((profile) => profile.id === value)
+          ?.name ||
+        value ||
+        "Default permissions"
+      );
     return getAgent().permissionLabel(value, { ...state, nativeSettings });
   }
   function updateControls() {
     const offline = state.device?.online === false,
+      activeAgent = state.agents?.find((agent) => agent.id === getAgent().id),
+      agentUnavailable =
+        !state.agentDiscovered ||
+        (activeAgent?.state && activeAgent.state !== "connected"),
       noProject = !state.selected && !state.project,
       noBackgroundCreation =
         !state.selected &&
         state.optionsLoaded &&
         state.catalog.capabilities?.background_creation !== true;
     $("message").disabled = state.sending || offline || noProject;
-    $("new").disabled = state.sending || offline;
-    $("startChat").disabled = state.sending || offline;
+    $("new").disabled = state.sending || offline || agentUnavailable;
+    $("agentSelect").disabled =
+      !state.agentDiscovered || state.sending || state.uploading > 0;
+    $("startChat").disabled = state.sending || offline || agentUnavailable;
     $("project").disabled = state.sending;
     $("breadcrumbProject").disabled = state.sending;
     for (const b of $("sessions").querySelectorAll("button"))
@@ -830,11 +850,11 @@ export function startRemote() {
         !!state.settingsMutation ||
         !state.optionsLoaded;
     const queued = shouldQueue(),
-      queueUnavailable = queued && !state.catalog.capabilities?.queue;
+      queueUnavailable = queued && !queueAvailable(state.catalog.capabilities);
     $("send").disabled =
       noProject ||
       offline ||
-      !ownerCan(queued ? "queue" : "send") ||
+      !ownerCan(queued ? "queue_add" : "send") ||
       state.sending ||
       !!state.queueMutation ||
       state.uploading > 0 ||
@@ -853,7 +873,7 @@ export function startRemote() {
     $("attach").disabled =
       noProject ||
       offline ||
-      !ownerCan("send") ||
+      !ownerCan(messageCapability(state)) ||
       state.sending ||
       state.uploading > 0;
     $("filesToggle").disabled = !state.selected;
@@ -864,7 +884,7 @@ export function startRemote() {
           ? "Background conversations are unavailable. Update agentTools on your computer and reconnect."
           : state.settingsMutation
             ? "Saving settings…"
-            : !ownerCan("send")
+            : !ownerCan(queued ? "queue_add" : "send")
               ? "Viewing the original application. Your draft stays here until control reconnects."
               : state.uploading
                 ? "Uploading attachments…"
@@ -873,7 +893,9 @@ export function startRemote() {
                   : state.currentRequests.length
                     ? "Codex still needs your answer. New messages will be queued."
                     : queued
-                      ? "Messages wait until the current task finishes. Use Steer to send one now."
+                      ? ownerCan("steer")
+                        ? "Messages wait until the current task finishes. Use Steer to send one now."
+                        : "Messages wait until the current task finishes."
                       : "Codex runs on your computer. Review its changes.",
     );
     if (!state.selected) setStatus("idle", []);
@@ -885,6 +907,26 @@ export function startRemote() {
     renderContext();
     renderReasoning();
     syncSubagents();
+  }
+  async function connectionMetadata(generation) {
+    const id = state.selected, revision = state.liveRevision;
+    const value = await api(
+      "sessions/" + encodeURIComponent(id) + "?scope=connection",
+    );
+    if (generation !== state.generation || id !== state.selected) return;
+    if (value.session?.id !== id || !value.live?.owner)
+      throw new Error("Connection failed.");
+    if (revision !== state.liveRevision || state.live.owner) return;
+    state.agentReadPending = false;
+    state.session = value.session;
+    state.cwd = value.session.cwd || "";
+    $("cwd").textContent = state.cwd;
+    state.project = sessionProject(state.projects, state.sidebarProjects, value.session);
+    state.live = value.live;
+    state.liveRevision++;
+    renderProjects();
+    renderCurrent();
+    ensureStream();
   }
   async function detail(generation, created) {
     clearTimeout(state.timer);
@@ -908,6 +950,7 @@ export function startRemote() {
       return;
     const session = value.session,
       live = revision !== state.liveRevision ? state.live : value.live || {};
+    state.agentReadPending = false;
     reading.get();
     state.lastSyncedAt = Date.now();
     state.reportedOptions = value.options || null;
@@ -924,7 +967,7 @@ export function startRemote() {
       }
     }
     if (session.cwd) {
-      const owner = owningProject(state.projects, session.cwd);
+      const owner = sessionProject(state.projects, state.sidebarProjects, session);
       if (owner !== state.project) {
         state.project = owner;
         state.optionsLoaded = false;
@@ -1603,6 +1646,7 @@ export function startRemote() {
     canConfigure: (...args) => canConfigure(...args),
   });
   const { api, cancelAPI } = createAPI({
+    checkDevice: (...args) => checkDevice(...args),
     getAgent,
     state,
     actionCapability: (...args) => actionCapability(...args),
@@ -1653,6 +1697,7 @@ export function startRemote() {
     renderChanges,
     connectOriginalOwner: (...args) => connectOriginalOwner(...args),
     detail: (...args) => detail(...args),
+    connectionMetadata: (...args) => connectionMetadata(...args),
     loadProjectFiles,
     requireOwner: (...args) => requireOwner(...args),
     ownerEpoch: (...args) => ownerEpoch(...args),
@@ -1711,7 +1756,7 @@ export function startRemote() {
     });
   const { renderDevice, updateConnection, checkDevice, setDeviceOnline } =
     createDevices({
-      switchAgent: (...args) => switchAgent(...args),
+      setAgents: (...args) => setAgents(...args),
       translate,
       state,
       nativeSettings: (...args) => nativeSettings(...args),
@@ -1746,27 +1791,32 @@ export function startRemote() {
     renderCurrent: (...args) => renderCurrent(...args),
     notice,
   });
-  const { switchAgent } = createAgentLifecycle({
-    clearCreatedThreads,
-    saveReading: () => reading.save(),
-    state,
-    $,
-    getAgent,
-    closeStream,
-    cancelAPI,
-    resetSideData,
-    closeDialog,
-    closeMenu,
-    closeReasoning,
-    clearDraft,
-    renderAttachments,
-    resizeComposer,
-    renderSessions,
-    renderProjects,
-    renderChanges,
-    updateControls,
-    t,
-  });
+  const { switchAgent, setAgents, chooseAgent, renderAgents } =
+    createAgentLifecycle({
+      clearCreatedThreads,
+      translate: (...args) => translate(...args),
+      list: (...args) => list(...args),
+      saveReading: () => reading.save(),
+      state,
+      $,
+      getAgent,
+      closeStream,
+      cancelAPI,
+      resetSideData,
+      closeDialog,
+      closeMenu,
+      closeReasoning,
+      clearDraft,
+      renderAttachments,
+      resizeComposer,
+      renderSessions,
+      renderProjects,
+      renderChanges,
+      updateControls,
+      t,
+    });
+  $("agentSelect").onchange = () =>
+    run(() => chooseAgent($("agentSelect").value), $("agentSelect"));
   $("conversationSearch").oninput = renderSearch;
   $("conversationFilter").onchange = renderSearch;
   $("conversationTurn").onchange = () => {

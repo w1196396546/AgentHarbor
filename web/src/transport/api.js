@@ -7,6 +7,7 @@ export function createAPI({
   archiveConversation,
   unavailableConversation,
   getAgent,
+  checkDevice = () => {},
 }) {
   const requests = new Set();
   function cancelAPI() {
@@ -15,9 +16,19 @@ export function createAPI({
   }
   async function api(path, body, options = {}) {
     const generation = state.generation,
+      agentScoped = !["device", "logout", "agents"].includes(path),
       agentID = getAgent().id,
       method = options.method || (body === undefined ? "GET" : "POST"),
       capability = actionCapability(path, method);
+    const agent = state.agents?.find((value) => value.id === agentID);
+    if (agentScoped && agent?.state && agent.state !== "connected") {
+      const error = new Error(
+        agent.problem ||
+          "The selected Agent is not connected. Connect it in agentTools on your computer.",
+      );
+      error.status = 503;
+      throw error;
+    }
     if (capability) requireOwner(capability);
     const ownerEpoch =
       capability && state.live.owner?.epoch
@@ -29,11 +40,11 @@ export function createAPI({
     const controller = new AbortController(),
       timeout = setTimeout(() => controller.abort(), 45000),
       abort = () => controller.abort();
-    requests.add(controller);
+    if (agentScoped) requests.add(controller);
     if (options.signal?.aborted) controller.abort();
     else options.signal?.addEventListener("abort", abort, { once: true });
     const multipart = body instanceof FormData;
-    let res;
+    let res, raw;
     const init = {
       method,
       headers: {
@@ -61,29 +72,29 @@ export function createAPI({
       res = await (path === "device" || path === "logout"
         ? fetch("/api/" + path, init)
         : window.RemoteSecure.fetch(path, init));
+      if (agentScoped && agentID !== getAgent().id)
+        throw new DOMException("The connected agent changed.", "AbortError");
+      if (res.status === 401) {
+        showPair();
+        throw new Error(
+          path === "pair"
+            ? "Authorization code is invalid or expired."
+            : "Pair this browser first",
+        );
+      }
+      if (res.status === 503 && generation === state.generation) {
+        if (path === "device") setDeviceOnline(false);
+        else checkDevice();
+      }
+      if (res.status === 204) return null;
+      raw = await res.text();
+      if (agentScoped && agentID !== getAgent().id)
+        throw new DOMException("The connected agent changed.", "AbortError");
     } finally {
       requests.delete(controller);
       clearTimeout(timeout);
       options.signal?.removeEventListener("abort", abort);
     }
-    if (path !== "agents" && agentID !== getAgent().id)
-      throw new DOMException("The connected agent changed.", "AbortError");
-    if (res.status === 401) {
-      showPair();
-      throw new Error(
-        path === "pair"
-          ? "Authorization code is invalid or expired."
-          : "Pair this browser first",
-      );
-    }
-    if (res.status === 503 && path !== "threads" && !options.observation) {
-      setDeviceOnline(false);
-      throw new Error("Your computer is offline");
-    }
-    if (res.status === 204) return null;
-    const raw = await res.text();
-    if (path !== "agents" && agentID !== getAgent().id)
-      throw new DOMException("The connected agent changed.", "AbortError");
     let value;
     try {
       value = JSON.parse(raw);
@@ -121,10 +132,6 @@ export function createAPI({
         /^[A-Za-z0-9_-]{1,128}$/.test(value.created_thread_id)
       )
         error.createdThreadID = value.created_thread_id;
-      if (res.status === 503 && !options.observation) {
-        setDeviceOnline(false);
-        if (!error.createdThreadID) error.message = "Your computer is offline";
-      }
       throw error;
     }
     if (path === "device") window.RemoteSecure.rememberDevice?.(value);

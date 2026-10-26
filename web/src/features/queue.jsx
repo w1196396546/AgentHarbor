@@ -1,3 +1,4 @@
+import { queueAvailable } from "./owner-capabilities";
 import { renderView } from "../render";
 import { Card } from "../components/ui/card";
 import { Tag } from "../components/ui/tag";
@@ -58,20 +59,36 @@ export function createQueue({
     state.queueFetched = false;
   }
   function applyQueue(snapshot) {
-    if (!snapshot || !Array.isArray(snapshot.queue)) return;
+    if (
+      !snapshot ||
+      (snapshot.known !== false && !Array.isArray(snapshot.queue))
+    )
+      return;
     syncQueueOwner();
     const revision = Number(snapshot.revision);
     if (Number.isFinite(revision) && revision < state.queueRevision) return;
+    if (Number.isFinite(revision)) state.queueRevision = revision;
+    if (snapshot?.known === false) {
+      state.queuePaused = true;
+      state.queueError = snapshot.error || t("Unable to load queued messages.");
+      renderQueue();
+      return;
+    }
     state.queue = snapshot.queue;
-    state.queueRevision = Number.isFinite(revision)
-      ? revision
-      : state.queueRevision;
     state.queuePaused = !!snapshot.paused;
     state.queueError = snapshot.error || "";
     renderQueue();
   }
   function applyLiveQueue(live) {
     syncQueueOwner();
+    if (live.queue_known === false) {
+      applyQueue({
+        known: false,
+        revision: live.queue_revision,
+        error: live.queue_error,
+      });
+      return;
+    }
     if (Array.isArray(live.queue))
       applyQueue({
         queue: live.queue,
@@ -86,7 +103,7 @@ export function createQueue({
     syncQueueOwner();
     if (
       !state.selected ||
-      !state.catalog.capabilities?.queue ||
+      !queueAvailable(state.catalog.capabilities) ||
       state.queueFetch ||
       (state.queueFetched && !force)
     )
@@ -151,7 +168,7 @@ export function createQueue({
     $("resumeQueue").hidden = !state.queuePaused;
     const uncertain = state.queue.some((entry) => entry.status === "uncertain");
     $("resumeQueue").disabled =
-      !ownerCan("queue") ||
+      !ownerCan("queue_resume") ||
       !!state.queueMutation ||
       state.sending ||
       state.device?.online === false ||
@@ -192,7 +209,7 @@ export function createQueue({
     $("queueList").dataset.key = key;
     renderView(
       $("queueList"),
-      state.queue.map((entry) => {
+      state.queue.map((entry, index) => {
         const attachments = queueAttachments(entry),
           blocked =
             !!state.queueMutation ||
@@ -225,12 +242,48 @@ export function createQueue({
               )}
             </div>
             <div className="queue-actions">
+              {Object.hasOwn(
+                state.live.owner?.capabilities || {},
+                "queue_reorder",
+              ) &&
+                ["up", "down"].map((direction) => {
+                  const other =
+                    state.queue[index + (direction === "up" ? -1 : 1)];
+                  return (
+                    <Action
+                      key={direction}
+                      className="icon-button queue-reorder"
+                      aria-label={t(
+                        direction === "up"
+                          ? "Move queued message up"
+                          : "Move queued message down",
+                      )}
+                      title={t(
+                        direction === "up"
+                          ? "Move queued message up"
+                          : "Move queued message down",
+                      )}
+                      disabled={
+                        !ownerCan("queue_reorder") ||
+                        blocked ||
+                        !other ||
+                        !editableQueueEntry(entry) ||
+                        !editableQueueEntry(other)
+                      }
+                      action={() => reorderQueue(entry.id, other.id)}
+                    >
+                      <Icon name={direction} />
+                    </Action>
+                  );
+                })}
               <Action
                 className="icon-button queue-edit"
                 aria-label={t("Edit queued message")}
                 title={t("Edit queued message")}
                 disabled={
-                  !ownerCan("queue") || blocked || !editableQueueEntry(entry)
+                  !ownerCan("queue_edit") ||
+                  blocked ||
+                  !editableQueueEntry(entry)
                 }
                 action={() => beginQueueEdit(entry.id)}
               >
@@ -255,7 +308,7 @@ export function createQueue({
                 aria-label={t("Remove queued message")}
                 title={t("Remove queued message")}
                 disabled={
-                  !ownerCan("queue") ||
+                  !ownerCan("queue_cancel") ||
                   blocked ||
                   entry.status === "dispatching"
                 }
@@ -311,7 +364,7 @@ export function createQueue({
     return value;
   }
   function beginQueueEdit(id) {
-    requireOwner("queue");
+    requireOwner("queue_edit");
     if (state.queueMutation || state.sending || state.queueEdit) return;
     const entry = state.queue.find((item) => item.id === id);
     if (!entry || !editableQueueEntry(entry)) return;
@@ -340,7 +393,7 @@ export function createQueue({
     $("saveQueueEdit").disabled =
       !entry ||
       !editableQueueEntry(entry) ||
-      !ownerCan("queue") ||
+      !ownerCan("queue_edit") ||
       ownerEpoch() !== edit.epoch ||
       !!state.queueMutation ||
       state.sending ||
@@ -358,7 +411,7 @@ export function createQueue({
   async function saveQueueEdit() {
     const edit = state.queueEdit;
     if (!edit || state.queueMutation || state.sending) return;
-    requireOwner("queue");
+    requireOwner("queue_edit");
     const current = () =>
       state.queueEdit === edit &&
       state.selected === edit.thread &&
@@ -401,7 +454,13 @@ export function createQueue({
     }
   }
   async function mutateQueue(id, action) {
-    requireOwner(action === "steer" ? "steer" : "queue");
+    requireOwner(
+      action === "steer"
+        ? "steer"
+        : action === "remove"
+          ? "queue_cancel"
+          : "queue_resume",
+    );
     if (state.queueMutation || state.sending || !state.selected) return;
     const entry = id ? state.queue.find((item) => item.id === id) : null;
     if (id && !entry) return;
@@ -464,6 +523,50 @@ export function createQueue({
         epoch === ownerEpoch()
       )
         throw error;
+    } finally {
+      if (state.queueMutation === mutation) {
+        state.queueMutation = null;
+        updateControls();
+      }
+    }
+  }
+
+  async function reorderQueue(id, over) {
+    requireOwner("queue_reorder");
+    if (state.queueMutation || state.sending || !state.selected || id === over)
+      return;
+    if (
+      ![id, over].every((key) =>
+        state.queue.some(
+          (entry) => entry.id === key && editableQueueEntry(entry),
+        ),
+      )
+    )
+      return;
+    const thread = state.selected,
+      generation = state.generation,
+      epoch = ownerEpoch(),
+      mutation = { controller: new AbortController() };
+    state.queueMutation = mutation;
+    updateControls();
+    try {
+      const snapshot = await api(
+        "threads/" +
+          encodeURIComponent(thread) +
+          "/queue/" +
+          encodeURIComponent(id) +
+          "/reorder",
+        { over },
+        { signal: mutation.controller.signal },
+      );
+      if (
+        thread !== state.selected ||
+        generation !== state.generation ||
+        epoch !== ownerEpoch()
+      )
+        return;
+      if (snapshot?.queue) applyQueue(snapshot);
+      else await refreshQueue(true);
     } finally {
       if (state.queueMutation === mutation) {
         state.queueMutation = null;

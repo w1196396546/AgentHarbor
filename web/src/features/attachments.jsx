@@ -1,3 +1,4 @@
+import { messageCapability } from "./owner-capabilities";
 import { useState, useEffect } from "react";
 import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { renderView } from "../render";
@@ -17,7 +18,7 @@ export function createAttachments({
 }) {
   const previews = new Map();
   async function upload(files) {
-    requireOwner("send");
+    requireOwner(messageCapability(state));
     if (!state.project) {
       notice("Choose a project first.");
       return;

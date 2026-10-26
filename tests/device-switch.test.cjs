@@ -379,7 +379,7 @@ for (const engine of engines)
         .waitFor();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       assert.equal(await page.locator("dialog:visible").count(), 0);
-      assert.equal(await page.locator("select").count(), 0);
+      assert.equal(await page.locator(".device-switcher select").count(), 0);
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

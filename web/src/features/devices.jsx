@@ -8,7 +8,7 @@ export function createDevices({
   showPair,
   api,
   translate,
-  switchAgent,
+  setAgents,
   showWorkspace,
   notice,
   list,
@@ -89,10 +89,11 @@ export function createDevices({
     renderDevice();
     updateControls();
   }
-  async function checkDevice() {
+  async function checkDevice(refresh = false) {
     if (state.deviceChecking) return;
     clearTimeout(state.deviceTimer);
     state.deviceChecking = true;
+    let deviceChecked = false;
     try {
       if (!window.RemoteSecure.available()) {
         showPair();
@@ -102,48 +103,51 @@ export function createDevices({
         value = await api("device");
       state.device = value;
       state.deviceConnectionUnknown = false;
+      deviceChecked = true;
       showWorkspace();
       renderDevice();
       updateControls();
-      if (
-        value.online &&
-        (!previous || !previous.online || !state.agentDiscovered)
-      ) {
-        notice();
+      if (value.online) {
+        const discovered = state.agentDiscovered;
+        let status;
         try {
-          const result = await api("agents");
-          const id = result.default_agent;
-          const agent =
-            Array.isArray(result.agents) &&
-            result.agents.find((agent) => agent?.id === id);
-          if (
-            !agent ||
-            typeof agent.id !== "string" ||
-            !agent.id ||
-            typeof agent.name !== "string"
-          )
-            throw new Error("The connected agent could not be verified.");
-          switchAgent(agent);
+          const result = await api("agents", undefined, { observation: true });
+          status = setAgents(result);
         } catch (error) {
           if (error.status !== 404) {
-            state.agentDiscovered = false;
-            closeStream();
+            state.agentDiscovered = discovered;
+            if (!discovered) closeStream();
             updateControls();
             throw error;
           }
           // Older clients support Codex without agent discovery.
-          switchAgent({ id: "codex", name: "Codex" });
+          status = setAgents({
+            agents: [{ id: "codex", name: "Codex" }],
+            default_agent: "codex",
+          });
         }
         state.agentDiscovered = true;
-        translate();
-        state.optionsLoaded = false;
-        await list();
-        if (state.selected) await detail(state.generation);
+        if (!status?.connected) return;
+        if (
+          !previous ||
+          !previous.online ||
+          !discovered ||
+          status.changed ||
+          status.recovered
+        ) {
+          translate();
+          state.optionsLoaded = false;
+          await list();
+          if (state.selected) await detail(state.generation);
+        } else if (!document.hidden)
+          await list(false, !refresh).catch((error) => {
+            if (error.name !== "AbortError") notice(error.message);
+          });
       } else if (!value.online) setDeviceOnline(false);
-      else if (!document.hidden) await list(false, true).catch(() => {});
     } catch (e) {
       if (state.device) {
-        setDeviceOnline(false, true);
+        if (!deviceChecked) setDeviceOnline(false, true);
+        else updateControls();
         notice(
           e.name === "AbortError"
             ? "Connection timed out. Try again."

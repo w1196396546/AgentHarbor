@@ -10,6 +10,9 @@
   width: 100%;
   margin: 0 auto;
 }
+.account-dashboard .admin-page-heading > div:last-child {
+  flex-shrink: 0;
+}
 .account-dashboard.account-auth-view .admin-main {
   display: flex;
   flex-direction: column;

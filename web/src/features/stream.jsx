@@ -20,8 +20,10 @@ export function createStream({
     updateConnection();
   }
   function ensureStream() {
+    const agent = state.agents?.find((value) => value.id === getAgent().id);
     if (
       !state.selected ||
+      (agent?.state && agent.state !== "connected") ||
       state.ownerUnavailable ||
       $("workspace").hidden ||
       state.device?.online === false
