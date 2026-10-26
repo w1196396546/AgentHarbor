@@ -35,7 +35,7 @@ function Panel({
       data-slot="panel"
       aria-label={title}
       className={cn(
-        "glass-panel flex min-h-0 flex-col overflow-hidden rounded-md",
+        "surface-panel flex min-h-0 flex-col overflow-hidden rounded-md",
         className,
       )}
       {...props}
@@ -70,7 +70,7 @@ function Panel({
   );
 }
 
-/** A row in a panel's list: lit while under the pointer, a pane of clear glass when chosen. */
+/** A selectable row within a panel. */
 function PanelRow({
   chosen,
   className,
@@ -82,8 +82,8 @@ function PanelRow({
       data-slot="panel-row"
       aria-current={chosen || undefined}
       className={cn(
-        "flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-[12.5px] text-foreground/85 transition-colors outline-none hover:bg-accent focus-visible:bg-accent [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
-        chosen && "glass-chosen text-foreground",
+        "flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-[12.5px] text-foreground/85 transition-colors outline-none hover:bg-secondary focus-visible:bg-secondary [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
+        chosen && "control-selected text-foreground",
         className,
       )}
       {...props}

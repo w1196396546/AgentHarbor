@@ -160,6 +160,7 @@ for (const engine of engines)
               ".html": "text/html",
               ".js": "text/javascript",
               ".css": "text/css",
+              ".svg": "image/svg+xml",
             }[path.extname(name)],
           });
         });

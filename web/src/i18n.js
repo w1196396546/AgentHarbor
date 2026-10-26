@@ -718,3 +718,9 @@ for (const [key, zh, tw, ja, de] of [
  ['Create with default mode and permissions, then change them after connecting. Your draft is preserved.','请先用默认模式和权限创建，连接后再修改；草稿已保留。','請先用預設模式和權限建立，連線後再修改；草稿已保留。','既定のモードと権限で作成し、接続後に変更してください。下書きは保持されています。','Erstelle mit Standardmodus und Standardberechtigungen und ändere sie nach dem Verbinden. Dein Entwurf bleibt erhalten.'],
  ['The conversation was already created. Review it before sending your message.','会话已经创建，请先确认该会话，再明确发送消息。','對話已經建立，請先確認該對話，再明確傳送訊息。','会話は既に作成されています。メッセージを送る前に会話を確認してください。','Die Unterhaltung wurde bereits erstellt. Prüfe sie, bevor du deine Nachricht sendest.'],
 ]) for (const [code,value] of [['zh',zh],['zh-TW',tw],['ja',ja],['de',de]]) window.REMOTE_I18N[code][key]=value;
+
+
+for (const [key, zh, tw, ja, de] of [
+  ['Latest', '最新', '最新', '最新', 'Zuletzt'],
+  ['Current', '当前', '目前', '現在', 'Aktuell'],
+]) for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;

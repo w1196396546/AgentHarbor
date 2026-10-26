@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /**
- * Where a message is written: a pane of glass holding, on one line that
+ * Where a message is written: a surface holding, on one line that
  * wraps, whatever is offered before the text (`leading`: an attach button),
  * whatever is attached (`tags`), the text itself, and the mark that sends it.
  *
@@ -166,7 +166,7 @@ function Composer({
             disabled={!stops && !ready}
             onClick={stops ? onStop : submit}
             className={cn(
-              "shrink-0 rounded-md bg-transparent transition-colors hover:bg-accent",
+              "shrink-0 rounded-md bg-transparent transition-colors hover:bg-secondary",
               stops
                 ? "text-muted-foreground hover:text-foreground"
                 : ready
@@ -240,7 +240,7 @@ function ComposerPick<T extends string>({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={label}
-        className="glass-held flex h-6 items-center gap-1 rounded-sm px-1.5 text-[12px] text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
+        className="control-held flex h-6 items-center gap-1 rounded-sm px-1.5 text-[12px] text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
       >
         <span className="max-w-40 truncate">
           {shown ?? options.find((option) => option.value === value)?.label}
@@ -293,7 +293,7 @@ export function ComposerSurface({
   return (
     <div
       data-slot="composer"
-      className={cn("glass-card composer-surface", className)}
+      className={cn("surface-card composer-surface", className)}
       {...props}
     />
   );

@@ -12,7 +12,7 @@ export function startSidebar() {
     if (Number.isFinite(saved?.width)) inspectorWidth = Math.min(720, Math.max(280, saved.width));
   } catch { /* Resizing still works without storage. */ }
   const storageKey = 'codex.remote.sidebar';
-  const minimum = 220, defaultWidth = 244;
+  const minimum = 220, defaultWidth = 270;
   let width = defaultWidth, collapsed = false, drag = null;
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey));
@@ -21,7 +21,7 @@ export function startSidebar() {
   } catch { /* Browser preferences can be unavailable. */ }
   const desktop = () => innerWidth > 760;
   const inspectorMaximum = () => Math.max(280, Math.min(720, innerWidth > 1180 ? innerWidth - (collapsed ? 0 : minimum) - 510 : innerWidth - 40));
-  const inspectorSize = () => Math.min(inspectorWidth ?? (innerWidth > 1180 ? 280 : 340), inspectorMaximum());
+  const inspectorSize = () => Math.min(inspectorWidth ?? (innerWidth > 1180 ? 400 : 340), inspectorMaximum());
   const maximum = () => Math.max(minimum, Math.min(480, innerWidth - (workspace.classList.contains('has-changes') && innerWidth > 1180 ? inspectorSize() + 510 : 480)));
   function save() {
     try { localStorage.setItem(storageKey, JSON.stringify({width, collapsed})); } catch { /* Resizing still works without storage. */ }

@@ -215,7 +215,7 @@ export function createWorkspace({
           <DiffStats change={file} />
           {kind !== "delete" && (
             <Button
-              variant="glass"
+              variant="default"
               type="button"
               className="icon-button preview-file-button"
               aria-label={t("Open file") + " " + file.path}

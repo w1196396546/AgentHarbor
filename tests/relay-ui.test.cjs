@@ -9,7 +9,7 @@ const engines = process.env.BROWSER ? [process.env.BROWSER] : ['chromium', 'webk
 
 async function asset(route) {
   const url = new URL(route.request().url()), name = url.pathname === '/' ? 'index.html' : url.pathname === '/admin/' ? 'admin.html' : path.basename(url.pathname);
-  try { await route.fulfill({body:await fs.readFile(path.join(assets,name)),contentType:{'.html':'text/html','.css':'text/css','.js':'text/javascript'}[path.extname(name)]}); }
+  try { await route.fulfill({body:await fs.readFile(path.join(assets,name)),contentType:{'.html':'text/html','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'}[path.extname(name)]}); }
   catch { await route.fulfill({status:404}); }
 }
 

@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 
 /**
  * Something attached to what is being written: a tool, a file, a folder. A
- * small pane of clear glass, sized to its label and never to a floor — a
+ * compact label sized to its contents rather than a minimum width. A
  * minimum width leaves short names with dead space before the close button,
  * so the x sits at a different distance on every tag.
  *
  * While `progress` is between 0 and 1 the tag itself is the progress bar: it
  * fills from the left, so nothing new appears in the row. `armed` is the same
- * pane lit a step brighter, for the tag the next Backspace will remove.
+ * tag highlighted for removal by the next Backspace.
  */
 function Tag({
   icon,
@@ -40,10 +40,10 @@ function Tag({
       data-slot="tag"
       title={error}
       className={cn(
-        "glass-chosen relative flex h-7 w-fit max-w-44 items-center gap-1.5 overflow-hidden rounded-sm pl-2 text-[12px] text-foreground/90 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        "control-selected relative flex h-7 w-fit max-w-44 items-center gap-1.5 overflow-hidden rounded-sm pl-2 text-[12px] text-foreground/90 [&_svg]:size-3.5 [&_svg]:shrink-0",
         onRemove ? "pr-1" : "pr-2",
         error && "text-destructive",
-        armed && "glass-armed",
+        armed && "control-armed",
         className,
       )}
       {...props}

@@ -322,7 +322,9 @@ for (const engine of engines)
             ? "text/javascript"
             : file.endsWith(".css")
               ? "text/css"
-              : "text/html",
+              : file.endsWith(".svg")
+                ? "image/svg+xml"
+                : "text/html",
         });
       });
       await page.goto("https://device-menu.test/");

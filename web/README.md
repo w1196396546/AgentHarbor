@@ -23,8 +23,8 @@ is a build dependency only. No CDN, runtime Node server or external font is used
 - `account.jsx`: FullCupAI account login and account-owned device management;
   account authentication does not replace per-device encrypted pairing.
 - `admin.jsx`: independent administrator authentication, polling and revocation.
-- `theme.jsx`: local appearance preference; defaults to Solid Glass dark.
-- `styles/`: upstream material plus workspace/admin layout and responsive styles.
+- `theme.jsx`: persistent light/dark preference; defaults to dark and discards obsolete style presets.
+- `styles/`: shared flat tokens and primitives, workspace/admin layout and responsive styles.
 
 The static workspace shell mounts once. Its controller manages stable controls'
 values, visibility, focus and native dialogs; live contents belong to React roots.
@@ -40,30 +40,31 @@ conversation and selection generation. Dynamic requests and owners keep updating
 independently, and resource actions still check their current context. These
 changes reduce browser computation without adding a stream delay or global cache.
 
-## Solid Glass source
+## Workspace design
 
-Source: https://github.com/deeplethe/solid-glass
-Snapshot: `6e8903e494a15491ceda38fafea5056c95a74d44` (2026-10-20).
-Vendored `solid-glass.css` and the components under `components/ui/` retain
-upstream MIT licensing: button, panel, message, bubble, attachment, composer,
-ask-card, tool-steps, diff-view, input, textarea, label, field, kbd, alert, card,
-table, empty, breadcrumb, dropdown-menu, separator, tag, reasoning,
-status-glyph and turn-status. Lucide supplies all application icons.
+The desktop and mobile light/dark references are at
+https://remote.facingagi.com/design-previews/20261026-ui/ . The workspace uses a
+blue accent, opaque surfaces, a resizable navigation sidebar and a right-hand
+inspector. Mobile keeps the navigation drawer, safe-area composer and readable
+controls. Pinned, project, latest and current groups use the real session catalog;
+status, file changes and execution details only show data reported by the client.
+The selected Agent identity follows encrypted discovery, including Codex, Claude
+and other supported adapters. Product branding and the SVG favicon use the blue
+robot mark from the reference; they do not change Agent capabilities.
 
-Local adaptations keep the existing live workspace contracts: shared `cn`
-imports, semantic article messages, rich native tool disclosures, a stable
-composer surface, complex approval contents, forwarded Reasoning attributes
-and translated TurnStatus labels. `components/workspace-surfaces.jsx` supplies the shell,
-search field, menu and native modal surfaces. Native dialog/disclosure lifecycles
-preserve keyboard focus, cancellation and streamed expansion state.
+`styles/tokens.css` defines the light/dark palette and Tailwind mappings;
+`styles/ui.css` supplies shared surface states; `styles/workspace.css` owns the
+remote layout. There are no style presets, glass materials, blur filters or
+glass packages. Existing `codex.remote.theme` preferences are preserved; the old
+`codex.remote.style` preference is removed. There is no new runtime dependency.
+`web/icon.svg` is copied and versioned by the build alongside the HTML entries.
 
-The official Agent Workspace reference informs the complete layout: edge sidebar,
-centered reading column, compact tool steps, floating file inspector, inline
-decision cards, single-line expanding composer and settings underneath. Pairing,
-file previews, queues, menus, approval forms and administration share its tokens.
-`styles/workspace.css` stays in a lower-priority legacy layer for existing behavior;
-`styles/remote-glass.css` owns the new presentation and responsive layout.
-See `SOLID-GLASS-LICENSE`, `SOLID-GLASS-NOTICE.md` and the root `design-qa.md`.
+Accessible Base UI primitives and adapted component APIs remain in
+`components/ui/`. Their historical MIT attribution is retained in
+`SOLID-GLASS-LICENSE` and `SOLID-GLASS-NOTICE.md` for derived code; the previous
+Solid Glass CSS and theme engine are no longer included. Lucide supplies the
+other application icons. Native dialogs and disclosures preserve focus,
+cancellation and streamed expansion state.
 
 ## Build and checks
 

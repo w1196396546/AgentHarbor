@@ -25,7 +25,7 @@ function AskCard({
     <div
       data-slot="ask-card"
       {...props}
-      className={cn("glass-panel rounded-md px-3.5 py-3", className)}
+      className={cn("surface-panel rounded-md px-3.5 py-3", className)}
     >
       <p className="text-[11.5px] text-status-interrupted">{eyebrow}</p>
       {question && (
@@ -42,7 +42,7 @@ function AskCard({
               type="button"
               disabled={!onAnswer}
               onClick={() => onAnswer?.(option)}
-              className="glass-chosen h-7 rounded-sm px-2.5 text-[12.5px] text-foreground/90 transition-colors outline-none hover:bg-foreground/[0.12] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50"
+              className="control-selected h-7 rounded-sm px-2.5 text-[12.5px] text-foreground/90 transition-colors outline-none hover:bg-foreground/[0.12] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50"
             >
               {option}
             </button>

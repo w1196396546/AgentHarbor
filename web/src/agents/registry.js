@@ -16,7 +16,7 @@ export function agentFor(descriptor) {
   return {
     id,
     name: descriptor?.name || id,
-    icon: "agent",
+    icon: id === "claude" || id.startsWith("claude-") ? "claude" : "agent",
     sourceID: id,
     desktopURL: () => "",
     sourceLabel: (source) => source || "Unknown source",

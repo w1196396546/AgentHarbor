@@ -897,7 +897,7 @@ async function fixture(t, engine, options = {}) {
     }
     const name = u.pathname === "/" ? "index.html" : u.pathname.slice(1);
     if (
-      !["index.html", "remote.js", "remote.css", "favicon.ico"].includes(name)
+      !["index.html", "remote.js", "remote.css", "icon.svg", "favicon.ico"].includes(name)
     ) {
       seen.unknown.push(name);
       return route.fulfill({ status: 404 });
@@ -909,6 +909,7 @@ async function fixture(t, engine, options = {}) {
         ".html": "text/html",
         ".js": "text/javascript",
         ".css": "text/css",
+        ".svg": "image/svg+xml",
       }[path.extname(name)],
       headers: {
         "Content-Security-Policy":
@@ -1636,18 +1637,18 @@ for (const engine of engines) {
       .locator("[data-icon]")
       .evaluateAll((nodes) =>
         nodes
-          .filter(
-            (node) =>
-              !node.querySelector(
-                "svg path, svg circle, svg rect, svg line, svg polyline",
-              ),
-          )
+          .filter((node) => {
+            const image = node.querySelector("img");
+            return !node.querySelector(
+              "svg path, svg circle, svg rect, svg line, svg polyline",
+            ) && !(image?.complete && image.naturalWidth > 0);
+          })
           .map((node) => `${node.closest("[id]")?.id}:${node.dataset.icon}`),
       );
     assert.deepEqual(
       missing,
       [],
-      "static action icons must have visible SVG geometry",
+      "static action icons must have SVG geometry or a loaded image",
     );
     async function opaque(selector) {
       const alpha = await page.locator(selector).evaluate((node) => {
@@ -1838,7 +1839,7 @@ for (const engine of engines) {
     await f.clean();
   });
 
-  test(`${engine}: React glass appearance persists without replacing a conversation or its draft`, async (t) => {
+  test(`${engine}: flat light and dark appearance replaces legacy styles without losing a conversation or its draft`, async (t) => {
     const f = await fixture(t, engine, {
       locale: "zh-CN",
       state: { historyItems: richItems() },
@@ -1849,6 +1850,27 @@ for (const engine of engines) {
       if (/Content Security Policy|violates.*directive/i.test(message.text()))
         cspErrors.push(message.text());
     });
+    await page.evaluate(() =>
+      localStorage.setItem("codex.remote.style", "liquid"),
+    );
+    await page.reload();
+    await page.locator("#workspace:visible").waitFor();
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("codex.remote.style")),
+      null,
+      "a stored legacy style must be retired",
+    );
+    assert.equal(await page.locator("html").getAttribute("data-style"), null);
+    assert.equal(
+      await page.locator(".style-toggle, .liquid-filter-defs").count(),
+      0,
+    );
+    const icon = await page.locator('link[rel="icon"]').getAttribute("href");
+    assert.equal(new URL(icon, page.url()).pathname, "/icon.svg");
+    assert.match(
+      await page.evaluate(async (href) => (await fetch(href)).text(), icon),
+      /<svg[\s>]/,
+    );
     await page.locator('#sessions button[data-id="remote-rich"]').click();
     await page.locator("#history .markdown h1").waitFor();
     await page.locator("#message").fill("主题切换后保留的草稿");
@@ -1858,6 +1880,15 @@ for (const engine of engines) {
         .evaluate((node) => node.classList.contains("dark")),
     );
     await page.locator("#changesToggle").click();
+    for (const selector of ["#sidebar", ".composer-surface", "#changesPanel"])
+      assert.equal(
+        await page.locator(selector).evaluate((node) => {
+          const style = getComputedStyle(node);
+          return style.backdropFilter || style.webkitBackdropFilter || "none";
+        }),
+        "none",
+        selector + " must use a flat surface",
+      );
     await page.locator("#workspace .theme-toggle").click();
     assert.equal(
       await page.locator("#message").inputValue(),
@@ -6885,7 +6916,10 @@ for (const engine of engines) {
     );
     assert.equal(await page.locator("#title").innerText(), title);
     assert.equal(await row.innerText(), title);
-    assert.equal(await row.locator("..").getAttribute("title"), title);
+    assert.equal(
+      await page.locator('#sessions button[data-id="' + original.id + '"]').getAttribute("title"),
+      title,
+    );
     assert.deepEqual(
       {
         options: seen.options.length,

@@ -1,7 +1,7 @@
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
-@import "./solid-glass.css";
-@import "./themes.css";
+@import "./tokens.css";
+@import "./ui.css";
 @source "../";
 :root {
   font: 14px/1.6 var(--font-sans);
@@ -61,7 +61,7 @@ input {
   padding: 16px;
 }
 .login-panel {
-  border-radius: 18px;
+  border-radius: 12px;
 }
 .login-panel > [data-slot="panel-header"] {
   height: 48px;
@@ -76,9 +76,9 @@ input {
   width: 58px;
   height: 58px;
   place-items: center;
-  border-radius: 16px;
+  border-radius: 12px;
+  color: var(--primary);
   background: var(--secondary);
-  box-shadow: inset 0 1px var(--glass-rim);
   margin-bottom: 24px;
 }
 .admin-eyebrow {
@@ -92,7 +92,7 @@ input {
 }
 .login-content h1 {
   font-size: 26px;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
   margin: 0 0 8px;
 }
 .login-content > p {
@@ -133,34 +133,34 @@ input {
   padding: 8px 16px;
   border-radius: 8px;
   text-decoration: none;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 .back-chat:hover {
   color: var(--foreground);
-  background: var(--accent);
+  background: var(--secondary);
 }
 .admin-dashboard {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100dvh;
-  padding: 12px;
-  gap: 12px;
+  padding: 0;
 }
 .admin-sidebar {
   position: sticky;
-  top: 12px;
-  height: calc(100dvh - 24px);
+  top: 0;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: 24px 12px 12px;
-  border-radius: 12px;
+  padding: 24px 16px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
   min-width: 0;
 }
 .admin-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 10px 36px;
+  padding: 0 8px 32px;
   font-size: 15px;
   letter-spacing: -0.4px;
 }
@@ -171,6 +171,14 @@ input {
   color: var(--muted-foreground);
   font-weight: 400;
 }
+.admin-mark .icon {
+  width: 36px;
+  height: 36px;
+}
+.admin-brand-icon .icon {
+  width: 28px;
+  height: 28px;
+}
 .admin-brand-icon {
   display: grid;
   place-items: center;
@@ -178,7 +186,6 @@ input {
   height: 36px;
   border-radius: 10px;
   background: var(--secondary);
-  box-shadow: inset 0 1px var(--glass-rim);
 }
 .sidebar-caption {
   font-size: 11px;
@@ -198,9 +205,8 @@ input {
 }
 .admin-nav:hover,
 .admin-nav.selected {
-  background: var(--glass-control);
+  background: var(--selection);
   color: var(--foreground);
-  box-shadow: inset 0 1px var(--glass-rim);
 }
 .admin-sidebar-bottom {
   margin-top: auto;
@@ -256,11 +262,11 @@ input {
   overflow-wrap: anywhere;
 }
 .admin-page-heading h1 {
-  font-size: 30px;
-  letter-spacing: -1px;
+  font-size: 27px;
+  letter-spacing: -0.5px;
   line-height: 1.4;
   margin: 0 0 8px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .admin-page-heading p {
   color: var(--muted-foreground);
@@ -286,7 +292,7 @@ input {
   font-weight: 500;
   line-height: 1.5;
   padding: 8px 10px;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
   font-variant-numeric: tabular-nums;
 }
 .admin-stats small {
@@ -481,17 +487,13 @@ dialog {
   max-width: min(480px, calc(100vw - 32px));
   width: 100%;
   padding: 28px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--popover);
   color: var(--foreground);
-  box-shadow:
-    inset 0 1px var(--glass-rim),
-    0 24px 80px #0005;
 }
 dialog::backdrop {
   background: #0007;
-  backdrop-filter: blur(4px);
 }
 dialog h2 {
   font-size: 19px;
@@ -538,8 +540,8 @@ dialog p {
   .admin-sidebar {
     position: static;
     height: auto;
-    border-radius: 0;
-    box-shadow: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
     padding: 14px 18px 10px;
   }
   .admin-brand {
@@ -644,16 +646,6 @@ dialog p {
   }
 }
 
-.admin-sidebar {
-  border-radius: 0;
-  box-shadow: none;
-  background: var(--sidebar);
-}
-.admin-page-heading h1 {
-  font-size: 27px;
-  font-weight: 500;
-  letter-spacing: -0.7px;
-}
 .empty-devices [data-slot="empty-title"] {
   font-size: 14px;
   font-weight: 500;

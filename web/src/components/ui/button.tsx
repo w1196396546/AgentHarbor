@@ -16,13 +16,6 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        // A pane of the app's glass: clear fill, lit rim, hairline. Without
-        // the base's transparent border, which the fill stops short of and
-        // which would leave the hairline standing off it as a ring. `data-
-        // strong` is the same pane lit a step brighter, for the one button
-        // in a group that asks to be pressed.
-        glass:
-          "glass-control border-0 bg-(--glass-control) text-foreground hover:bg-foreground/[0.12] data-[strong]:bg-foreground/[0.16] data-[strong]:hover:bg-foreground/[0.22]",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
@@ -54,7 +47,6 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
-      // The theme gives each kind of button its own glass by this.
       data-variant={variant}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}

@@ -115,6 +115,9 @@ for (const engine of engines)
         page.on("pageerror", (error) => errors.push(error.message));
         await page.goto(f.url + "/admin/");
         await page.locator("#login:visible").waitFor();
+        const icon = await page.request.get(new URL(await page.locator('link[rel="icon"]').getAttribute("href"), page.url()).href);
+        assert.equal(icon.status(), 200);
+        assert.match(icon.headers()["content-type"], /image\/svg\+xml/);
         await page.locator("#token").fill("wrong");
         await page.locator("#loginForm button").click();
         await page.waitForFunction(() =>

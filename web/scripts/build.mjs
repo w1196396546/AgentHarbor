@@ -3,8 +3,9 @@ import { build } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
-import { readFile, writeFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
+await copyFile(root + "web/icon.svg", root + "internal/relay/assets/icon.svg");
 for (const name of ["remote", "admin", "account"]) {
   await build({
     configFile: false,
@@ -37,6 +38,10 @@ for (const name of ["index", "admin", "account"]) {
       .digest("hex").slice(0, 16);
     html = html.replaceAll(`${asset}"`, `${asset}?v=${hash}"`);
   }
+  const iconHash = createHash("sha256")
+    .update(await readFile(root + "web/icon.svg"))
+    .digest("hex").slice(0, 16);
+  html = html.replaceAll('/icon.svg"', `/icon.svg?v=${iconHash}"`);
   await writeFile(root + `internal/relay/assets/${name}.html`, html);
 }
 

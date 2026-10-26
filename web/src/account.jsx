@@ -20,7 +20,8 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "./components/ui/empty";
-import { ThemeToggle, StyleToggle, applyTheme } from "./theme";
+import { RemoteIcon } from "./components/RemoteIcon";
+import { ThemeToggle, applyTheme } from "./theme";
 import "./styles/admin.css";
 import "./styles/account.css";
 
@@ -87,7 +88,10 @@ function AccountApp() {
         <div className="admin-content">
           <header className="admin-page-heading">
             <div>
-              <p className="admin-eyebrow">anywhereToAgent</p>
+              <a className="account-brand" href="/">
+                <RemoteIcon name="brand" />
+                <span>anywhereToAgent</span>
+              </a>
               <h1>我的设备</h1>
               <p>
                 {account
@@ -96,10 +100,7 @@ function AccountApp() {
               </p>
               {account?.user.username && <p>{account.user.email}</p>}
             </div>
-            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
-              <StyleToggle />
-              <ThemeToggle />
-            </div>
+            <ThemeToggle />
           </header>
           <p role="alert" className="admin-notice" hidden={!notice}>
             {notice}
@@ -200,7 +201,7 @@ function AccountApp() {
                       返回
                     </Button>
                   )}
-                  <Button type="submit" variant="glass" disabled={busy}>
+                  <Button type="submit" variant="default" disabled={busy}>
                     {busy ? "正在登录…" : factor ? "验证并登录" : "登录"}
                   </Button>
                 </div>
@@ -216,7 +217,7 @@ function AccountApp() {
                 {account.current_device && !account.current_device.user_id && (
                   <Button
                     type="button"
-                    variant="glass"
+                    variant="default"
                     disabled={busy}
                     onClick={() => run(async () => setAccount(await api("/claim", {})))}
                   >
@@ -225,7 +226,7 @@ function AccountApp() {
                 )}
                 <Button
                   type="button"
-                  variant="glass"
+                  variant="default"
                   disabled={busy}
                   onClick={() => run(refresh)}
                 >

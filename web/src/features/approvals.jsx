@@ -378,7 +378,7 @@ export function createApprovals({
             </FieldSet>
           ))}
           <div className="request-actions">
-            <Button variant="glass" className="primary" type="submit">
+            <Button variant="default" className="primary" type="submit">
               {t("Submit answer")}
             </Button>
           </div>
@@ -450,7 +450,7 @@ export function createApprovals({
                 <Action action={() => answer({ decision: "decline" })}>
                   {t("Decline")}
                 </Action>
-                <Button variant="glass" className="primary" type="submit">
+                <Button variant="default" className="primary" type="submit">
                   {t("Submit answer")}
                 </Button>
               </div>
@@ -558,7 +558,7 @@ export function createApprovals({
           <nav className="request-actions" aria-label={t("Pending requests")}>
             {requests.map((value, index) => (
               <Button
-                variant="glass"
+                variant="default"
                 key={requestKey(value)}
                 type="button"
                 aria-pressed={value === request}

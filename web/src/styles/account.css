@@ -1,6 +1,6 @@
 .account-dashboard {
   grid-template-columns: minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 .account-dashboard .admin-main {
   width: 100%;
@@ -10,20 +10,33 @@
   width: 100%;
   margin: 0 auto;
 }
-.account-dashboard .admin-page-heading > div:last-child {
+.account-dashboard .admin-page-heading > .theme-toggle {
   flex-shrink: 0;
+}
+.account-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 24px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.account-brand .icon {
+  width: 28px;
+  height: 28px;
 }
 .account-dashboard.account-auth-view .admin-main {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 85vh;
+  min-height: 100dvh;
 }
 .account-dashboard.account-auth-view .admin-content {
   max-width: 480px;
   width: 100%;
-  margin: 4vh auto;
+  margin: 24px auto;
   padding: 0 16px;
 }
 .account-dashboard.account-auth-view .admin-page-heading {

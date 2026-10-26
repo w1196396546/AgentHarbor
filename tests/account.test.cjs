@@ -89,7 +89,7 @@ for (const engine of engines)
           url.pathname === "/account"
             ? "account.html"
             : path.basename(url.pathname);
-        if (!["account.html", "account.js", "account.css"].includes(file))
+        if (!["account.html", "account.js", "account.css", "icon.svg"].includes(file))
           return route.fulfill({ status: 404 });
         await route.fulfill({
           status: 200,
@@ -97,7 +97,9 @@ for (const engine of engines)
             ? "text/javascript"
             : file.endsWith(".css")
               ? "text/css"
-              : "text/html",
+              : file.endsWith(".svg")
+                ? "image/svg+xml"
+                : "text/html",
           body: await fs.readFile(path.join(assetDir, file)),
         });
       });

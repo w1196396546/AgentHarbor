@@ -25,16 +25,19 @@ for (const engine of engines) for (const locale of ['en-US','zh-CN']) {
     sessions:[{id:'pinned',title:'Pinned thread',cwd:'/work/project',project_id:'project',pinned:true,last:'2026-10-20T08:00:00Z'},{id:'project-thread',title:'Project thread',cwd:'/work/project',project_id:'project',last:'2026-10-22T08:00:00Z'},{id:'recent',title:'Recent thread',cwd:'/work/recent',last:'2026-10-21T08:00:00Z'}],
     next:3,has_more:false
    }});
+   if(pathname==='/api/threads/recent/changes')return route.fulfill({json:{changes:[]}});
+   if(pathname==='/api/threads/recent/plan')return route.fulfill({json:{plan:null}});
+   if(pathname==='/api/sessions/recent')return route.fulfill({json:{session:{id:'recent',title:'Recent thread',cwd:'/work/recent',source:'remote'},history_items:[],live:{status:'idle',items:[]}}});
    if(pathname==='/api/options')return route.fulfill({json:{models:[],modes:[],permissions:[],defaults:{},capabilities:{}}});
    if(pathname.startsWith('/api/')){unknown.push(pathname);return route.fulfill({status:404})}
    const name=pathname==='/'?'index.html':pathname.slice(1);
    if(name==='favicon.ico')return route.fulfill({status:204});
-   try{return route.fulfill({body:await fs.readFile(path.join(assets,name)),contentType:{'.html':'text/html','.css':'text/css','.js':'text/javascript'}[path.extname(name)]})}
+   try{return route.fulfill({body:await fs.readFile(path.join(assets,name)),contentType:{'.html':'text/html','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'}[path.extname(name)]})}
    catch{unknown.push(pathname);return route.fulfill({status:404})}
   });
   await page.goto('https://catalog.test/');
   await page.locator('[data-path="pinned"] [data-id=pinned]').waitFor();
-  const pinned=locale==='zh-CN'?'置顶':'Pinned',recent=locale==='zh-CN'?'最近':'Recent';
+  const pinned=locale==='zh-CN'?'置顶':'Pinned',recent=locale==='zh-CN'?'最新':'Latest';
   const summaries=()=>page.locator('#sessions .project-group:not(.project-collection) > summary').allTextContents();
   const recentRows=page.locator('[data-path="recent"] [data-id]');
   assert.deepEqual(await summaries(),[pinned,'Named App Project','Empty App Project',recent]);
@@ -53,6 +56,20 @@ for (const engine of engines) for (const locale of ['en-US','zh-CN']) {
   assert.deepEqual(await summaries(),['Named App Project',recent]);
   await page.locator('#search').fill('');
   await page.waitForFunction(()=>document.querySelectorAll('#sessions [data-id]').length===5);
+  await recentRows.filter({hasText:'Recent thread'}).click();
+  const current=page.locator('[data-path="current"]');
+  await current.locator('[data-id="recent"][aria-current="true"]').waitFor();
+  assert.equal(await current.locator('summary').textContent(),locale==='zh-CN'?'当前':'Current');
+  assert.equal(await recentRows.filter({hasText:'Recent thread'}).count(),0);
+  assert.equal(await page.locator('#sessions [data-id="recent"]').count(),1,'current selection must not add another duplicate row');
+  assert.equal(await page.locator('#sessionCount').textContent(),'3');
+  await page.locator('#search').fill('Pinned thread');
+  await current.waitFor({state:'detached'});
+  await page.locator('#search').fill('');
+  await current.locator('[data-id="recent"]').waitFor();
+  await page.locator('[data-path="project:empty"] button').click();
+  await current.waitFor({state:'detached'});
+  await recentRows.filter({hasText:'Recent thread'}).waitFor();
   assert.deepEqual(errors,[]);assert.deepEqual(unknown,[]);
  });
 }

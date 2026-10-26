@@ -6,11 +6,11 @@ import {
   CircleCheck,
   Monitor,
   RefreshCw,
-  Server,
   Settings2,
   ShieldCheck,
   Unplug,
 } from "lucide-react";
+import { RemoteIcon } from "./components/RemoteIcon";
 import { Button } from "./components/ui/button";
 import { Panel } from "./components/ui/panel";
 import { Label } from "./components/ui/label";
@@ -118,7 +118,7 @@ function AdminApp() {
         >
           <div className="login-content">
             <span className="admin-mark">
-              <ShieldCheck size={28} />
+              <RemoteIcon name="brand" />
             </span>
             <span className="admin-eyebrow">RELAY CONSOLE</span>
             <h1>管理你的中转服务</h1>
@@ -156,7 +156,7 @@ function AdminApp() {
               <p id="loginError" role="alert">
                 {loginError}
               </p>
-              <Button type="submit" variant="glass" data-strong disabled={busy}>
+              <Button type="submit" variant="default" data-strong disabled={busy}>
                 进入控制台 <ArrowRight size={16} />
               </Button>
             </form>
@@ -172,10 +172,10 @@ function AdminApp() {
         </Panel>
       </main>
       <main id="dashboard" hidden={!state} className="admin-dashboard">
-        <aside className="admin-sidebar glass-panel">
+        <aside className="admin-sidebar">
           <a href="/admin/" className="admin-brand">
             <span className="admin-brand-icon">
-              <Server size={20} />
+              <RemoteIcon name="brand" />
             </span>
             <span>
               anywhereToAgent<strong>Relay console</strong>
@@ -246,7 +246,7 @@ function AdminApp() {
               </div>
               <Button
                 id="refresh"
-                variant="glass"
+                variant="default"
                 disabled={busy}
                 onClick={() => run(refresh)}
               >

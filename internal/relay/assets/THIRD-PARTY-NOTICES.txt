@@ -67,5 +67,7 @@ Icons are [Lucide](https://lucide.dev) (ISC), with [Tabler](https://tabler.io/ic
 
 Solid Glass snapshot: `6e8903e494a15491ceda38fafea5056c95a74d44`.
 The selected upstream components and local adaptations are enumerated in `web/README.md`.
-Only Solid Glass styles, selected React components and Lucide icons are bundled;
-upstream example apps, imagery and fonts are not distributed here.
+Selected adapted React components retain this historical attribution. The Solid
+Glass CSS and multi-style engine were removed in the 2026-10-26 redesign.
+Base UI and Lucide remain; upstream example apps, imagery and fonts are not
+distributed here.

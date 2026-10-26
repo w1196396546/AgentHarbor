@@ -67,7 +67,7 @@ function DiffView({ patch, className }: { patch: string; className?: string }) {
     <div
       data-slot="diff-view"
       className={cn(
-        "glass-panel scrollbar-thin max-h-80 overflow-auto rounded-md py-1 font-mono text-[11.5px] leading-[1.6]",
+        "surface-panel scrollbar-thin max-h-80 overflow-auto rounded-md py-1 font-mono text-[11.5px] leading-[1.6]",
         className,
       )}
     >

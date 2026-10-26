@@ -25,7 +25,7 @@ async function fixture(t, engine, locale = 'en-US', catalog, clock = false) {
     if (name === 'favicon.ico') return route.fulfill({status: 204});
     if (pathname.startsWith('/api/')) { unknown.push(pathname); return route.fulfill({status: 404}); }
     try {
-      return route.fulfill({body: await fs.readFile(path.join(assets, name)), contentType: {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript'}[path.extname(name)], headers: {'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:"}});
+      return route.fulfill({body: await fs.readFile(path.join(assets, name)), contentType: {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml'}[path.extname(name)], headers: {'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:"}});
     } catch { unknown.push(pathname); return route.fulfill({status: 404}); }
   });
   await page.goto('https://sidebar.test/');
@@ -114,9 +114,9 @@ for (const engine of engines) {
       if (cancel) await page.keyboard.press('Escape');
       await page.mouse.up();
     };
-    await open(); await panelWidth(280);
-    await dragRight(-160); await panelWidth(440);
-    await width(page, 244);
+    await open(); await panelWidth(400);
+    await dragRight(-40); await panelWidth(440);
+    await width(page, 270);
     await handle.press('ArrowLeft'); await panelWidth(450);
     await handle.press('ArrowRight'); await panelWidth(440);
     await dragRight(-80, true); await panelWidth(440);
@@ -130,7 +130,7 @@ for (const engine of engines) {
     await panelWidth(Number(await handle.getAttribute('aria-valuemax')));
     await page.setViewportSize({width:1000,height:850});
     await panelWidth(710);
-    await width(page, 244);
+    await width(page, 270);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await handle.isVisible(), false);
     assert(await panel.evaluate(node => node.getBoundingClientRect().width <= innerWidth - 20));
@@ -180,8 +180,8 @@ for (const engine of engines) {
 
   test(`${engine}: sidebar drag and keyboard widths persist, respect bounds and keep history scrollable`, async t => {
     const f = await fixture(t, engine), {page} = f;
-    await width(page, 244);
-    await drag(page, 176); await width(page, 420);
+    await width(page, 270);
+    await drag(page, 150); await width(page, 420);
     await page.reload(); await page.locator('#workspace:visible').waitFor(); await width(page, 420);
     const handle = page.getByRole('separator', {name: 'Resize sidebar'});
     await handle.focus(); await page.keyboard.press('ArrowLeft'); await width(page, 410);
@@ -212,7 +212,7 @@ for (const engine of engines) {
 
   test(`${engine}: desktop sidebar collapses, remembers state and keyboard search restores it`, async t => {
     const f = await fixture(t, engine), {page} = f;
-    await drag(page, 96); await width(page, 340);
+    await drag(page, 70); await width(page, 340);
     await page.getByRole('button', {name: 'Collapse sidebar'}).click(); await width(page, 0);
     assert.equal(await page.locator('#sidebar').evaluate(element => element.inert), true);
     assert.equal(await page.locator('#desktopSidebarToggle').getAttribute('aria-expanded'), 'false');
@@ -234,7 +234,7 @@ for (const engine of engines) {
     await page.setViewportSize({width: 1440, height: 850}); await width(page, 480);
     await page.setViewportSize({width: 1181, height: 850});
     await page.locator('#workspace').evaluate(workspace => workspace.classList.add('has-changes'));
-    await width(page, 391);
+    await width(page, 271);
     await page.locator('#workspace').evaluate(workspace => workspace.classList.remove('has-changes'));
     await width(page, 480);
     await page.setViewportSize({width: 1440, height: 850});
@@ -245,7 +245,7 @@ for (const engine of engines) {
     assert.equal(await page.locator('#sidebar').evaluate(element => element.inert), false);
     await page.locator('#sidebarToggle').click();
     await page.waitForFunction(() => Math.abs(document.getElementById('sidebar').getBoundingClientRect().left) < 1);
-    await width(page, 280);
+    await width(page, 346);
     assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'true');
     await page.locator('#navBackdrop').click({position: {x: 380, y: 300}});
     await page.waitForFunction(() => document.getElementById('sidebar').getBoundingClientRect().right < 1);

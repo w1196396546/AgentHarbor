@@ -225,6 +225,7 @@ for (const engine of engines)
                 ".html": "text/html",
                 ".js": "text/javascript",
                 ".css": "text/css",
+                ".svg": "image/svg+xml",
               }[path.extname(name)],
               headers: {
                 "Content-Security-Policy":
@@ -239,7 +240,7 @@ for (const engine of engines)
         await page.locator("#workspace:visible").waitFor();
         assert.equal(await page.title(), "anywhereToAgent");
         assert.equal(
-          await page.locator(".brand strong").innerText(),
+          await page.locator(".brand small").innerText(),
           "anywhereToAgent",
         );
         assert.equal(

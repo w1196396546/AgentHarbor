@@ -284,7 +284,7 @@ export function DeviceSwitcher({ pairRequested = false }) {
             </Button>
             <Button
               type="submit"
-              variant="glass"
+              variant="default"
               disabled={busy}
               data-t="Pair browser"
             >
@@ -309,7 +309,7 @@ export function DeviceConnect({ device, disabled }) {
     <>
       <Button
         type="button"
-        variant="glass"
+        variant="default"
         disabled={disabled || device.revoked}
         onClick={() => {
           try {

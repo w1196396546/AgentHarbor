@@ -195,6 +195,7 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
           ".html": "text/html",
           ".js": "text/javascript",
           ".css": "text/css",
+          ".svg": "image/svg+xml",
         }[path.extname(name)],
       });
     } catch {
@@ -456,13 +457,32 @@ for (const engine of engines) {
       );
       if (width <= 760) {
         const permission = await page.locator("#permission").boundingBox();
+        const toolbar = await page.locator(".composer-toolbar").boundingBox();
         const scroll = await page.locator("#conversationScroll").boundingBox();
-        assert(permission.y + permission.height <= bubble.y, "floating controls do not overlap");
-        assert(bubble.y + bubble.height <= scroll.y + scroll.height, "agents float over the conversation");
-        assert(permission.y >= scroll.y, "permission floats over the conversation");
+        assert(
+          permission.x >= toolbar.x &&
+            permission.y >= toolbar.y &&
+            permission.x + permission.width <= toolbar.x + toolbar.width + 1 &&
+            permission.y + permission.height <= toolbar.y + toolbar.height + 1,
+          "permission stays inside the composer toolbar",
+        );
+        assert(
+          permission.x >= composer.x &&
+            permission.y >= composer.y &&
+            permission.x + permission.width <= composer.x + composer.width &&
+            permission.y + permission.height <= composer.y + composer.height,
+          "permission stays inside the composer",
+        );
+        assert(permission.width > 0 && permission.height >= 30, "permission remains a visible control");
+        assert(bubble.y + bubble.height <= permission.y, "agents do not overlap composer controls");
+        assert(
+          bubble.y >= scroll.y && bubble.x >= 0 && bubble.x + bubble.width <= width,
+          "agents stay visible below the conversation header",
+        );
         await page.locator("#latest").evaluate((node) => { node.hidden = false; });
         const latest = await page.locator("#latest").boundingBox();
         assert(bubble.x + bubble.width <= latest.x, "latest output does not overlap agents");
+        assert(latest.y + latest.height <= permission.y, "latest output does not overlap composer controls");
       }
       assert.equal(await page.locator("#sessions [data-id]").count(), 2);
       await page.locator("#message").fill("Keep my draft");

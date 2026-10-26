@@ -19,6 +19,7 @@ func (a *Admin) Handler() http.Handler {
 		a.asset(w, r, "admin.js", "text/javascript; charset=utf-8")
 	})
 	mux.HandleFunc("GET /admin/admin.css", func(w http.ResponseWriter, r *http.Request) { a.asset(w, r, "admin.css", "text/css; charset=utf-8") })
+	mux.HandleFunc("GET /icon.svg", func(w http.ResponseWriter, r *http.Request) { a.asset(w, r, "icon.svg", "image/svg+xml") })
 	mux.HandleFunc("POST /api/admin/login", a.login)
 	mux.HandleFunc("POST /api/admin/logout", func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie(adminCookieName); err == nil {

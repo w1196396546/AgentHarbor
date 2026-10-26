@@ -64,7 +64,7 @@ make build
 
 ## 开发
 
-需要 Go 1.26.8+ 和 Node.js 22.12+。前端使用 React 19、Vite、Tailwind CSS 4 和 [Solid Glass](https://github.com/deeplethe/solid-glass)，源码位于 `web/`。`make build` 自动安装前端依赖并构建页面，再将静态资源嵌入 Go 二进制；服务器运行时无需 Node.js。
+需要 Go 1.26.8+ 和 Node.js 22.12+。前端使用 React 19、Vite、Tailwind CSS 4 和 Base UI，采用统一的明暗两种外观，源码位于 `web/`。`make build` 自动安装前端依赖并构建页面，再将静态资源嵌入 Go 二进制；服务器运行时无需 Node.js。
 
 ### 构建与本地启动
 

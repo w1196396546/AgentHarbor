@@ -2,8 +2,9 @@ import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
-import { ThemeToggle, StyleToggle } from "../theme";
+import { ThemeToggle } from "../theme";
 import { DeviceSwitcher } from "../components/DeviceSwitcher";
+import { RemoteIcon } from "../components/RemoteIcon";
 
 export function Pairing() {
   return (
@@ -12,16 +13,11 @@ export function Pairing() {
       <Panel
         id="pair"
         title="anywhereToAgent"
-        actions={
-          <div style={{ display: "inline-flex", gap: "4px" }}>
-            <StyleToggle />
-            <ThemeToggle />
-          </div>
-        }
+        actions={<ThemeToggle />}
         hidden
         className="pair-card"
       >
-        <div className="pair-mark" data-icon="codex"></div>
+        <div className="pair-mark"><RemoteIcon name="brand" /></div>
         <p className="eyebrow">anywhereToAgent</p>
         <h1 data-t="Your computer, within reach."></h1>
         <p data-t="Scan the QR code on the remote connection page in agentTools, or enter its authorization code."></p>
@@ -38,7 +34,7 @@ export function Pairing() {
             autoCapitalize="off"
           />
           <Button
-            variant="glass"
+            variant="default"
             type="submit"
             className="primary"
             data-t="Pair browser"

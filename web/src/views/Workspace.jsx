@@ -19,7 +19,7 @@ import {
   Sidebar,
   DecisionSurface,
 } from "../components/workspace-surfaces";
-import { ThemeToggle, StyleToggle } from "../theme";
+import { ThemeToggle } from "../theme";
 import { DeviceSwitcher } from "../components/DeviceSwitcher";
 
 export function Workspace() {
@@ -36,20 +36,29 @@ export function Workspace() {
         ></Button>
         <Sidebar id="sidebar" aria-label="Projects and sessions">
           <a className="brand" href="/">
-            <span className="brand-mark" data-icon="codex"></span>
-            <strong>anywhereToAgent</strong>
+            <span className="brand-mark">
+              <Icon name="brand" />
+            </span>
+            <span className="brand-copy">
+              <strong id="activeAgentName" data-t="Codex"></strong>
+              <small>anywhereToAgent</small>
+            </span>
           </a>
-          <div className="px-3 pb-2">
-            <Label htmlFor="agentSelect" data-t="Agent"></Label>
+          <div className="agent-switcher">
+            <Label
+              htmlFor="agentSelect"
+              className="sr-only"
+              data-t="Agent"
+            ></Label>
             <select
               id="agentSelect"
               data-label="Agent"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              className="agent-switcher-control"
               disabled
             ></select>
             <p
               id="agentConnectionStatus"
-              className="mt-1 text-xs text-muted-foreground break-words"
+              className="agent-connection-status"
               role="status"
               hidden
             ></p>
@@ -126,7 +135,6 @@ export function Workspace() {
                 <span data-t="My account and devices"></span>
               </a>
               <ThemeToggle />
-              <StyleToggle />
               <Button
                 variant="ghost"
                 id="language"
@@ -158,7 +166,7 @@ export function Workspace() {
             aria-controls="sidebar"
             aria-valuemin="220"
             aria-valuemax="480"
-            aria-valuenow="244"
+            aria-valuenow="270"
             aria-describedby="sidebarResizeHint"
             data-label="Resize sidebar"
           ></div>
@@ -222,6 +230,10 @@ export function Workspace() {
                 <Icon name="warning" />
               </span>
             </Button>
+            <span className="execution-identity">
+              <span data-icon="codex"></span>
+              <span id="executionAgentName" data-t="Codex"></span>
+            </span>
             <span id="state" className="status-pill" role="status"></span>
             <a
               id="openCodex"
@@ -494,17 +506,6 @@ export function Workspace() {
               <ComposerSurface>
                 <div id="attachments" className="attachment-list" />
                 <div className="composer-line">
-                  <Button
-                    variant="ghost"
-                    id="attach"
-                    className="icon-button"
-                    type="button"
-                    data-label="Add attachments"
-                  >
-                    <span data-icon="plus">
-                      <Icon name="plus" />
-                    </span>
-                  </Button>
                   <Label
                     htmlFor="message"
                     className="sr-only"
@@ -521,6 +522,110 @@ export function Workspace() {
                     data-placeholder="Ask Codex to do anything. @ for files, / for tools."
                     spellCheck="false"
                   />
+                </div>
+                <div className="composer-controls">
+                  <Button
+                    variant="ghost"
+                    id="attach"
+                    className="icon-button"
+                    type="button"
+                    data-label="Add attachments"
+                  >
+                    <span data-icon="plus">
+                      <Icon name="plus" />
+                    </span>
+                  </Button>
+                  <ComposerFooter className="composer-toolbar">
+                    <div className="composer-left">
+                      <Button
+                        variant="ghost"
+                        id="permission"
+                        className="composer-chip"
+                        type="button"
+                        aria-haspopup="menu"
+                      >
+                        <span data-icon="shield">
+                          <Icon name="shield" />
+                        </span>
+                        <span data-t="Workspace access"></span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        id="mode"
+                        className="composer-chip"
+                        type="button"
+                        aria-haspopup="menu"
+                      >
+                        <span data-icon="plan">
+                          <Icon name="plan" />
+                        </span>
+                        <span data-t="Default mode"></span>
+                      </Button>
+                    </div>
+                    <ComposerFooterEnd className="composer-right">
+                      <Button
+                        variant="ghost"
+                        id="model"
+                        className="composer-chip"
+                        type="button"
+                        aria-haspopup="dialog"
+                        aria-controls="reasoningCard"
+                        aria-expanded="false"
+                      >
+                        <span data-t="Configured model"></span>
+                        <span data-icon="chevron">
+                          <Icon name="chevron" />
+                        </span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        id="effort"
+                        className="composer-chip"
+                        type="button"
+                        aria-haspopup="dialog"
+                        aria-controls="reasoningCard"
+                        aria-expanded="false"
+                      >
+                        <span data-t="Default effort"></span>
+                        <span data-icon="chevron">
+                          <Icon name="chevron" />
+                        </span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        id="contextUsage"
+                        className="context-usage icon-button"
+                        type="button"
+                        data-label="Context usage"
+                        aria-haspopup="dialog"
+                        aria-controls="contextUsageDialog"
+                        hidden
+                      >
+                        <svg
+                          className="context-ring"
+                          viewBox="0 0 32 32"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            className="context-ring-track"
+                            cx="16"
+                            cy="16"
+                            r="12"
+                            pathLength="100"
+                          ></circle>
+                          <circle
+                            id="contextUsageRing"
+                            cx="16"
+                            cy="16"
+                            r="12"
+                            pathLength="100"
+                            strokeDasharray="0 100"
+                          ></circle>
+                        </svg>
+                        <span id="contextUsageText" className="sr-only"></span>
+                      </Button>
+                    </ComposerFooterEnd>
+                  </ComposerFooter>
                   <Button
                     variant="ghost"
                     id="stop"
@@ -552,97 +657,6 @@ export function Workspace() {
                 role="listbox"
                 hidden
               />
-              <ComposerFooter className="composer-toolbar">
-                <div className="composer-left">
-                  <Button
-                    variant="ghost"
-                    id="permission"
-                    className="composer-chip"
-                    type="button"
-                    aria-haspopup="menu"
-                  >
-                    <span data-icon="shield">
-                      <Icon name="shield" />
-                    </span>
-                    <span data-t="Workspace access"></span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    id="mode"
-                    className="composer-chip"
-                    type="button"
-                    aria-haspopup="menu"
-                  >
-                    <span data-icon="plan">
-                      <Icon name="plan" />
-                    </span>
-                    <span data-t="Default mode"></span>
-                  </Button>
-                </div>
-                <ComposerFooterEnd className="composer-right">
-                  <Button
-                    variant="ghost"
-                    id="model"
-                    className="composer-chip"
-                    type="button"
-                    aria-haspopup="dialog"
-                    aria-controls="reasoningCard"
-                    aria-expanded="false"
-                  >
-                    <span data-t="Configured model"></span>
-                    <span data-icon="chevron">
-                      <Icon name="chevron" />
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    id="effort"
-                    className="composer-chip"
-                    type="button"
-                    aria-haspopup="dialog"
-                    aria-controls="reasoningCard"
-                    aria-expanded="false"
-                  >
-                    <span data-t="Default effort"></span>
-                    <span data-icon="chevron">
-                      <Icon name="chevron" />
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    id="contextUsage"
-                    className="context-usage icon-button"
-                    type="button"
-                    data-label="Context usage"
-                    aria-haspopup="dialog"
-                    aria-controls="contextUsageDialog"
-                    hidden
-                  >
-                    <svg
-                      className="context-ring"
-                      viewBox="0 0 32 32"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        className="context-ring-track"
-                        cx="16"
-                        cy="16"
-                        r="12"
-                        pathLength="100"
-                      ></circle>
-                      <circle
-                        id="contextUsageRing"
-                        cx="16"
-                        cy="16"
-                        r="12"
-                        pathLength="100"
-                        strokeDasharray="0 100"
-                      ></circle>
-                    </svg>
-                    <span id="contextUsageText" className="sr-only"></span>
-                  </Button>
-                </ComposerFooterEnd>
-              </ComposerFooter>
               <input id="fileInput" type="file" multiple hidden />
             </form>
             <div className="composer-caption">
@@ -717,7 +731,7 @@ export function Workspace() {
             aria-controls="changesPanel"
             aria-valuemin="280"
             aria-valuemax="720"
-            aria-valuenow="280"
+            aria-valuenow="400"
             aria-describedby="sidebarResizeHint"
             data-label="Resize right panel"
           ></div>

@@ -65,7 +65,7 @@ export function startRemote() {
     return (
       <Button
         type="button"
-        variant={props.className?.includes("primary") ? "glass" : "ghost"}
+        variant={props.className?.includes("primary") ? "default" : "ghost"}
         {...props}
         onClick={(event) => run(action, event.currentTarget)}
       >

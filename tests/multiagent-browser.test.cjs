@@ -326,6 +326,7 @@ async function fixture(t, engine, config = {}) {
           ".html": "text/html",
           ".js": "text/javascript",
           ".css": "text/css",
+          ".svg": "image/svg+xml",
         }[path.extname(name)],
       });
     } catch {
@@ -814,7 +815,39 @@ for (const engine of engines) {
         await page.locator("#message").fill("Phone Codex draft " + theme);
         await page.locator("#sidebarToggle").click();
         await chooseAgent(page, "claude-desktop");
+        assert.equal(
+          await selector.locator("option:checked").textContent(),
+          "Claude Desktop",
+        );
+        assert.equal(
+          await page.locator("#activeAgentName").innerText(),
+          "Claude Desktop",
+        );
+        assert.equal(
+          await page.locator("#executionAgentName").innerText(),
+          "Claude Desktop",
+        );
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          "the Agent drawer must fit the phone viewport",
+        );
+        if (process.env.ARTIFACT_DIR) {
+          await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
+          await page.screenshot({
+            path: path.join(
+              process.env.ARTIFACT_DIR,
+              `mobile-claude-${theme}-${engine}.png`,
+            ),
+            animations: "disabled",
+          });
+        }
         await chooseAgent(page, "codex");
+        assert.equal(
+          await page.locator("#activeAgentName").innerText(),
+          "Codex",
+        );
         await page
           .locator("#navBackdrop")
           .click({ position: { x: 380, y: 500 } });

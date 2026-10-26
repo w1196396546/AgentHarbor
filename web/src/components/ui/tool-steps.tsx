@@ -41,7 +41,7 @@ function OutputBlock({
   return (
     <div
       data-slot="output-block"
-      className={cn("glass-panel overflow-hidden rounded-md", className)}
+      className={cn("surface-panel overflow-hidden rounded-md", className)}
     >
       <div className="border-b border-border/70 px-3 py-1 text-[11px] text-muted-foreground">
         {label}
@@ -138,7 +138,7 @@ function StepList({
     <div
       data-slot="step-list"
       className={cn(
-        "glass-panel flex flex-col divide-y divide-border rounded-md",
+        "surface-panel flex flex-col divide-y divide-border rounded-md",
         className,
       )}
     >
@@ -226,7 +226,7 @@ export function StepDisclosure({
   return (
     <details
       data-slot="step-row"
-      className={cn("glass-panel tool-disclosure", className)}
+      className={cn("surface-panel tool-disclosure", className)}
       {...props}
     />
   );

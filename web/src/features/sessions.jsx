@@ -158,7 +158,8 @@ export function createSessions({
       }
       for (const capability of ["controls_options", "connection_metadata"])
         if (typeof value.capabilities?.[capability] === "boolean")
-          state.catalog.capabilities[capability] = value.capabilities[capability];
+          state.catalog.capabilities[capability] =
+            value.capabilities[capability];
       state.projects = value.projects || [];
       state.sidebarProjects = value.sidebar_projects || null;
       state.pinnedIDs = value.pinned_ids || [];
@@ -288,11 +289,13 @@ export function createSessions({
           sessions: [],
         });
       groups.set("recent", {
-        name: t("Recent"),
+        name: t("Latest"),
         icon: "clock",
-        sessions: [...rows].sort(
-          (a, b) => (Date.parse(b.last) || 0) - (Date.parse(a.last) || 0),
-        ),
+        sessions: rows
+          .filter((session) => session.id !== state.selected)
+          .sort(
+            (a, b) => (Date.parse(b.last) || 0) - (Date.parse(a.last) || 0),
+          ),
       });
       for (const session of rows) {
         const key =
@@ -303,6 +306,7 @@ export function createSessions({
       }
     } else {
       for (const session of rows) {
+        if (session.id === state.selected) continue;
         const owner =
           owningProject(state.projects, session.cwd) || session.cwd || "";
         if (!groups.has(owner))
@@ -315,6 +319,13 @@ export function createSessions({
         groups.get(owner).sessions.push(session);
       }
     }
+    const current = rows.find((session) => session.id === state.selected);
+    if (current)
+      groups.set("current", {
+        name: t("Current"),
+        icon: "agent",
+        sessions: [current],
+      });
     const visibleGroups = [...groups].filter(
       ([, group]) => group.sessions.length || (!query && group.project),
     );
@@ -357,6 +368,8 @@ export function createSessions({
             <PanelRow
               key={session.id}
               chosen={session.id === state.selected}
+              className={owner === "current" ? "current-session" : undefined}
+              data-status={session.status || "unknown"}
               data-id={session.id}
               aria-current={String(session.id === state.selected)}
               title={session.title || t("Untitled session")}
@@ -364,11 +377,29 @@ export function createSessions({
                 run(() => select(session.id), event.currentTarget)
               }
             >
-              <Icon name="file" />
-              <span className="session-title">
-                {session.title === "New session"
-                  ? t("New session")
-                  : session.title || t("Untitled session")}
+              <Icon name={owner === "current" ? "agent" : "file"} />
+              <span className="session-copy">
+                <span className="session-title">
+                  {session.title === "New session"
+                    ? t("New session")
+                    : session.title || t("Untitled session")}
+                </span>
+                {owner === "current" && session.status && (
+                  <span className="session-detail">
+                    {t(
+                      {
+                        running: "Running",
+                        inProgress: "Running",
+                        starting: "Running",
+                        waiting: "Waiting for you",
+                        completed: "Completed",
+                        failed: "Failed",
+                        interrupted: "Interrupted",
+                        unknown: "Unknown",
+                      }[session.status] || "",
+                    )}
+                  </span>
+                )}
               </span>
               {session.source && (
                 <span className="session-source">
@@ -426,6 +457,9 @@ export function createSessions({
         {visibleGroups
           .filter(([, group]) => group.icon === "clock")
           .map(renderGroup)}
+        {visibleGroups
+          .filter(([owner]) => owner === "current")
+          .map(renderGroup)}
         {!rows.length && (
           <p className="note">
             {t(query ? "No matching conversations." : "No sessions yet.")}
@@ -479,11 +513,13 @@ export function createSessions({
       const result = apply(await api("options?" + query));
       if (result && controls) {
         query.delete("scope");
-        api("options?" + query).then(apply).catch((error) => {
-          if (seq !== state.optionsSeq) return;
-          $("capabilityIssue").hidden = false;
-          notice(error.message);
-        });
+        api("options?" + query)
+          .then(apply)
+          .catch((error) => {
+            if (seq !== state.optionsSeq) return;
+            $("capabilityIssue").hidden = false;
+            notice(error.message);
+          });
       }
       return result;
     } catch (e) {

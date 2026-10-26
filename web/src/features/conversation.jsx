@@ -699,6 +699,10 @@ export function createConversation({
                   </>
                 ) : (
                   <>
+                    <div className="agent-message-heading">
+                      <Icon name={getAgent().icon} />
+                      <strong>{getAgent().name}</strong>
+                    </div>
                     {data.phase && (
                       <p className="message-phase">
                         {t(
