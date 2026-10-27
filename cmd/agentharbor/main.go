@@ -1,4 +1,4 @@
-// Command anywhereToAgent serves the public web UI and relay for agentTools clients.
+// Command AgentHarbor serves the public web UI and relay for agentTools clients.
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"anywheretoagent/internal/relay"
+	"agentharbor/internal/relay"
 )
 
 func main() {

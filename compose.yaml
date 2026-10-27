@@ -1,7 +1,7 @@
 services:
-  anywheretoagent:
+  agentharbor:
     build: .
-    image: anywheretoagent:local
+    image: agentharbor:local
     restart: unless-stopped
     # Linux only: both listeners stay on host loopback; HTTPS proxy runs on this host.
     network_mode: host
@@ -12,7 +12,7 @@ services:
       - --listen
       - 127.0.0.1:8080
       - --public-url
-      - ${ANYWHERE_TO_AGENT_PUBLIC_URL:-${CODEX_REMOTE_PUBLIC_URL:?Set ANYWHERE_TO_AGENT_PUBLIC_URL to your HTTPS relay URL}}
+      - ${AGENTHARBOR_PUBLIC_URL:-${ANYWHERE_TO_AGENT_PUBLIC_URL:-${CODEX_REMOTE_PUBLIC_URL:?Set AGENTHARBOR_PUBLIC_URL to your HTTPS relay URL}}}
       - --admin-listen
       - 127.0.0.1:9090
     volumes:

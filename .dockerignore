@@ -13,5 +13,8 @@ codex-remote.exe
 *.key
 *.pem
 
-anywhereToAgent
-anywhereToAgent.exe
+agentharbor
+agentharbor.exe
+
+/anywhereToAgent
+/anywhereToAgent.exe

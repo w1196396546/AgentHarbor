@@ -13,7 +13,7 @@
 ## 工作区
 
 - agentTools：`/Users/weihaiqiu/IdeaProjects/agenttools-user-input-20261021`，分支 `codex/shared-user-input-20261021`，基于 `28879abe`。仅增加协议回归与更新远程参考，未修改运行代码。
-- anywhereToAgent：`/Users/weihaiqiu/IdeaProjects/anywhere-user-input-20261021`，同名独立分支，基于 `3bbb39b`。网页、嵌入资源和回归都在这个 worktree。
+- AgentHarbor：`/Users/weihaiqiu/IdeaProjects/anywhere-user-input-20261021`，同名独立分支，基于 `3bbb39b`。网页、嵌入资源和回归都在这个 worktree。
 - 实现工作树不包含其它会话之后新增的配对/设备切换修改。合并时保留原 checkout 的未提交工作；重叠文档合并两侧内容，嵌入资源由合并后的源码重新生成。
 
 ## 结果
@@ -34,7 +34,7 @@
 - 旧版资源 `REMOTE_ASSET_DIR` 指向改动前网页时，新英文 Chromium 用例在等待 `#requestDialog[open]` 处实际失败，最终资源同用例通过。
 - 网页全套（含新解析测试和五语言问答，SSE 两项随后单独增加并通过）共 290 项：274 通过、16 失败，不能称全绿。失败详情见下一节。
 - agentTools 隔离 HOME、固定 Go 缓存：`go test -race ./internal/remoteclient/... -count=1` 全部通过；Windows、Linux `go vet ./internal/remoteclient/agents/codex/...` 通过；新增 Go 文件 gofmt 检查无输出。
-- anywhereToAgent 隔离 HOME、固定 Go 缓存：`go test -race ./...` 全部通过。
+- AgentHarbor 隔离 HOME、固定 Go 缓存：`go test -race ./...` 全部通过。
 - Chromium/WebKit 390px 问答截图已人工查看，位于 `/tmp/agenttools-question-screenshots/`。关键日志位于 `/tmp/agenttools-question-{full-ui,before,baseline,focused,stream}.log`。
 
 ## 全套网页回归的开放问题

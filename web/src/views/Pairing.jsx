@@ -12,7 +12,7 @@ export function Pairing() {
       <div id="notice" role="status" aria-live="polite"></div>
       <Panel
         id="pair"
-        title="anywhereToAgent"
+        title="AgentHarbor"
         actions={<ThemeToggle />}
         hidden
         className="pair-card"

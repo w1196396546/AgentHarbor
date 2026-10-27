@@ -1,6 +1,6 @@
 # 架构与授权边界
 
-anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远程网页和服务端管理页。agentTools 内置连接端、Agent 注册表与执行适配器，可按本机配置启用 Codex 与 Claude Desktop。两者通过 WebSocket 协议通信，分别构建和部署；服务器不导入 agentTools 的网关、账号或本机进程代码。
+AgentHarbor 是独立 Go 模块 `agentharbor`，提供公网中转、远程网页和服务端管理页。agentTools 内置连接端、Agent 注册表与执行适配器，可按本机配置启用 Codex 与 Claude Desktop。两者通过 WebSocket 协议通信，分别构建和部署；服务器不导入 agentTools 的网关、账号或本机进程代码。
 
 ## 阅读范围与验证记录
 
@@ -20,7 +20,7 @@ anywhereToAgent 是独立 Go 模块 `anywheretoagent`，提供公网中转、远
 
 ```mermaid
 flowchart LR
-  Browser[手机 / 远程浏览器] -->|HTTPS 请求 / SSE| Relay[anywhereToAgent]
+  Browser[手机 / 远程浏览器] -->|HTTPS 请求 / SSE| Relay[AgentHarbor]
   Client[agentTools 连接端] -->|主动 WSS 连接| Relay
   Client -->|本机请求| Engine[本机 Agent 适配器]
   Engine -->|后台创建 / 恢复 / 轮次| Codex[本机官方 Codex app-server]
@@ -58,7 +58,7 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 
 | 路径 | 职责 |
 | --- | --- |
-| `cmd/anywhereToAgent` | 进程入口、配置参数、监听与退出；兼容旧默认数据路径 |
+| `cmd/agentharbor` | 进程入口、配置参数、监听与退出；兼容旧默认数据路径 |
 | `internal/relay/server.go`、`http.go`、`assets.go` | 服务生命周期、来源校验、可信代理 IP 与限流、路由及嵌入网页 |
 | `internal/relay/devices.go`、`connection.go`、`state.go` | 设备目录/撤销、WSS 登记与心跳、原子私有持久化 |
 | `internal/relay/sessions.go`、`pairing.go`、`secure.go` | 浏览器授权映射、配对、受限密文代理 |
@@ -66,7 +66,7 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 | `internal/transport/tunnel` | 有界 HTTP 帧、共享 WebSocket peer、请求/响应及背压，不导入 Agent 执行代码 |
 | `web/src/agents` | 网页 Agent 适配入口；现有 Codex 控制及展示逻辑保留其专属语义 |
 
-名称兼容：二进制和新部署模板使用 `anywhereToAgent`，Go module 使用 `anywheretoagent`。既有 `relay-state.json` schema、`admin-token`、`codex-remote` / `__Host-codex-remote` 浏览器 cookie 以及 `codex-relay-admin` 管理 cookie 保持不变，重命名不会清除浏览器授权。通用写请求标记为 `X-Remote-Request: 1`、管理标记为 `X-Remote-Admin: 1`，同时接受原 `X-Codex-Remote` / `X-Codex-Admin`，来源校验不变。中转向旧客户端转发时仍附带旧请求标记；浏览器提供的明文 Agent、owner、游标与任意其它头全部剥离。新安装默认使用系统配置目录下 `anywhereToAgent`；原 `codex-remote` 路径已存在时继续使用原位置；显式数据目录优先，服务不会迁移、合并或删除目录。Compose 的新入口变量为 `ANYWHERE_TO_AGENT_PUBLIC_URL`，原 `CODEX_REMOTE_PUBLIC_URL` 继续作为后备值。
+名称兼容：二进制和新部署模板使用 `agentharbor`，Go module 使用 `agentharbor`。既有 `relay-state.json` schema、`admin-token`、`codex-remote` / `__Host-codex-remote` 浏览器 cookie 以及 `codex-relay-admin` 管理 cookie 保持不变，重命名不会清除浏览器授权。通用写请求标记为 `X-Remote-Request: 1`、管理标记为 `X-Remote-Admin: 1`，同时接受原 `X-Codex-Remote` / `X-Codex-Admin`，来源校验不变。中转向旧客户端转发时仍附带旧请求标记；浏览器提供的明文 Agent、owner、游标与任意其它头全部剥离。新安装默认使用系统配置目录下 `agentharbor`；原 `codex-remote` / `anywhereToAgent` 路径已存在时继续使用原位置；显式数据目录优先，服务不会迁移、合并或删除目录。Compose 的新入口变量为 `AGENTHARBOR_PUBLIC_URL`，原 `ANYWHERE_TO_AGENT_PUBLIC_URL` / `CODEX_REMOTE_PUBLIC_URL` 继续作为后备值。
 
 ### 原生 owner 的细分能力
 
@@ -141,7 +141,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表和文�
 
 ## 服务端配置和持久化
 
-`cmd/anywhereToAgent` 启动网页/中转监听及独立管理监听。`internal/relay` 维护服务端，`internal/transport/tunnel` 定义传输协议。网页资源嵌入二进制。配置只有 `public_url`、`listen_address`、`data_dir`、`registration_enabled` 和可选的 `trusted_proxies`，不包含 Codex 程序、Codex home、共享根目录、SSH 或模型凭证。`trusted_proxies` 只允许明确列出的反向代理 CIDR 影响限流地址解析。
+`cmd/agentharbor` 启动网页/中转监听及独立管理监听。`internal/relay` 维护服务端，`internal/transport/tunnel` 定义传输协议。网页资源嵌入二进制。配置只有 `public_url`、`listen_address`、`data_dir`、`registration_enabled` 和可选的 `trusted_proxies`，不包含 Codex 程序、Codex home、共享根目录、SSH 或模型凭证。`trusted_proxies` 只允许明确列出的反向代理 CIDR 影响限流地址解析。
 
 私有数据目录保存 `relay-state.json` 和 `admin-token`；示例将管理员提供的配置文件也存为该目录的 `config.json`，只有显式指定 `--config` 才加载它，服务不会自动重写配置文件。状态写入先同步临时文件，再原子重命名并同步父目录；成功重命名后，内存状态跟随该文件，即使目录同步报告错误也不会回退到旧状态。Windows 上 Go 没有可移植的目录同步接口。`relay-state.json` 保存设备凭证哈希、浏览器授权映射、FullCupAI 用户资料、设备用户关联/别名及账户会话哈希，权限 0600；会话映射及用户资料仍须私有保护；不含平台凭证、原始授权 token 或加密密钥。原状态无需迁移文件即可载入，新增字段之后旧二进制因严格解析会拒绝读取；回滚应使用同时备份的旧状态，并知悉备份后撤销/新增的授权差异，不能静默删除新字段。`admin-token` 是独立管理凭证，也为 0600。解析失败不能当作空授权列表覆盖原状态，应报告错误并保留原文件。
 

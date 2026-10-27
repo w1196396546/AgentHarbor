@@ -1,7 +1,7 @@
 package relay
 
 import (
-	"anywheretoagent/internal/transport/tunnel"
+	"agentharbor/internal/transport/tunnel"
 	"bytes"
 	"context"
 	"encoding/json"

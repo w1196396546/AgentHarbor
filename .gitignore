@@ -8,9 +8,12 @@ node_modules/
 /codex-remote
 /codex-remote.exe
 
-/anywhereToAgent
-/anywhereToAgent.exe
+/agentharbor
+/agentharbor.exe
 .claude/
 
 # Local development instructions may contain private deployment details.
 /AGENTS.md
+
+/anywhereToAgent
+/anywhereToAgent.exe

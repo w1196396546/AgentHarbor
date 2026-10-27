@@ -1,11 +1,13 @@
-# anywhereToAgent
+# AgentHarbor · 泊舟
+
+随时随地，连接你的 Agent。原名 anywhereToAgent。
 
 agentTools 的独立公网中转服务和远程网页，访问由本机适配器提供的 Agent。网页按客户端声明的能力适配 Codex 和 Claude Desktop；具体执行支持由电脑端决定。在手机或另一台电脑打开网页，经过本机 agentTools 授权后，查看项目、历史会话并继续任务。
 
-**agentTools 是客户端，anywhereToAgent 是服务器。** agentTools 主动连接中转服务，不要求电脑有公网 IP、开放入站端口或为每个用户配置 SSH。可以使用客户端预设的服务，也可以部署自己的 Remote。
+**agentTools 是客户端，AgentHarbor 是服务器。** agentTools 主动连接中转服务，不要求电脑有公网 IP、开放入站端口或为每个用户配置 SSH。可以使用客户端预设的服务，也可以部署自己的 Remote。
 
 ```text
-手机 / 浏览器 ── HTTPS ── anywhereToAgent ── 出站 WSS 连接 ── agentTools ── 本机 Agent
+手机 / 浏览器 ── HTTPS ── AgentHarbor ── 出站 WSS 连接 ── agentTools ── 本机 Agent
                            公网中转                         项目、会话、文件
 ```
 
@@ -51,8 +53,8 @@ agentTools 的独立公网中转服务和远程网页，访问由本机适配器
 
 ```sh
 make build
-./anywhereToAgent \
-  --data-dir "$HOME/.local/share/anywhereToAgent" \
+./agentharbor \
+  --data-dir "$HOME/.local/share/agentharbor" \
   --listen 127.0.0.1:8080 \
   --public-url https://remote.example.com \
   --admin-listen 127.0.0.1:9090
@@ -72,7 +74,7 @@ make build
 make build
 # 使用独立临时状态，避免读写已有部署的数据目录。
 relay_dev_dir="$(mktemp -d)"
-./anywhereToAgent \
+./agentharbor \
   --data-dir "$relay_dev_dir" \
   --listen 127.0.0.1:8080 \
   --public-url http://127.0.0.1:8080 \
@@ -101,7 +103,7 @@ relay_dev_dir="$(mktemp -d)"
 
 | 路径 | 内容 |
 | --- | --- |
-| `cmd/anywhereToAgent/` | Go 程序入口与配置加载 |
+| `cmd/agentharbor/` | Go 程序入口与配置加载 |
 | `internal/relay/` | 设备路由、授权映射、账户、管理和静态资源 |
 | `internal/transport/tunnel/` | 有界 HTTP 流与 WebSocket 隧道 |
 | `web/src/` | React 页面、共享组件、交互功能及加密传输 |

@@ -1,4 +1,4 @@
-# 部署 anywhereToAgent 中转服务
+# 部署 AgentHarbor 中转服务
 
 服务器提供网页、中转和服务端管理；用户电脑运行带“远程连接”的 agentTools，主动通过 WSS 连接。服务器不运行 Agent、不配置模型 API 密钥、不读取用户 Agent 目录、不挂载项目，也不需要为用户设置 SSH。
 
@@ -12,18 +12,18 @@
 
 ```sh
 make build
-./anywhereToAgent --help
-mkdir -p "$HOME/.local/share/anywhereToAgent"
-chmod 700 "$HOME/.local/share/anywhereToAgent"
-cp deployment/config.example.json "$HOME/.local/share/anywhereToAgent/config.json"
+./agentharbor --help
+mkdir -p "$HOME/.local/share/agentharbor"
+chmod 700 "$HOME/.local/share/agentharbor"
+cp deployment/config.example.json "$HOME/.local/share/agentharbor/config.json"
 ```
 
 编辑刚复制的配置，把 `public_url` 改成自己的专用 HTTPS 域名，然后启动：
 
 ```sh
-./anywhereToAgent \
-  --data-dir "$HOME/.local/share/anywhereToAgent" \
-  --config "$HOME/.local/share/anywhereToAgent/config.json"
+./agentharbor \
+  --data-dir "$HOME/.local/share/agentharbor" \
+  --config "$HOME/.local/share/agentharbor/config.json"
 ```
 
 配置和命令行选项：
@@ -38,7 +38,7 @@ cp deployment/config.example.json "$HOME/.local/share/anywhereToAgent/config.jso
 | — | `--admin-listen` | 独立管理监听，默认 `127.0.0.1:9090`，只允许回环地址 |
 | — | `--config` | 严格 JSON 配置文件；显式传入的配置字段命令行选项覆盖文件值 |
 
-新安装默认数据目录为当前用户系统配置目录下的 `anywhereToAgent`；若原 `codex-remote` 目录已存在，继续使用原目录，避免遗失设备登记、浏览器授权和管理凭证。显式 `--data-dir` 或配置中的 `data_dir` 优先；更新已有服务时须保留原数据目录，本文的 anywhereToAgent 目录为新安装示例。`data_dir` 可省略并通过 `--data-dir` 指定。配置中不要写用户项目目录或 Agent 凭证。修改配置文件后重启本服务；服务端管理页展示当前配置、状态和设备，不修改客户端的 Agent 设置。
+新安装默认数据目录为当前用户系统配置目录下的 `agentharbor`；若原 `codex-remote` / `anywhereToAgent` 目录已存在，继续使用原目录，避免遗失设备登记、浏览器授权和管理凭证。显式 `--data-dir` 或配置中的 `data_dir` 优先；更新已有服务时须保留原数据目录，本文的 `agentharbor` 目录为新安装示例。`data_dir` 可省略并通过 `--data-dir` 指定。配置中不要写用户项目目录或 Agent 凭证。修改配置文件后重启本服务；服务端管理页展示当前配置、状态和设备，不修改客户端的 Agent 设置。
 
 `deployment/config.example.json` 默认关闭新设备登记。已有设备仍可重连；需要登记新设备时，启用 `registration_enabled`。公开注册的多用户中继应有意保持开启，并监控容量；旧配置未设置该字段时仍沿用允许登记的兼容默认值。`trusted_proxies` 仅填写直接连接中继的反向代理地址段；代理必须覆盖写入转发地址，不能把公网客户端可伪造的头直接交给中继。
 
@@ -85,24 +85,26 @@ ssh -N -L 19090:127.0.0.1:9090 'your-ssh-host'
 
 ## 系统服务
 
-Linux 用户服务模板：[anywhereToAgent.service](../deployment/anywhereToAgent.service)包含权限提升限制、私有临时目录、只读系统/主目录、状态目录写入白名单与地址族限制。使用不同 `--data-dir` 时同步调整 `ReadWritePaths`。复制为系统级单元时必须设置专用 `User=`，并按实际状态目录调整白名单。先按原生部署准备配置文件，再安装；已有服务应先停用旧单元并保留原 `--data-dir`，不要让两份服务同时读写同一目录：
+本次更名将二进制、命令入口和新服务模板统一为 `agentharbor`（原 `anywhereToAgent`）。已有服务须更新可执行文件路径，但继续使用原配置与 `--data-dir`；不要直接套用新安装的数据目录。
+
+Linux 用户服务模板：[agentharbor.service](../deployment/agentharbor.service)包含权限提升限制、私有临时目录、只读系统/主目录、状态目录写入白名单与地址族限制。使用不同 `--data-dir` 时同步调整 `ReadWritePaths`。复制为系统级单元时必须设置专用 `User=`，并按实际状态目录调整白名单。先按原生部署准备配置文件，再安装；已有服务应先停用旧单元并保留原 `--data-dir`，不要让两份服务同时读写同一目录：
 
 ```sh
 mkdir -p "$HOME/.local/bin" "$HOME/.config/systemd/user"
-install -m 755 ./anywhereToAgent "$HOME/.local/bin/anywhereToAgent"
-install -m 644 deployment/anywhereToAgent.service "$HOME/.config/systemd/user/anywhereToAgent.service"
+install -m 755 ./agentharbor "$HOME/.local/bin/agentharbor"
+install -m 644 deployment/agentharbor.service "$HOME/.config/systemd/user/agentharbor.service"
 systemctl --user daemon-reload
-systemctl --user enable --now anywhereToAgent
-journalctl --user -u anywhereToAgent -n 50
+systemctl --user enable --now agentharbor
+journalctl --user -u agentharbor -n 50
 ```
 
 用户退出后是否继续运行取决于服务器的 user lingering 策略，模板不修改该策略。程序无需 root 权限。
 
-macOS 测试服务器模板：[com.anywheretoagent.service.plist.example](../deployment/com.anywheretoagent.service.plist.example)。替换 `__HOME__`，存为 `$HOME/Library/LaunchAgents/com.anywheretoagent.service.plist`，确保二进制和配置已放到模板指定位置：
+macOS 测试服务器模板：[com.agentharbor.service.plist.example](../deployment/com.agentharbor.service.plist.example)。替换 `__HOME__`，存为 `$HOME/Library/LaunchAgents/com.agentharbor.service.plist`，确保二进制和配置已放到模板指定位置：
 
 ```sh
 mkdir -p "$HOME/Library/LaunchAgents"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.anywheretoagent.service.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.agentharbor.service.plist"
 ```
 
 模板只运行中转，不启动本机 Agent。Mac 休眠、退出登录或关机会使该测试服务器不可用；正式中转建议部署在持续在线的服务器。
@@ -116,13 +118,15 @@ mkdir -p data/state
 chmod 700 data/state
 # 只修改本模板刚创建的专用目录。
 sudo chown 10001:10001 data/state
-export ANYWHERE_TO_AGENT_PUBLIC_URL=https://remote.example.com
+export AGENTHARBOR_PUBLIC_URL=https://remote.example.com
 docker compose build
 docker compose up -d
-docker compose logs --tail 50 anywheretoagent
+docker compose logs --tail 50 agentharbor
 ```
 
-将 `ANYWHERE_TO_AGENT_PUBLIC_URL` 替换为自己的入口；Compose 兼容原 `CODEX_REMOTE_PUBLIC_URL`，同时设置时新变量优先。可在项目外的环境文件中保存该非秘密值，并通过 `docker compose --env-file /实际路径/relay.env` 显式加载；不要假设仓库已经忽略 `.env`。状态仅挂载 `./data/state:/data`；不挂载用户项目、Codex home 或 Docker socket，不使用 privileged。宿主机反向代理配置同上。
+已有 Compose 部署升级时，先用旧 Compose 文件停止原 `anywheretoagent` 服务，再启动新 `agentharbor` 服务；保留原项目名与状态挂载路径，避免两份实例同时写入状态。
+
+将 `AGENTHARBOR_PUBLIC_URL` 替换为自己的入口；Compose 兼容原 `ANYWHERE_TO_AGENT_PUBLIC_URL` / `CODEX_REMOTE_PUBLIC_URL`，同时设置时新变量优先。可在项目外的环境文件中保存该非秘密值，并通过 `docker compose --env-file /实际路径/relay.env` 显式加载；不要假设仓库已经忽略 `.env`。状态仅挂载 `./data/state:/data`；不挂载用户项目、Codex home 或 Docker socket，不使用 privileged。宿主机反向代理配置同上。
 
 独立管理入口仍为宿主机 `http://127.0.0.1:9090/admin/`；凭证在 `data/state/admin-token`。需要关闭新设备注册时，创建包含 `registration_enabled: false` 的 JSON 配置并挂载到容器，使用 `--config` 加载后重新创建服务。其它监听调整直接编辑 Compose 命令，确保管理端口仍为回环。
 

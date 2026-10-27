@@ -128,7 +128,7 @@ function AdminApp() {
     <>
       <main id="login" hidden={!!state} className="admin-login">
         <Panel
-          title="anywhereToAgent"
+          title="AgentHarbor"
           actions={<ThemeToggle />}
           className="login-panel"
         >
@@ -225,7 +225,7 @@ function AdminApp() {
               <RemoteIcon name="brand" />
             </span>
             <span>
-              anywhereToAgent<strong>Relay console</strong>
+              AgentHarbor<strong>Relay console</strong>
             </span>
           </a>
           <p className="sidebar-caption">服务管理</p>

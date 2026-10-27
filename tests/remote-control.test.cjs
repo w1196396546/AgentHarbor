@@ -238,10 +238,10 @@ for (const engine of engines)
         });
         await page.goto("https://remote.test/#key=" + pairCode);
         await page.locator("#workspace:visible").waitFor();
-        assert.equal(await page.title(), "anywhereToAgent");
+        assert.equal(await page.title(), "AgentHarbor");
         assert.equal(
           await page.locator(".brand small").innerText(),
-          "anywhereToAgent",
+          "AgentHarbor",
         );
         assert.equal(
           await page

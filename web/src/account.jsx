@@ -92,7 +92,7 @@ function AccountApp() {
             <div>
               <a className="account-brand" href="/">
                 <RemoteIcon name="brand" />
-                <span>anywhereToAgent</span>
+                <span>AgentHarbor</span>
               </a>
               <h1>
                 {account

@@ -40,7 +40,7 @@ export function Workspace() {
             </span>
             <span className="brand-copy">
               <strong id="activeAgentName" data-t="Codex"></strong>
-              <small>anywhereToAgent</small>
+              <small>AgentHarbor</small>
             </span>
           </a>
           <div className="agent-switcher">

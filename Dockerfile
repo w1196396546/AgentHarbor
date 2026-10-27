@@ -13,7 +13,7 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 COPY --from=frontend /src/internal/relay/assets ./internal/relay/assets
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /anywhereToAgent ./cmd/anywhereToAgent
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /agentharbor ./cmd/agentharbor
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates \
@@ -21,8 +21,8 @@ RUN apk add --no-cache ca-certificates \
     && adduser -D -u 10001 -G relay relay \
     && mkdir -p /data \
     && chown relay:relay /data
-COPY --from=builder /anywhereToAgent /usr/local/bin/anywhereToAgent
+COPY --from=builder /agentharbor /usr/local/bin/agentharbor
 WORKDIR /data
 USER 10001:10001
-ENTRYPOINT ["anywhereToAgent"]
+ENTRYPOINT ["agentharbor"]
 CMD ["--data-dir", "/data", "--listen", "127.0.0.1:8080", "--admin-listen", "127.0.0.1:9090"]

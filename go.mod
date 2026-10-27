@@ -1,4 +1,4 @@
-module anywheretoagent
+module agentharbor
 
 go 1.26.8
 

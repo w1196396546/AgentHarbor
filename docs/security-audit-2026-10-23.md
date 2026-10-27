@@ -1,7 +1,7 @@
-# anywhereToAgent 安全审计记录
+# AgentHarbor 安全审计记录
 
 - **日期**：2026-10-23
-- **范围**：本仓库 `anywheretoagent`（Go 中继 + React 前端 + 部署模板）
+- **范围**：本仓库 `agentharbor`（Go 中继 + React 前端 + 部署模板）
 - **方法**：逐文件源码审读 + 定向 grep + 现有测试审视；**未做**动态探测、模糊测试、渗透测试
 - **明确不含**：agentTools 仓库（`internal/remoteclient`，桌面连接端 / Agent 适配器）
 
@@ -18,7 +18,7 @@
 | 3 | 中 | E2EE 会话密钥与 grant 明文存于 localStorage | `web/src/transport/secure.js:3` |
 | 4 | 低 | Caddy 示例的 Host 头会触发自身 403 | `deployment/Caddyfile.example:8` |
 | 5 | 低 | 默认开启匿名设备注册，可被填满配额 | `deployment/config.example.json:4` |
-| 6 | 低（加固） | systemd 单元缺沙箱强化 | `deployment/anywhereToAgent.service` |
+| 6 | 低（加固） | systemd 单元缺沙箱强化 | `deployment/agentharbor.service` |
 | 7 | 低（加固） | nginx 示例缺 TLS 下限、HSTS、HTTP 跳转 | `deployment/nginx.conf.example` |
 | 8 | 低（加固） | 状态写入缺目录 fsync | `internal/relay/state.go:158` |
 | 9 | 低 | 审批弹窗可被注入任意外部链接（钓鱼面） | `web/src/features/approvals.jsx:159` |
@@ -223,7 +223,7 @@ Caddy 默认已保留原始 Host，这一行是多余的。nginx 示例中的 `$
 
 ### 位置
 
-`deployment/anywhereToAgent.service`
+`deployment/agentharbor.service`
 
 现状：user unit（不以 root 运行）、`UMask=0077`，这两点是对的。
 
@@ -234,7 +234,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/share/anywhereToAgent
+ReadWritePaths=%h/.local/share/agentharbor
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 ```
 

@@ -1,7 +1,7 @@
 .PHONY: build frontend test test-race test-ui vet
 
 build: frontend
-	go build -trimpath -o anywhereToAgent ./cmd/anywhereToAgent
+	go build -trimpath -o agentharbor ./cmd/agentharbor
 
 node_modules/.package-lock.json: package.json package-lock.json
 	npm ci

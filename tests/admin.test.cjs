@@ -14,9 +14,9 @@ before(async () => {
   );
   binary = path.join(
     buildDir,
-    process.platform === "win32" ? "anywhereToAgent.exe" : "anywhereToAgent",
+    process.platform === "win32" ? "agentharbor.exe" : "agentharbor",
   );
-  execFileSync("go", ["build", "-o", binary, "./cmd/anywhereToAgent"], {
+  execFileSync("go", ["build", "-o", binary, "./cmd/agentharbor"], {
     cwd: path.resolve(__dirname, ".."),
   });
 });

@@ -1,8 +1,8 @@
 {
-  "name": "anywhere-to-agent",
+  "name": "agentharbor",
   "version": "0.1.0",
   "private": true,
-  "description": "React frontend and browser tests for anywhereToAgent",
+  "description": "React frontend and browser tests for AgentHarbor",
   "license": "MIT",
   "engines": {
     "node": ">=22.12"
