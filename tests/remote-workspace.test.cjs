@@ -1519,8 +1519,10 @@ for (const engine of engines) {
     });
     assert.match(
       await page.locator("#live .failure-details").textContent(),
-      /Automatic model retry.*Fixture model request failed.*rateLimit.*The model request is retrying automatically/,
+      /Reconnecting….*Fixture model request failed.*rateLimit/,
     );
+    assert.equal(await page.locator("#live .failure-details").evaluate((node) => node.open), false);
+    await page.locator("#live .failure-details > summary").click();
     assert.equal(
       await page
         .locator("#live .failure-details")
@@ -10897,3 +10899,61 @@ for (const engine of engines)
       await f.clean();
     });
   }
+
+
+for (const engine of engines) {
+  for (const agent of ["codex", "claude-desktop"]) {
+    test(`${engine} ${agent}: model retries collapse and recovered errors leave the current state`, async (t) => {
+      for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"]) {
+        await t.test(locale, async (t) => {
+          const retry = (attempt) => ({ id: "retry-" + attempt, turn_id: "retry-turn", type: "error", data: {
+            message: agent === "codex" ? `Reconnecting... ${attempt}/5` : "overloaded_error",
+            willRetry: true, additionalDetails: "stream disconnected before completion: The upstream could not validate encrypted continuation context.",
+            ...(agent === "claude-desktop" ? { attempt, maxRetries: 5, errorStatus: 529 } : {}),
+          }});
+          const f = await fixture(t, engine, {
+            width: 390, locale, streaming: true,
+            agents: { agents: [{ id: agent, name: agent === "codex" ? "Codex" : "Claude" }], default_agent: agent },
+            catalog: { agent: { id: agent, name: agent === "codex" ? "Codex" : "Claude" }, capabilities: { ...catalog.capabilities, streaming: true } },
+            state: { historyItems: [], live: { status: "inProgress", turn_id: "retry-turn", requests: [], items: [retry(1)],
+              error: retry(1).data.message, error_data: retry(1).data, retrying: true } },
+          });
+          const { page } = f;
+          await page.locator("#sidebarToggle").click();
+          await page.locator('#sessions button[data-id="remote-rich"]').first().click();
+          await page.waitForFunction(() => window.fixtureStreams.length === 1);
+          const emit = (packet) => page.evaluate((packet) => window.fixtureStreams[0].emit(packet), packet);
+          const row = page.locator("#live .model-error");
+          assert.equal(await row.count(), 1);
+          assert.equal(await row.evaluate((node) => node.open), false);
+          assert.equal(await row.locator('[data-slot="step-row"]').count(), 0);
+          assert.match(await row.locator("summary").textContent(), /1\/5/);
+          await row.locator("summary").focus();
+          await page.keyboard.press("Enter");
+          assert.equal(await row.evaluate((node) => node.open), true);
+          await emit({ items: [retry(2)], state: { error: retry(2).data.message, error_data: retry(2).data, retrying: true } });
+          assert.equal(await row.count(), 1);
+          assert.equal(await row.evaluate((node) => node.open), true);
+          assert.match(await row.locator("summary").textContent(), /2\/5/);
+          await emit({ items: [], remove: ["retry-1"] });
+          assert.equal(await page.locator("#history .model-error, #live .model-error").count(), 1, "history/live boundary duplicated retries");
+          await row.locator("summary").click();
+          await emit({ items: [{ id: "resumed", turn_id: "retry-turn", type: "agentMessage", text: "Recovered answer" }],
+            state: { status: "inProgress", error: "", error_data: null, retrying: false } });
+          assert.equal(await row.count(), 1);
+          assert.equal(await row.getAttribute("data-status"), "recovered");
+          assert.equal(await row.evaluate((node) => node.open), false);
+          assert.equal(await page.locator('#live .model-error[data-status="failed"], #live .model-error[data-status="retrying"]').count(), 0);
+          assert.equal(await page.locator('#live [data-type="agentMessage"]').textContent().then((text) => text.includes("Recovered answer")), true);
+          await emit({ items: [], state: { status: "completed" } });
+          assert.equal(await row.getAttribute("data-status"), "recovered");
+          await page.locator("#sidebarToggle").click();
+          await page.locator("#workspace .theme-toggle").click();
+          await page.keyboard.press("Escape");
+          assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "retry row overflowed narrow screen");
+          await f.clean();
+        });
+      }
+    });
+  }
+}

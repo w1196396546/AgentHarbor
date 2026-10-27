@@ -142,12 +142,40 @@
     text-align: left;
   }
 }
-.failure-details {
-  margin: 1rem 0;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.model-error {
+  margin: 0.75rem 0;
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
+}
+.model-error > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.model-error > summary::-webkit-details-marker {
+  display: none;
+}
+.model-error .fold-icon {
+  width: 14px;
+  height: 14px;
+}
+.model-error[open] > summary .fold-icon {
+  transform: rotate(180deg);
+}
+.model-error-body {
+  padding: 0 0 0.5rem 1.75rem;
+}
+.model-error-body p {
+  white-space: pre-wrap;
+}
+.model-error-body li + li {
+  margin-top: 0.5rem;
+}
+.model-error[data-status="failed"] > summary {
+  color: var(--destructive);
 }
 .event-fields > div {
   display: flex;

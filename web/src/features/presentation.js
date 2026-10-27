@@ -267,12 +267,125 @@ export function errorDetails(live) {
   return {
     message: live.error || error.message || "",
     details: error.additionalDetails || "",
-    code: error.codexErrorInfo || "",
+    code: error.codexErrorInfo || error.errorInfo || error.errorStatus || "",
     retrying:
       typeof live.retrying === "boolean" ? live.retrying : payload.willRetry,
     itemID: payload.itemId || payload.targetItemId || "",
     turnID: payload.turnId || live.turn_id || "",
   };
+}
+
+export function modelErrorGroups(items, live = {}) {
+  const result = [],
+    groups = [];
+  for (const item of items) {
+    if (item.type !== "error") {
+      result.push(item);
+      continue;
+    }
+    let group = result.at(-1);
+    if (group?.type !== "modelError" || group.turn_id !== item.turn_id) {
+      group = { ...item, type: "modelError", data: { items: [] } };
+      result.push(group);
+      groups.push(group);
+    }
+    group.data.items.push(item);
+  }
+  const current = errorDetails(live);
+  if (current.message || current.details) {
+    let group = groups.findLast(
+      (value) =>
+        (value.turn_id
+          ? value.turn_id === current.turnID
+          : value === result.at(-1)) &&
+        value.data.items.some(
+          (item) =>
+            errorDetails({
+              error: item.data?.message || item.text,
+              error_data: item.data,
+            }).message === current.message,
+        ),
+    );
+    const tail = result.at(-1);
+    if (
+      !group &&
+      tail?.type === "modelError" &&
+      (!tail.turn_id || tail.turn_id === current.turnID)
+    )
+      group = tail;
+    if (!group) {
+      group = {
+        id: "model-error-" + (current.turnID || "live"),
+        turn_id: current.turnID,
+        type: "modelError",
+        data: { items: [] },
+      };
+      result.push(group);
+      groups.push(group);
+    }
+    group.data.live = live;
+  }
+  for (const group of groups) {
+    const last = group.data.items.at(-1),
+      data = last?.data || {};
+    const issue = group.data.live || {
+      error: data.message || last?.text,
+      error_data: data.error_data || data,
+    };
+    const error = errorDetails(issue);
+    const status =
+      group.data.live || (group.turn_id && group.turn_id === live.turn_id)
+        ? live.status
+        : last?.turn?.status;
+    const position = items.indexOf(last);
+    const next =
+      position >= 0 &&
+      items
+        .slice(position + 1)
+        .find(
+          (item) =>
+            item.turn_id !== last.turn_id ||
+            [
+              "userMessage",
+              "agentMessage",
+              "reasoning",
+              "plan",
+              "commandExecution",
+              "fileChange",
+              "dynamicToolCall",
+              "mcpToolCall",
+              "webSearch",
+            ].includes(item.type),
+        );
+    const progressed =
+      next && next.turn_id === last.turn_id && next.type !== "userMessage";
+    const resolved =
+      data.resolved === true || progressed || status === "completed";
+    const ended =
+      data.ended === true ||
+      ["completed", "failed", "interrupted"].includes(status);
+    group.data.error = error;
+    group.status = resolved
+      ? "recovered"
+      : error.retrying
+        ? ended
+          ? "ended"
+          : "retrying"
+        : "failed";
+    const retryData = group.data.live?.error_data || data;
+    const match = /^Reconnecting(?:\.{3}|…)?\s*(\d+)\s*\/\s*(\d+)/i.exec(
+      error.message,
+    );
+    group.data.attempt = match
+      ? `${match[1]}/${match[2]}`
+      : Number.isInteger(retryData.attempt) && retryData.attempt > 0
+        ? String(retryData.attempt) +
+          (Number.isInteger(retryData.maxRetries) && retryData.maxRetries > 0
+            ? "/" + retryData.maxRetries
+            : "")
+        : "";
+  }
+  return result;
 }
 
 export function itemResources(item) {

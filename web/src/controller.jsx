@@ -10,6 +10,7 @@ import {
   itemResources,
   collectChanges,
   groupByTurn,
+  modelErrorGroups,
 } from "./features/presentation";
 import { bindWorkspace } from "./features/bindings";
 import { createAgentLifecycle } from "./features/agents";
@@ -346,17 +347,22 @@ export function startRemote() {
     reading.capture();
     const live = state.live,
       activeIDs = new Set((live.items || []).map((item) => item.id)),
-      history = state.history.filter((item) => !activeIDs.has(item.id));
+      history = state.history.filter((item) => !activeIDs.has(item.id)),
+      timeline = modelErrorGroups([
+        ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
+        ...history, ...(live.items || []),
+      ], live),
+      isLive = (item) => item.type === "modelError"
+        ? item.data.live || item.data.items.some((source) => activeIDs.has(source.id))
+        : activeIDs.has(item.id);
     renderItems(
       $("history"),
-      [
-        ...(!state.nativeHistory ? legacyItems(state.legacyParts) : []),
-        ...history,
-      ],
+      timeline.filter((item) => !isLive(item)),
       new Set((live.items || []).map((item) => item.turn_id)),
       conversationView,
+      true,
     );
-    renderItems($("live"), live.items || [], new Set(), conversationView);
+    renderItems($("live"), timeline.filter(isLive), new Set(), conversationView, true);
     reading.afterRender();
   }
   const notice = (text = "") => {

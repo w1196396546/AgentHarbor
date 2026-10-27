@@ -217,7 +217,12 @@ outputs and diffs can be copied. Raw arguments remain available in disclosures.
 New linked requests expand their tool once; later stream updates preserve manual
 expansion and in-memory answers. The pending entry shows the request count and the
 existing dialog can switch requests without a second dispatcher. Errors display
-reported causes and related operations. Automatic model retries remain separate
+reported causes and related operations. Consecutive API failures and retries share one
+collapsed connection row, including matching live state and paginated history.
+It preserves expansion while attempts update and shows recovery only after real
+model progress or successful completion. Terminal failures remain inspectable;
+explicit empty error fields clear current state for both Codex and Claude Desktop.
+Automatic model retries remain separate
 from browser SSE reconnects; neither implies retrying a control request.
 
 The context dialog separates recent/cumulative token usage from context occupancy;

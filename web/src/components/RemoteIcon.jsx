@@ -1,4 +1,4 @@
-import { AlertTriangle, Plus, Search, RefreshCw, Folder, ChevronDown, LogOut, PanelLeft, FileDiff, File, Pencil, X, ListTodo, ShieldCheck, Square, ArrowUp, ArrowDown, CircleHelp, Check, Clock, Terminal, Brain, Wrench, Globe, Copy, Image, Link, ExternalLink, Bot, Settings, ArrowLeft, Download, Pin, Sparkles } from "lucide-react";
+import { AlertTriangle, Wifi, Plus, Search, RefreshCw, Folder, ChevronDown, LogOut, PanelLeft, FileDiff, File, Pencil, X, ListTodo, ShieldCheck, Square, ArrowUp, ArrowDown, CircleHelp, Check, Clock, Terminal, Brain, Wrench, Globe, Copy, Image, Link, ExternalLink, Bot, Settings, ArrowLeft, Download, Pin, Sparkles } from "lucide-react";
 
 function BrandIcon(props) {
   return <img src="/icon.svg" alt="" {...props} />;
@@ -6,6 +6,7 @@ function BrandIcon(props) {
 
 const icons = {
   warning: AlertTriangle,
+  connection: Wifi,
   brand: BrandIcon,
   codex: BrandIcon,
   claude: Sparkles,

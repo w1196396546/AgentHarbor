@@ -477,3 +477,34 @@ test("failed computer checks remain unknown while explicit offline reports remai
     global.window = previousWindow;
   }
 });
+
+
+test("model errors form one retry disclosure and recover without hiding terminal failures", async () => {
+  const { modelErrorGroups } = await presentation;
+  const retry = (id, attempt, turn = "turn") => ({ id, turn_id: turn, type: "error", data: {
+    message: `Reconnecting... ${attempt}/5`, willRetry: true, additionalDetails: "stream disconnected before completion",
+  }});
+  const items = [retry("one", 1), retry("two", 2)];
+  const live = { turn_id: "turn", status: "inProgress", error: "Reconnecting... 2/5", retrying: true };
+  let groups = modelErrorGroups(items, live);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].status, "retrying");
+  assert.equal(groups[0].data.attempt, "2/5");
+  assert.equal(groups[0].data.items.length, 2);
+  assert.equal(groups[0].id, "one");
+  groups = modelErrorGroups([...items, { id: "answer", type: "agentMessage", turn_id: "turn", text: "resumed" }], { turn_id: "turn", status: "inProgress" });
+  assert.equal(groups[0].status, "recovered");
+  assert.equal(modelErrorGroups(items, { turn_id: "turn", status: "completed" })[0].status, "recovered");
+  assert.equal(modelErrorGroups(items, { turn_id: "turn", status: "interrupted" })[0].status, "ended");
+  assert.equal(modelErrorGroups([...items, { id: "failed", turn_id: "turn", type: "error", data: { message: "Retry exhausted", willRetry: false } }])[0].status, "failed");
+  assert.equal(modelErrorGroups([items[0], retry("other", 1, "other")]).length, 2);
+  assert.equal(modelErrorGroups([items[0], { id: "notice", type: "systemEvent", turn_id: "turn" }])[0].status, "retrying");
+  const claude = { id: "claude-retry", type: "error", data: { message: "overloaded_error", willRetry: true, attempt: 3, maxRetries: 5 } };
+  groups = modelErrorGroups([claude], { status: "inProgress", turn_id: "native-turn", error: "overloaded_error", error_data: claude.data, retrying: true });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].data.attempt, "3/5");
+  assert.equal(modelErrorGroups([{ ...claude, data: { ...claude.data, resolved: true } }])[0].status, "recovered");
+  const failed = { id: "failed", type: "error", data: { message: "API Error", willRetry: false } };
+  assert.equal(modelErrorGroups([failed, { id: "new-user", type: "userMessage" }, { id: "new-answer", type: "agentMessage" }])[0].status, "failed", "a later user turn must not recover an earlier terminal failure");
+  assert.equal(items[0].data.items, undefined, "grouping mutated source history");
+});

@@ -3,7 +3,7 @@ import {
   searchAction,
   externalURL,
   toolStatus,
-  errorDetails,
+  modelErrorGroups,
   resourcePath,
   groupByTurn,
 } from "./presentation";
@@ -110,7 +110,13 @@ export function createConversation({
     expandedState()["item:" + id] = value;
     onReadingChange();
   }
-  function renderItems(root, items, continuingTurns = new Set(), view) {
+  function renderItems(
+    root,
+    items,
+    continuingTurns = new Set(),
+    view,
+    errorsGrouped = false,
+  ) {
     if (scope !== getScope()) {
       scope = getScope();
       expanded.clear();
@@ -127,7 +133,9 @@ export function createConversation({
         view?.changesByTurn ||
         (getChangedFiles && groupByTurn(getChangedFiles()));
     const grouped = [];
-    for (const item of items) {
+    for (const item of errorsGrouped
+      ? items
+      : modelErrorGroups(items, root.id === "live" ? getLive() : {})) {
       if (
         /^(hook|systemEvent|tokenCount)$/.test(item.type) ||
         item.data?.name === "hook"
@@ -188,7 +196,6 @@ export function createConversation({
           );
         return nodes;
       }),
-      root.id === "live" && <Failure key="live-error" live={getLive()} />,
     ]);
   }
   function Activity({
@@ -440,32 +447,71 @@ export function createConversation({
       </Action>
     );
   }
-  function Failure({ live, id = live.turn_id || "live" }) {
-    const error = errorDetails(live);
-    if (!error.message && !error.details) return null;
+  function ModelError({ item }) {
+    const { error, items, attempt } = item.data,
+      activityScope = useRef(scope),
+      initial = useRef(
+        expanded.get(item.id) ?? expandedState()["item:" + item.id] ?? false,
+      ),
+      label =
+        item.status === "retrying"
+          ? "Reconnecting…"
+          : item.status === "recovered"
+            ? "Connection restored"
+            : item.status === "ended"
+              ? "Model retries"
+              : "Error";
     return (
-      <div className="failure-details" role="status">
-        <strong>{t(error.retrying ? "Automatic model retry" : "Error")}</strong>
-        {error.message && <p>{error.message}</p>}
-        {error.code !== "" && error.code != null && (
-          <p>
-            {t("Error code")}: {textOf(error.code)}
-          </p>
-        )}
-        <p className="note">
-          {t(
-            error.retrying
-              ? "The model request is retrying automatically."
-              : "No automatic retry is currently reported.",
+      <details
+        className="model-error failure-details"
+        data-id={item.id}
+        data-type="modelError"
+        data-status={item.status}
+        open={initial.current}
+        onToggle={(event) =>
+          rememberExpanded(
+            item.id,
+            event.currentTarget.open,
+            activityScope.current,
+          )
+        }
+      >
+        <summary>
+          <Icon name={item.status === "failed" ? "warning" : "connection"} />
+          <span role="status">
+            {t(label)}
+            {attempt ? " " + attempt : ""}
+          </span>
+          <Icon name="chevron" className="fold-icon" />
+        </summary>
+        <div className="model-error-body">
+          {error.message && <p>{error.message}</p>}
+          {error.details && <p>{textOf(error.details)}</p>}
+          {error.code !== "" && error.code != null && (
+            <p>
+              {t("Error code")}: {textOf(error.code)}
+            </p>
           )}
-        </p>
-        {error.itemID && jumpToItem && (
-          <Action action={() => jumpToItem(error.itemID)}>
-            {t("Go to failed operation")}
-          </Action>
-        )}
-        <Raw id={"error:" + id} value={error.details || live.error_data} />
-      </div>
+          {error.itemID && jumpToItem && (
+            <Action action={() => jumpToItem(error.itemID)}>
+              {t("Go to failed operation")}
+            </Action>
+          )}
+          {items.length > 1 && (
+            <ol>
+              {items.map((source) => (
+                <li key={source.id}>
+                  {source.id !== item.id && <span data-id={source.id} />}
+                  {source.data?.message || source.text}
+                  {source.data?.additionalDetails && (
+                    <p>{textOf(source.data.additionalDetails)}</p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </details>
     );
   }
   function Raw({ id, value, label = "Details" }) {
@@ -1044,22 +1090,7 @@ export function createConversation({
         </Activity>
       );
     }
-    if (type === "error")
-      return (
-        <Activity {...props} title="Error" symbol="tool" status="failed" open>
-          <Failure
-            id={item.id}
-            live={{
-              error: data.message || data.error?.message || text,
-              error_data: data.error_data || data,
-              ...(typeof data.willRetry === "boolean"
-                ? { retrying: data.willRetry }
-                : {}),
-            }}
-          />
-          <Raw id={item.id + "|details"} value={data} />
-        </Activity>
-      );
+    if (type === "modelError") return <ModelError item={item} />;
     if (
       [
         "systemEvent",
@@ -1369,6 +1400,5 @@ export function createConversation({
     textOf,
     Copy,
     Resource,
-    Failure,
   };
 }
