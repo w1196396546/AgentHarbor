@@ -56,15 +56,48 @@ The four sidebar sections remain available for legacy and native catalogs, with
 independent folds and explicit empty states. Projects include shared folders that
 have no native project metadata. Latest orders loaded conversations by update time;
 Current shows the selected conversation and other reported running or waiting
-conversations. Search and project filters continue to apply to these sections.
+conversations. Search continues to apply across these sections; the separate
+"All projects" list filter is removed, so all shared project groups remain visible.
+Choosing the folder for a new conversation remains available in its breadcrumb.
+Branding occupies one line, search and the labeled new-session icon share a row,
+and device/account controls use a compact footer on desktop and phones. Desktop
+keeps its keyboard shortcuts and resizable sidebar, with compact 36px search/new
+controls; phones use 44px controls. The middle navigation remains independently
+scrollable, including in short viewports.
 
 The inspector provides Details, Files, Diff, Logs and Artifacts tabs. Details
 reuses owner-reported session settings and loaded tool/change records; Logs links
 back to the corresponding loaded conversation records. Missing values stay unknown,
 and neither view requests a new execution. Keyboard tab navigation keeps the
-selected tab visible on narrow screens. Phone controls use one compact toolbar
-with icon-only permission/mode controls and a combined model/reasoning picker,
-plus viewport-bounded draft height; Latest output stays centered above the composer.
+selected tab visible on narrow screens. Phone menus and panel actions use 44px
+touch targets; the heading and turn-summary controls retain their compact sizes.
+The composer retains its compact single row with icon-only
+permission/mode controls and a combined model/reasoning picker, including while
+stop/context actions are present. The phone heading keeps its original 62px
+single-row layout, with project and conversation text stacked beside the actions.
+Draft height stays viewport-bounded; Latest output stays centered above the composer.
+
+The model/effort/context group stays beside Send on desktop and aligns its wrapped
+contents to the right. Claude Desktop uses the shared context ring and dialog:
+`live.context.used_tokens` and `window_tokens` come from its native summary.
+An empty context object keeps the control visible with unknown values; the browser
+does not infer a model window or use cumulative usage as context occupancy.
+
+The reading surface uses an 820px maximum width including gutters, 15px desktop prose,
+and 12px command/code text. The 16px root preserves the shared components' rem
+scale while the application body stays 14px. System UI/PingFang/Windows CJK
+fallbacks and a separate system monospace stack keep the interface available
+without network font loading. Tool disclosures use quiet separators and reveal
+their surface on expansion; message text remains the main visual focus.
+
+The blue brand mark is unchanged. Interactive/semantic text colors have separate
+light/dark values and paired button foregrounds for readable contrast. Account
+and admin pages share this type/color system, task-specific headings and clear
+initial loading/failure/retry states. A failed state read is not treated as a
+confirmed sign-out. The admin navigation is a set of section links rather than a
+permanently selected "devices" item.
+See the [2026-10-27 UI detail QA](../docs/ui-detail-qa-2026-10-27.md) for design
+decisions, screenshot review, test results and remaining verification limits.
 
 `styles/tokens.css` defines the light/dark palette and Tailwind mappings;
 `styles/ui.css` supplies shared surface states; `styles/workspace.css` owns the

@@ -45,7 +45,6 @@ export function createMenus({ $, t, ownerEpoch, Action, canConfigure }) {
         "permission",
       ].includes(trigger.id);
     closeMenu();
-    $("projects").hidden = true;
     const menu = $("menu");
     menu._trigger = trigger;
     renderView(

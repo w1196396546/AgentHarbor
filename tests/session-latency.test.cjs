@@ -54,7 +54,6 @@ function fixture(api) {
     optionsLoaded: true,
     sessions: [],
     projects: ["/project"],
-    listProject: "",
     listSeq: 0,
     optionsSeq: 0,
     attachments: [],

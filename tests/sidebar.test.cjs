@@ -17,8 +17,8 @@ async function fixture(t, engine, locale = 'en-US', catalog, clock = false) {
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', async route => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname === '/api/device') return route.fulfill({json: {id: 'sidebar-computer', name: 'My Mac', online: true}});
-    if (pathname === '/api/agents') return route.fulfill({json: {agents: [{id: 'codex', name: 'Codex'}], default_agent: 'codex'}});
+    if (pathname === '/api/device') return route.fulfill({json: {id: '11'.repeat(16), name: 'My development computer', online: true}});
+    if (pathname === '/api/agents') return route.fulfill({json: {agents: [{id: 'codex', name: 'Codex', state: 'connected'}], default_agent: 'codex'}});
     if (pathname === '/api/sessions') return route.fulfill({json: typeof catalog === 'function' ? catalog(new URL(route.request().url())) : catalog || {projects: ['/work/sidebar'], sessions: Array.from({length: 60}, (_, i) => ({id: 'chat-' + i, title: 'Review project changes and continue planning · ' + i, cwd: '/work/sidebar'}))}});
     if (pathname === '/api/options') return route.fulfill({json: {models: [], modes: [], permissions: [], defaults: {}, capabilities: {}}});
     const name = pathname === '/' ? 'index.html' : pathname.slice(1);
@@ -52,6 +52,49 @@ async function drag(page, delta) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: compact desktop sidebar keeps its list and footer usable at every width`, async t => {
+    const {page, clean} = await fixture(t, engine, 'zh-CN');
+    const handle = page.locator('#sidebarResize');
+    for (const [viewport, sidebarWidth, resizeKey] of [
+      [{width:1440, height:850}, 270, null],
+      [{width:900, height:600}, 220, 'Home'],
+      [{width:1440, height:850}, 480, 'End'],
+    ]) {
+      await page.setViewportSize(viewport);
+      if (resizeKey) await handle.press(resizeKey);
+      await width(page, sidebarWidth);
+      for (const theme of ['dark', 'light']) {
+        if (await page.locator('html').evaluate(node => node.classList.contains('dark')) !== (theme === 'dark'))
+          await page.locator('#workspace .theme-toggle').click();
+        const layout = await page.locator('#sidebar').evaluate(sidebar => {
+          const nav = sidebar.querySelector('#navigation'), footer = sidebar.querySelector('.sidebar-footer').getBoundingClientRect();
+          const search = sidebar.querySelector('.search-box').getBoundingClientRect(), create = sidebar.querySelector('#new').getBoundingClientRect();
+          const bounds = sidebar.getBoundingClientRect();
+          const overflow = [...sidebar.children].filter(node => node.id !== 'sidebarResize' && !node.classList.contains('sr-only')).some(node => {
+            const r = node.getBoundingClientRect();
+            return r.width > 0 && (r.left < bounds.left || r.right > bounds.right);
+          });
+          return {navigation:nav.clientHeight, footer:footer.height, overflow:overflow || nav.scrollWidth > nav.clientWidth, aligned:Math.abs(search.top - create.top) < 1 && create.left >= search.right};
+        });
+        assert(layout.navigation >= viewport.height - 300, 'the session list gets the remaining height: ' + JSON.stringify(layout));
+        assert(layout.footer <= 100 && !layout.overflow && layout.aligned, 'compact controls fit the resizable sidebar: ' + JSON.stringify(layout));
+        if (theme === 'light') t.diagnostic(`${viewport.width}x${viewport.height}, sidebar ${sidebarWidth}px: navigation ${layout.navigation}px, footer ${layout.footer}px`);
+        if (process.env.ARTIFACT_DIR) {
+          await fs.mkdir(process.env.ARTIFACT_DIR, {recursive:true});
+          await page.locator('#sidebar').screenshot({path:path.join(process.env.ARTIFACT_DIR, `desktop-sidebar-${engine}-${sidebarWidth}-${theme}.png`), animations:'disabled'});
+        }
+      }
+    }
+    await page.locator('#desktopSidebarToggle').click();
+    await width(page, 0);
+    await page.keyboard.press('Control+k');
+    await width(page, 480);
+    assert(await page.locator('#search').evaluate(node => node === document.activeElement));
+    await page.locator('#search').fill('planning · 30');
+    await page.locator('#sessions [data-id="chat-30"]').first().waitFor();
+    assert.equal(await page.locator('#new').getAttribute('aria-label'), '新建会话');
+    await clean();
+  });
   test(engine + ': recent sessions refresh online and on return without losing loaded pages or drafts', async t => {
     const session = id => ({id, title:id, cwd:'/work/shop', project_id:'shop', last:'2026-10-20T08:00:00Z'});
     let rows = ['yesterday', 'older', 'oldest'].map(session);

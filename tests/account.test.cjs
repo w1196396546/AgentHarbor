@@ -11,8 +11,29 @@ const engines = process.env.BROWSER
   ? [process.env.BROWSER]
   : ["chromium", "webkit"];
 const username = "FullCupUserWithALongUnbrokenAccountNameForMobileScreens";
+async function screenshotThemes(page, engine, width, label) {
+  if (!process.env.ARTIFACT_DIR || engine !== "chromium") return;
+  await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
+  for (const theme of ["dark", "light"]) {
+    if (
+      (await page.evaluate(() =>
+        document.documentElement.classList.contains("dark"),
+      )) !==
+      (theme === "dark")
+    )
+      await page.locator(".theme-toggle:visible").click();
+    await page.screenshot({
+      animations: "disabled",
+      path: path.join(
+        process.env.ARTIFACT_DIR,
+        `account-${label}-${width}-${theme}.png`,
+      ),
+      fullPage: true,
+    });
+  }
+}
 for (const engine of engines)
-  for (const width of [320, 390, 1280])
+  for (const width of [320, 390, 768, 1280])
     test(`account ${engine} ${width}px: FullCupAI sign-in and multiple devices`, async (t) => {
       const browser = await { chromium, webkit }[engine].launch();
       t.after(() => browser.close());
@@ -24,7 +45,9 @@ for (const engine of engines)
       const errors = [],
         mutations = [];
       page.on("pageerror", (error) => errors.push(error.message));
-      let authenticated = false;
+      let authenticated = false,
+        failInitialRead = true,
+        failAuthenticatedRead = true;
       const devices = [
         { id: "a".repeat(32), name: "Office Mac", online: true, user_id: 27 },
         { id: "b".repeat(32), name: "Home PC", online: false, user_id: 27 },
@@ -39,6 +62,10 @@ for (const engine of engines)
             body: JSON.stringify(value),
           });
         if (url.pathname.startsWith("/api/account")) {
+          if (url.pathname === "/api/account" && failInitialRead) {
+            failInitialRead = false;
+            return reply(503, { error: "账户服务暂时不可用，请重试。" });
+          }
           if (url.pathname === "/api/account/login") {
             assert.equal(request.headers()["x-remote-request"], "1");
             const body = request.postDataJSON();
@@ -66,6 +93,10 @@ for (const engine of engines)
           }
           if (!authenticated)
             return reply(401, { error: "Sign in with your FullCupAI account" });
+          if (url.pathname === "/api/account" && failAuthenticatedRead) {
+            failAuthenticatedRead = false;
+            return reply(401, { error: "登录会话未生效，请重新登录。" });
+          }
           if (url.pathname === "/api/account/device") {
             const body = request.postDataJSON(),
               device = devices.find((value) => value.id === body.id);
@@ -89,7 +120,11 @@ for (const engine of engines)
           url.pathname === "/account"
             ? "account.html"
             : path.basename(url.pathname);
-        if (!["account.html", "account.js", "account.css", "icon.svg"].includes(file))
+        if (
+          !["account.html", "account.js", "account.css", "icon.svg"].includes(
+            file,
+          )
+        )
           return route.fulfill({ status: 404 });
         await route.fulfill({
           status: 200,
@@ -104,17 +139,47 @@ for (const engine of engines)
         });
       });
       await page.goto("http://127.0.0.1:48123/account");
+      await page.getByText("无法读取账户", { exact: true }).waitFor();
+      assert.equal(await page.locator(".account-login-form").count(), 0);
+      assert.match(
+        await page.getByRole("alert").innerText(),
+        /账户服务暂时不可用/,
+      );
+      const retry = page.getByRole("button", { name: "重新读取账户" });
+      await retry.focus();
+      await page.keyboard.press("Enter");
+      await page.getByLabel("邮箱", { exact: true }).waitFor();
+      assert(
+        (await page.getByLabel("邮箱", { exact: true }).boundingBox()).height >=
+          44,
+      );
+      await screenshotThemes(page, engine, width, "login");
       await page
         .getByLabel("邮箱", { exact: true })
         .fill("person@example.test");
       await page
         .getByLabel("密码", { exact: true })
         .fill("test-password-private");
-      await page.getByRole("button", { name: "登录", exact: true }).click();
+      await page.getByLabel("密码", { exact: true }).press("Enter");
+      await page.getByLabel("动态验证码", { exact: true }).fill("123456");
+      await page.getByRole("button", { name: "验证并登录" }).click();
+      await page
+        .getByRole("alert")
+        .filter({ hasText: "登录会话未生效" })
+        .waitFor();
+      assert.equal(
+        await page.getByLabel("密码", { exact: true }).inputValue(),
+        "",
+      );
+      await page
+        .getByLabel("密码", { exact: true })
+        .fill("test-password-private");
+      await page.getByLabel("密码", { exact: true }).press("Enter");
       await page.getByLabel("动态验证码", { exact: true }).fill("123456");
       await page.getByRole("button", { name: "验证并登录" }).click();
       await page.getByText(username, { exact: true }).waitFor();
       assert.equal(await page.locator(".relay-device").count(), 2);
+      await screenshotThemes(page, engine, width, "devices");
       assert.equal(
         await page
           .getByRole("link", { name: "返回远程会话" })

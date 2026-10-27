@@ -76,11 +76,6 @@ export function bindWorkspace({
   positionReasoning,
   renderChanges,
 }) {
-  $("project").onclick = () => {
-    $("projects").hidden = !$("projects").hidden;
-    $("project").setAttribute("aria-expanded", String(!$("projects").hidden));
-    closeMenu();
-  };
   $("breadcrumbProject").onclick = chooseComposeProject;
   $("sidebarToggle").onclick = () =>
     setNavigation(!document.body.classList.contains("nav-open"));
@@ -418,14 +413,6 @@ export function bindWorkspace({
       !$("menu")._trigger?.contains(e.target)
     )
       closeMenu();
-    if (
-      !$("projects").hidden &&
-      !e.target.closest(".project-menu") &&
-      !$("breadcrumbProject").contains(e.target)
-    ) {
-      $("projects").hidden = true;
-      $("project").setAttribute("aria-expanded", "false");
-    }
     if (!e.target.closest("#composer")) hideSuggestions();
   });
   document.addEventListener("keydown", (e) => {
@@ -442,8 +429,6 @@ export function bindWorkspace({
       const trigger = $("menu")._trigger;
       closeMenu();
       trigger?.focus({ preventScroll: true });
-      $("projects").hidden = true;
-      $("project").setAttribute("aria-expanded", "false");
       setNavigation(false);
       if (!$("changesPanel").hidden) closeChanges();
     }

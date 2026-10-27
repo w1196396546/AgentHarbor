@@ -4,7 +4,6 @@ import { RemoteIcon as Icon } from "../components/RemoteIcon";
 import { PanelRow } from "../components/ui/panel";
 import {
   owningProject,
-  projectContainsPath,
   sameProjectPath,
   sessionProject,
 } from "../project-paths";
@@ -83,27 +82,17 @@ export function createSessions({
     if (pending.size > 100) pending.delete(pending.keys().next().value);
     // The creation receipt is authoritative even before the native index catches up.
     state.listSeq++;
-    if (!state.listProject || matchesProject(row, state.listProject)) {
-      state.sessions = [
-        row,
-        ...state.sessions.filter((session) => session.id !== row.id),
-      ];
-      renderSessions();
-    }
+    state.sessions = [
+      row,
+      ...state.sessions.filter((session) => session.id !== row.id),
+    ];
+    renderSessions();
     return row;
   }
   function setNavigation(open) {
     document.body.classList.toggle("nav-open", open);
     $("navBackdrop").hidden = !open;
     $("sidebarToggle").setAttribute("aria-expanded", String(open));
-  }
-  function matchesProject(session, project) {
-    return (
-      sameProjectPath(
-        project,
-        sessionProject(state.projects, state.sidebarProjects, session),
-      ) || projectContainsPath(project, session.cwd)
-    );
   }
   function projectName(path, containingProject = true) {
     const owner = containingProject
@@ -132,7 +121,7 @@ export function createSessions({
     listRequests++;
     try {
       const seq = ++state.listSeq,
-        project = state.listProject,
+        project = "",
         loaded = refresh ? state.next || state.sessions.length : 0;
       let value = await api(
         "sessions?" +
@@ -143,7 +132,7 @@ export function createSessions({
         undefined,
         { observation: true },
       );
-      if (seq !== state.listSeq || project !== state.listProject) return;
+      if (seq !== state.listSeq) return;
       const rows = [...value.sessions];
       while (refresh && value.has_more && value.next < loaded) {
         const offset = value.next;
@@ -153,11 +142,15 @@ export function createSessions({
           undefined,
           { observation: true },
         );
-        if (seq !== state.listSeq || project !== state.listProject) return;
+        if (seq !== state.listSeq) return;
         rows.push(...value.sessions);
         if (!(value.next > offset)) break;
       }
-      for (const capability of ["controls_options", "connection_metadata", "inventory_options"])
+      for (const capability of [
+        "controls_options",
+        "connection_metadata",
+        "inventory_options",
+      ])
         if (typeof value.capabilities?.[capability] === "boolean")
           state.catalog.capabilities[capability] =
             value.capabilities[capability];
@@ -172,12 +165,10 @@ export function createSessions({
         for (const [id, session] of pending)
           if (!sessionProject(state.projects, state.sidebarProjects, session))
             pending.delete(id);
-      const pendingRows = [...pending.values()]
-        .filter((session) => !project || matchesProject(session, project))
-        .map(
-          (session) =>
-            state.sessions.find((row) => row.id === session.id) || session,
-        );
+      const pendingRows = [...pending.values()].map(
+        (session) =>
+          state.sessions.find((row) => row.id === session.id) || session,
+      );
       const merged = new Map(
         [...pendingRows, ...(append ? state.sessions : []), ...rows].map(
           (session) => [session.id, session],
@@ -220,41 +211,10 @@ export function createSessions({
     }
   }
   function renderProjects() {
-    const current = state.listProject;
-    renderView(
-      $("project"),
-      <>
-        <Icon name="folder" />
-        <span className="label">{projectName(current)}</span>
-        <Icon name="chevron" />
-      </>,
-    );
     $("breadcrumbProject").textContent =
       state.cwd || state.project
         ? projectName(state.cwd || state.project)
         : t("Choose a project");
-    renderView(
-      $("projects"),
-      ["", ...state.projects].map((path) => (
-        <Action
-          key={path}
-          role="menuitemradio"
-          aria-checked={path === current}
-          action={async () => {
-            if (state.sending) return;
-            state.listProject = path;
-            if (!state.selected && path) state.project = path;
-            state.optionsLoaded = false;
-            $("projects").hidden = true;
-            $("project").setAttribute("aria-expanded", "false");
-            await list();
-          }}
-        >
-          <Icon name={path ? "folder" : "globe"} />
-          <span>{path || t("All projects")}</span>
-        </Action>
-      )),
-    );
   }
   function renderSessions() {
     const query = $("search").value.toLowerCase().trim();
@@ -284,13 +244,7 @@ export function createSessions({
       ],
     ]);
     const nativeProjects = state.sidebarProjects || [];
-    for (const project of nativeProjects.filter(
-      (project) =>
-        !state.listProject ||
-        project.root_paths?.some((root) =>
-          sameProjectPath(root, state.listProject),
-        ),
-    ))
+    for (const project of nativeProjects)
       groups.set("project:" + project.id, {
         name: project.name,
         path: project.root_paths?.join("\n"),
@@ -300,7 +254,6 @@ export function createSessions({
       });
     for (const root of state.projects.filter(
       (root) =>
-        (!state.listProject || sameProjectPath(root, state.listProject)) &&
         !nativeProjects.some((project) =>
           project.root_paths?.some((path) => sameProjectPath(path, root)),
         ),

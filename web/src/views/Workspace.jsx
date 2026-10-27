@@ -14,7 +14,6 @@ import {
   ComposerFooterEnd,
 } from "../components/ui/composer";
 import {
-  MenuSurface,
   SearchField,
   Sidebar,
   DecisionSurface,
@@ -63,31 +62,40 @@ export function Workspace() {
               hidden
             ></p>
           </div>
-          <SearchField className="search-box">
-            <span data-icon="search">
-              <Icon name="search" />
-            </span>
-            <Input
-              id="search"
-              type="search"
-              data-label="Search conversations"
-              data-placeholder="Search conversations"
-              autoComplete="off"
-            />
-            <Kbd aria-hidden="true">⌘ K</Kbd>
-          </SearchField>
-          <Button variant="ghost" id="new" className="nav-action" type="button">
-            <span data-icon="plus">
-              <Icon name="plus" />
-            </span>
-            <span data-t="New session"></span>
-            <Kbd>⌘ N</Kbd>
-          </Button>
+          <div className="sidebar-actions">
+            <SearchField className="search-box">
+              <span data-icon="search">
+                <Icon name="search" />
+              </span>
+              <Input
+                id="search"
+                type="search"
+                data-label="Search conversations"
+                data-placeholder="Search conversations"
+                autoComplete="off"
+              />
+              <Kbd aria-hidden="true">⌘ K</Kbd>
+            </SearchField>
+            <Button
+              variant="ghost"
+              id="new"
+              className="nav-action"
+              type="button"
+              data-label="New session"
+            >
+              <span data-icon="plus">
+                <Icon name="plus" />
+              </span>
+              <span data-t="New session"></span>
+              <Kbd>⌘ N</Kbd>
+            </Button>
+          </div>
 
           <details id="navigation" open>
             <summary data-t="Projects and sessions"></summary>
-            <div className="list-heading">
-              <span data-t="Workspace"></span>
+            <div className="list-heading history-heading">
+              <span data-t="Projects and sessions"></span>
+              <span id="sessionCount"></span>
               <Button
                 variant="ghost"
                 id="refresh"
@@ -99,21 +107,6 @@ export function Workspace() {
                   <Icon name="refresh" />
                 </span>
               </Button>
-            </div>
-            <div className="project-menu">
-              <Button
-                variant="ghost"
-                id="project"
-                type="button"
-                className="project-button"
-                aria-haspopup="menu"
-                aria-expanded="false"
-              ></Button>
-              <MenuSurface id="projects" hidden />
-            </div>
-            <div className="list-heading history-heading">
-              <span data-t="Projects and sessions"></span>
-              <span id="sessionCount"></span>
             </div>
             <nav id="sessions" aria-label="Sessions"></nav>
             <Button
@@ -128,7 +121,11 @@ export function Workspace() {
           <div className="sidebar-footer">
             <DeviceSwitcher pairRequested />
             <div>
-              <a className="settings-link" href="/account">
+              <a
+                className="settings-link"
+                href="/account"
+                data-label="My account and devices"
+              >
                 <span data-icon="agent">
                   <Icon name="agent" />
                 </span>
@@ -639,7 +636,12 @@ export function Workspace() {
           className="changes-panel"
           hidden
           bar={
-            <div id="inspectorTabs" className="panel-tabs inspector-tabs" role="tablist" data-label="Workspace inspector">
+            <div
+              id="inspectorTabs"
+              className="panel-tabs inspector-tabs"
+              role="tablist"
+              data-label="Workspace inspector"
+            >
               <Button
                 variant="ghost"
                 id="detailsTab"
@@ -648,7 +650,10 @@ export function Workspace() {
                 aria-selected="false"
                 aria-controls="detailsContent"
                 tabIndex={-1}
-              ><Icon name="settings" /><span data-t="Details"></span></Button>
+              >
+                <Icon name="settings" />
+                <span data-t="Details"></span>
+              </Button>
               <Button
                 variant="ghost"
                 id="filesTab"
@@ -657,7 +662,10 @@ export function Workspace() {
                 aria-selected="false"
                 aria-controls="filesContent"
                 tabIndex={-1}
-              ><Icon name="folder" /><span data-t="Files"></span></Button>
+              >
+                <Icon name="folder" />
+                <span data-t="Files"></span>
+              </Button>
               <Button
                 variant="ghost"
                 id="changesTab"
@@ -665,7 +673,10 @@ export function Workspace() {
                 role="tab"
                 aria-selected="true"
                 aria-controls="changesContent"
-              ><Icon name="diff" /><span data-t="Diff"></span></Button>
+              >
+                <Icon name="diff" />
+                <span data-t="Diff"></span>
+              </Button>
               <Button
                 variant="ghost"
                 id="logsTab"
@@ -674,7 +685,10 @@ export function Workspace() {
                 aria-selected="false"
                 aria-controls="logsContent"
                 tabIndex={-1}
-              ><Icon name="terminal" /><span data-t="Logs"></span></Button>
+              >
+                <Icon name="terminal" />
+                <span data-t="Logs"></span>
+              </Button>
               <Button
                 variant="ghost"
                 id="artifactsTab"
@@ -685,7 +699,10 @@ export function Workspace() {
                 tabIndex={-1}
               >
                 <Icon name="file" />
-                <span><span data-t="Artifacts"></span> <span id="artifactCount"></span></span>
+                <span>
+                  <span data-t="Artifacts"></span>{" "}
+                  <span id="artifactCount"></span>
+                </span>
               </Button>
             </div>
           }
@@ -721,14 +738,45 @@ export function Workspace() {
             role="status"
             hidden
           ></div>
-          <div id="detailsContent" className="inspector-content" role="tabpanel" aria-labelledby="detailsTab" tabIndex={0} hidden>
+          <div
+            id="detailsContent"
+            className="inspector-content"
+            role="tabpanel"
+            aria-labelledby="detailsTab"
+            tabIndex={0}
+            hidden
+          >
             <div id="detailsInfo" className="inspector-card"></div>
             <div id="detailsActivity"></div>
           </div>
-          <div id="logsContent" className="inspector-content" role="tabpanel" aria-labelledby="logsTab" tabIndex={0} hidden></div>
-          <div id="changesContent" role="tabpanel" aria-labelledby="changesTab" tabIndex={0}></div>
-          <div id="artifactsContent" role="tabpanel" aria-labelledby="artifactsTab" tabIndex={0} hidden></div>
-          <div id="filesContent" role="tabpanel" aria-labelledby="filesTab" tabIndex={0} hidden>
+          <div
+            id="logsContent"
+            className="inspector-content"
+            role="tabpanel"
+            aria-labelledby="logsTab"
+            tabIndex={0}
+            hidden
+          ></div>
+          <div
+            id="changesContent"
+            role="tabpanel"
+            aria-labelledby="changesTab"
+            tabIndex={0}
+          ></div>
+          <div
+            id="artifactsContent"
+            role="tabpanel"
+            aria-labelledby="artifactsTab"
+            tabIndex={0}
+            hidden
+          ></div>
+          <div
+            id="filesContent"
+            role="tabpanel"
+            aria-labelledby="filesTab"
+            tabIndex={0}
+            hidden
+          >
             <SearchField className="file-search">
               <span data-icon="search">
                 <Icon name="search" />

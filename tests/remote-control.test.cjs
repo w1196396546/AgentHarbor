@@ -262,12 +262,12 @@ for (const engine of engines)
           undefined,
           "transcript became executable HTML",
         );
-        if (width < 760) await page.locator("#sidebarToggle").click();
-        await page.locator("#project").click();
+        await page.locator("#breadcrumbProject").click();
         await page
-          .locator("#projects button")
+          .locator("#menu button")
           .filter({ hasText: project })
           .click();
+        if (width < 760) await page.locator("#sidebarToggle").click();
         const previousOptionCount = optionQueries.length;
         await page.locator("#new").click();
         await page

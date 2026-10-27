@@ -143,7 +143,6 @@ export function createAgentLifecycle({
     drafts.set(scope(previous), {
       prefs: !state.selected ? { ...state.prefs } : {},
       project: state.project,
-      listProject: state.listProject,
       text: $("message").value,
       attachments: state.attachments,
       skills: state.skills,
@@ -162,7 +161,6 @@ export function createAgentLifecycle({
     state.selected = "";
     state.session = null;
     state.project = "";
-    state.listProject = "";
     state.sessions = [];
     state.projects = [];
     state.sidebarProjects = null;

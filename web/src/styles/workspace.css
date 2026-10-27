@@ -8,14 +8,9 @@
   --green: var(--success);
   --focus: var(--ring);
   --danger: var(--destructive);
-  --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  --reading-width: 940px;
-  font:
-    14px/1.6 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "PingFang SC",
-    sans-serif;
+  --mono: var(--font-mono);
+  --reading-width: 820px;
+  font: 16px/1.6 var(--font-sans);
   color: var(--ink);
   background: var(--paper);
 }
@@ -29,6 +24,7 @@ body,
 }
 body {
   margin: 0;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -207,7 +203,7 @@ kbd {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 24px 12px 14px;
+  padding: 14px 12px 10px;
   border-right: 1px solid var(--line);
   background: var(--sidebar);
 }
@@ -243,8 +239,8 @@ body.inspector-resizing * {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 9px 24px;
+  gap: 8px;
+  padding: 4px 4px 10px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -255,7 +251,8 @@ body.inspector-resizing * {
 }
 .brand-copy {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
 .brand-copy strong {
@@ -264,7 +261,8 @@ body.inspector-resizing * {
   white-space: nowrap;
 }
 .brand-copy small {
-  margin-top: 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
   color: var(--text-muted);
   font-size: 10px;
 }
@@ -276,15 +274,16 @@ body.inspector-resizing * {
   justify-content: center;
 }
 .brand-mark {
-  width: 30px;
-  height: 30px;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
 }
 .brand-mark .icon {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
 }
 .agent-switcher {
-  padding: 0 8px 14px;
+  padding: 0 0 10px;
 }
 .agent-switcher > label {
   font-size: 11px;
@@ -294,10 +293,10 @@ body.inspector-resizing * {
   min-width: 0;
 }
 #agentSelect {
-  margin-top: 5px;
+  margin-top: 0;
   width: 100%;
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -317,9 +316,18 @@ body.inspector-resizing * {
   min-width: 0;
   color: var(--text-muted);
 }
+.sidebar-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
 .search-box {
   padding: 0 9px;
-  margin-bottom: 8px;
+  height: 36px;
+  margin-bottom: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -350,23 +358,32 @@ body.inspector-resizing * {
 .nav-action,
 #new {
   width: 100%;
-  justify-content: flex-start;
-  min-height: 42px;
-  padding: 9px 12px;
+  justify-content: center;
+  min-height: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   background: var(--secondary);
   color: var(--ink);
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 .nav-action:hover,
 #new:hover {
   background: color-mix(in srgb, var(--primary) 13%, var(--sidebar));
 }
-.nav-action kbd {
-  margin-left: auto;
+#new > [data-t] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+#new kbd {
+  display: none;
 }
 #navigation {
   flex: 1;
@@ -398,32 +415,11 @@ body.inspector-resizing * {
   width: 13px;
   height: 13px;
 }
-.project-menu {
-  position: relative;
-  margin: 4px 0 14px;
-}
-.project-button {
-  width: 100%;
-  min-width: 0;
-  justify-content: flex-start;
-  border-color: transparent;
-  padding: 9px;
-  font-size: 13px;
-  color: var(--ink);
-}
-.project-button .label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-button .icon:last-child {
-  margin-left: auto;
-  width: 12px;
-}
 .history-heading {
   margin: 4px 0 8px;
 }
 #sessionCount {
+  margin-left: auto;
   font-size: 11px;
   font-weight: 400;
 }
@@ -437,9 +433,8 @@ body.inspector-resizing * {
   margin-top: 4px;
 }
 .project-group + .project-group {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-  margin-top: 7px;
+  padding-top: 12px;
+  margin-top: 4px;
 }
 .project-group > summary {
   display: flex;
@@ -590,10 +585,11 @@ body.inspector-resizing * {
 .sidebar-footer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  flex-shrink: 0;
+  gap: 4px;
   min-width: 0;
-  margin-top: 12px;
-  padding: 14px 4px 0;
+  margin-top: 6px;
+  padding: 6px 0 0;
   border-top: 1px solid var(--line);
 }
 .sidebar-footer > div {
@@ -605,13 +601,33 @@ body.inspector-resizing * {
 .sidebar-footer > .device-switcher {
   display: block;
   width: 100%;
+  margin: 0;
+}
+.sidebar-footer .device-switcher > label {
+  display: none;
+}
+.sidebar-footer .device-switcher-trigger {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.sidebar-footer .device-switcher-selection {
+  gap: 2px;
 }
 .sidebar-footer button {
   font-size: 11px;
   padding: 6px;
 }
 .sidebar-footer > div:last-child {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+.sidebar-footer > div:last-child [data-slot="button"] {
+  min-width: 32px;
+  min-height: 32px;
+  width: auto;
+  height: 32px;
+}
+.sidebar-footer > div:last-child .icon-button {
+  width: 32px;
 }
 .sidebar-footer #language {
   margin-left: auto;
@@ -620,13 +636,14 @@ body.inspector-resizing * {
 }
 .settings-link {
   display: inline-flex;
-  flex: 1 0 100%;
-  gap: 7px;
+  flex: 1 1 0;
+  gap: 4px;
   align-items: center;
   min-width: 0;
-  padding: 7px 5px;
+  min-height: 32px;
+  padding: 4px 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   text-decoration: none;
   border-radius: 6px;
 }
@@ -874,7 +891,7 @@ body.inspector-resizing * {
 
 .message {
   width: 100%;
-  margin: 0 0 26px;
+  margin: 0 0 32px;
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -898,17 +915,18 @@ body.inspector-resizing * {
 .message.user .message-body {
   width: auto;
   max-width: 100%;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 14px 14px 4px 14px;
   background: var(--secondary);
-  padding: 11px 16px;
+  padding: 13px 18px;
+  font-size: 15px;
   white-space: pre-wrap;
   line-height: 1.7;
 }
 .message.agent,
 .message.agent .message-body {
   line-height: 1.8;
-  font-size: 14px;
+  font-size: 15px;
 }
 .message.agent .message-body {
   width: 100%;
@@ -925,17 +943,17 @@ body.inspector-resizing * {
 .agent-message-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  font-size: 15px;
+  gap: 9px;
+  margin-bottom: 14px;
+  font-size: 14px;
   font-weight: 600;
 }
 .agent-message-heading .icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
 }
 .agent-message-heading ~ .markdown {
-  margin-left: 42px;
+  margin-left: 0;
 }
 .message-body > :first-child {
   margin-top: 0;
@@ -956,24 +974,24 @@ body.inspector-resizing * {
   line-height: 1.8;
 }
 .markdown p {
-  margin: 9px 0;
+  margin: 12px 0;
   white-space: pre-wrap;
 }
 .markdown h1,
 .markdown h2,
 .markdown h3,
 .markdown h4 {
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.5;
   font-weight: 600;
-  margin: 22px 0 9px;
+  margin: 28px 0 12px;
 }
 .markdown h2 {
-  font-size: 17px;
+  font-size: 19px;
 }
 .markdown h3,
 .markdown h4 {
-  font-size: 15px;
+  font-size: 16px;
 }
 .markdown ul,
 .markdown ol {
@@ -1076,19 +1094,20 @@ body.inspector-resizing * {
   margin: 8px 0;
   overflow: hidden;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .activity > summary {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 47px;
-  padding: 11px 13px;
+  min-height: 44px;
+  padding: 10px 4px;
   list-style: none;
   cursor: pointer;
-  color: var(--ink);
+  color: var(--text-muted);
   font-size: 13px;
 }
 .activity > summary:hover {
@@ -1099,9 +1118,9 @@ body.inspector-resizing * {
   display: none;
 }
 .activity > summary > .icon:first-child {
-  width: 18px;
-  height: 18px;
-  color: var(--primary);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
 }
 .activity-title {
   font-weight: 500;
@@ -1135,8 +1154,9 @@ body.inspector-resizing * {
   transform: rotate(0);
 }
 .activity-body {
-  padding: 11px 14px;
-  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  border-top: 0;
+  background: var(--surface);
   font-size: 13px;
   line-height: 1.75;
 }
@@ -1162,7 +1182,7 @@ body.inspector-resizing * {
 }
 .command-line {
   padding: 9px 12px;
-  font: 11px/1.7 var(--mono);
+  font: 12px/1.7 var(--mono);
   border-bottom: 1px solid var(--line);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1174,7 +1194,7 @@ body.inspector-resizing * {
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 11px/1.75 var(--mono);
+  font: 12px/1.75 var(--mono);
 }
 .command-footer {
   padding: 6px 12px;
@@ -1433,6 +1453,7 @@ body.inspector-resizing * {
 }
 .composer-right {
   margin-left: auto;
+  justify-content: flex-end;
 }
 .composer-chip {
   min-width: 0;
@@ -1505,7 +1526,7 @@ body.inspector-resizing * {
   border: 1px solid transparent;
   border-radius: 50%;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--primary-foreground);
   background: var(--primary);
   margin: 0;
 }
@@ -1515,6 +1536,7 @@ body.inspector-resizing * {
 }
 .stop-button {
   background: var(--danger);
+  color: var(--destructive-foreground);
 }
 .stop-button .icon {
   width: 11px;
@@ -2580,8 +2602,10 @@ dialog p {
 }
 #pairForm input {
   font-size: 16px;
+  min-height: 44px;
 }
 #pairForm button {
+  min-height: 44px;
   margin-top: 4px;
   padding: 12px;
   border-radius: 9px;
@@ -2795,8 +2819,8 @@ dialog p {
     inset: 0 auto 0 0;
     width: min(350px, calc(100vw - 44px));
     z-index: 40;
-    padding: max(22px, env(safe-area-inset-top)) 14px
-      max(14px, env(safe-area-inset-bottom));
+    padding: max(10px, env(safe-area-inset-top)) 12px
+      max(8px, env(safe-area-inset-bottom));
     transform: translateX(-100%);
     transition: transform 0.18s ease;
   }
@@ -2813,30 +2837,56 @@ dialog p {
   #changesResize {
     display: none;
   }
-  .brand {
-    padding-bottom: 20px;
+  #sidebar .brand {
+    padding: 4px 4px 8px;
   }
-  .brand strong {
-    font-size: 21px;
+  #sidebar .agent-switcher {
+    padding: 0 0 8px;
+  }
+  #sidebar .sidebar-actions {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    margin-bottom: 8px;
+  }
+  #sidebar .search-box {
+    height: 44px;
+  }
+  #sidebar .sidebar-actions kbd {
+    display: none;
+  }
+  #sidebar #new {
+    height: 44px;
+  }
+  #navigation .list-heading .icon-button {
+    min-width: 32px;
+    min-height: 32px;
+    width: 32px;
+    height: 32px;
+  }
+  #sidebar .history-heading {
+    margin-bottom: 4px;
   }
   .nav-action,
   #new {
     background: var(--primary);
-    color: #fff;
+    color: var(--primary-foreground);
     min-height: 44px;
   }
   .nav-action kbd {
     background: transparent;
-    color: #fff;
+    color: var(--primary-foreground);
   }
   #sessions button {
-    min-height: 41px;
+    min-height: 44px;
   }
   .conversation-heading {
     height: var(--mobile-heading-height);
     padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0
       max(8px, env(safe-area-inset-left));
     gap: 3px;
+  }
+  .conversation-heading [data-slot="button"] {
+    min-width: 24px;
+    min-height: 24px;
   }
   .breadcrumb {
     flex-direction: column;
@@ -2927,6 +2977,11 @@ dialog p {
   .composer-controls {
     align-items: center;
     gap: 4px;
+    flex-wrap: nowrap;
+  }
+  .composer-controls [data-slot="button"] {
+    min-width: 24px;
+    min-height: 24px;
   }
   .composer-toolbar,
   .composer-left,
@@ -2937,11 +2992,11 @@ dialog p {
     font-size: 14px;
   }
   .agent-message-heading .icon {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
   }
   .agent-message-heading ~ .markdown {
-    margin-left: 38px;
+    margin-left: 0;
   }
   .composer-chip {
     flex: 0 0 auto;
@@ -2955,6 +3010,7 @@ dialog p {
   }
   .composer-chip#model {
     flex: 1 1 0;
+    min-width: 24px;
     max-width: none;
     justify-content: flex-end;
   }
@@ -3014,8 +3070,8 @@ dialog p {
     max-width: 95%;
   }
   .message.user .message-body {
-    font-size: 14px;
-    padding: 10px 13px;
+    font-size: 15px;
+    padding: 12px 15px;
   }
   .message-user-attachments .image-message {
     max-width: 100%;
@@ -3135,11 +3191,6 @@ dialog p {
   #sidebar {
     overflow-y: auto;
   }
-  #navigation {
-    flex: none;
-    min-height: 120px;
-    overflow: visible;
-  }
   .brand {
     padding-bottom: 10px;
   }
@@ -3167,19 +3218,20 @@ dialog p {
   }
   .request-actions button,
   .dialog-actions button,
-  .menu button {
-    min-height: 42px;
+  .menu button,
+  .project-group > summary {
+    min-height: 44px;
   }
   .queue-edit,
   .queue-remove {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
   }
   #attach,
   .send-button,
   .stop-button {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

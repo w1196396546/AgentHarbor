@@ -13,6 +13,9 @@
 .account-dashboard .admin-page-heading > .theme-toggle {
   flex-shrink: 0;
 }
+.account-dashboard .admin-page-heading {
+  align-items: flex-start;
+}
 .account-brand {
   display: inline-flex;
   align-items: center;
@@ -46,17 +49,30 @@
   max-width: 480px;
   width: 100%;
   margin: 0 auto;
+  border-radius: var(--radius-xl);
 }
 .account-login-form {
   display: grid;
-  gap: 10px;
-  padding: 24px;
+  gap: 8px;
+  padding: 28px;
+}
+.account-login-form label {
+  font-size: 13px;
+}
+.account-login-form input + label {
+  margin-top: 12px;
 }
 .account-login-form .dialog-actions {
-  margin-top: 10px;
+  margin-top: 16px;
+}
+.account-login-form .dialog-actions button {
+  min-height: 44px;
+}
+.account-login-form .dialog-actions button[type="submit"] {
+  flex: 1;
 }
 .account-login-form .section-note {
-  padding: 4px 0 0;
+  padding: 8px 0 0;
 }
 .account-factor-note {
   margin: 0 0 8px;
@@ -112,13 +128,24 @@
 }
 @media (max-width: 640px) {
   .account-login-form {
-    padding: 18px 16px;
+    padding: 24px 20px;
   }
   .account-device-actions {
     flex-basis: 100%;
     justify-content: flex-end;
   }
   .account-revoke-note {
+    margin-left: 0;
+  }
+}
+@media (max-width: 400px) {
+  .account-device .device-illustration {
+    display: none;
+  }
+  .account-device .relay-device-info {
+    flex-basis: 100%;
+  }
+  .account-device > .device-status {
     margin-left: 0;
   }
 }

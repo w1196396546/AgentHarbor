@@ -109,8 +109,8 @@
   height: auto;
 }
 .changes-controls button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .change-kind {
   flex: none;
@@ -177,4 +177,15 @@
   height: auto;
   padding: 0.2rem 0.3rem;
   font-size: inherit;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .turn-summary {
+    align-items: center;
+    gap: 4px 10px;
+  }
+  .turn-summary [data-slot="button"] {
+    min-height: 24px;
+    padding: 3px 5px;
+    line-height: 1.4;
+  }
 }

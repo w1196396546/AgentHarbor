@@ -32,6 +32,8 @@ function AdminApp() {
     [loginError, setLoginError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(true),
+    [loadError, setLoadError] = useState(""),
     [disableUser, setDisableUser] = useState(null),
     [revoke, setRevoke] = useState(null);
   const generation = useRef(0),
@@ -52,10 +54,13 @@ function AdminApp() {
       clearTimeout(timer.current);
       setState(null);
       setRevoke(null);
-      throw new Error(
-        path === "login"
-          ? "管理凭证无效，请从服务器上的 admin-token 文件获取。"
-          : "请重新登录管理页。",
+      throw Object.assign(
+        new Error(
+          path === "login"
+            ? "管理凭证无效，请从服务器上的 admin-token 文件获取。"
+            : "请重新登录管理页。",
+        ),
+        { status: response.status },
       );
     }
     if (response.status === 204) return;
@@ -75,8 +80,19 @@ function AdminApp() {
       15000,
     );
   }, [api]);
+  const loadState = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      await refresh();
+    } catch (error) {
+      if (error.status !== 401) setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [refresh]);
   useEffect(() => {
-    refresh().catch(() => {});
+    loadState();
     const stop = () => {
       generation.current++;
       clearTimeout(timer.current);
@@ -91,7 +107,7 @@ function AdminApp() {
       window.removeEventListener("pagehide", stop);
       window.removeEventListener("pageshow", resume);
     };
-  }, [refresh]);
+  }, [loadState, refresh]);
   useEffect(() => {
     if (revoke && !dialog.current.open) dialog.current.showModal();
     else if (!revoke && dialog.current.open) dialog.current.close();
@@ -123,47 +139,78 @@ function AdminApp() {
             <span className="admin-eyebrow">RELAY CONSOLE</span>
             <h1>管理你的中转服务</h1>
             <p>查看连接状态，管理已登记的电脑。</p>
-            <form
-              id="loginForm"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (busy) return;
-                setBusy(true);
-                setLoginError("");
-                try {
-                  generation.current++;
-                  await api("login", { token: token.trim() });
-                  setToken("");
-                  await refresh();
-                } catch (error) {
-                  setLoginError(error.message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <Label htmlFor="token">管理员凭证</Label>
-              <Input
-                id="token"
-                data-slot="input"
-                type="password"
-                autoComplete="off"
-                required
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="输入 admin-token"
-              />
-              <p id="loginError" role="alert">
-                {loginError}
-              </p>
-              <Button type="submit" variant="default" data-strong disabled={busy}>
-                进入控制台 <ArrowRight size={16} />
-              </Button>
-            </form>
-            <p className="login-note">
-              使用服务器上的 admin-token
-              登录。客户端配对授权码不能用于管理登录。
-            </p>
+            {loading ? (
+              <p role="status">正在读取管理状态…</p>
+            ) : loadError ? (
+              <Empty>
+                <EmptyTitle>无法读取管理状态</EmptyTitle>
+                <EmptyDescription role="alert">{loadError}</EmptyDescription>
+                <EmptyDescription>
+                  请检查网络连接，然后重新读取管理状态。
+                </EmptyDescription>
+                <Button type="button" onClick={loadState}>
+                  <RefreshCw size={16} />
+                  重新读取管理状态
+                </Button>
+              </Empty>
+            ) : (
+              <>
+                <form
+                  id="loginForm"
+                  aria-busy={busy}
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    if (busy) return;
+                    setBusy(true);
+                    setLoginError("");
+                    try {
+                      generation.current++;
+                      await api("login", { token: token.trim() });
+                      setToken("");
+                      await refresh();
+                    } catch (error) {
+                      setLoginError(error.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <Label htmlFor="token">管理员凭证</Label>
+                  <Input
+                    id="token"
+                    data-slot="input"
+                    type="password"
+                    autoComplete="off"
+                    required
+                    value={token}
+                    aria-invalid={!!loginError}
+                    aria-describedby={
+                      loginError ? "loginError loginHelp" : "loginHelp"
+                    }
+                    onChange={(event) => {
+                      setToken(event.target.value);
+                      setLoginError("");
+                    }}
+                    placeholder="输入 admin-token"
+                  />
+                  <p id="loginError" role="alert">
+                    {loginError}
+                  </p>
+                  <Button
+                    type="submit"
+                    variant="default"
+                    data-strong
+                    disabled={busy}
+                  >
+                    {busy ? "正在登录…" : "进入控制台"} <ArrowRight size={16} />
+                  </Button>
+                </form>
+                <p id="loginHelp" className="login-note">
+                  使用服务器上的 admin-token
+                  登录。客户端配对授权码不能用于管理登录。
+                </p>
+              </>
+            )}
             <a className="back-chat" href="/">
               <ArrowLeft size={14} />
               返回远程会话
@@ -183,7 +230,7 @@ function AdminApp() {
           </a>
           <p className="sidebar-caption">服务管理</p>
           <nav>
-            <a className="admin-nav selected" href="#devices">
+            <a className="admin-nav" href="#devices">
               <Monitor size={16} />
               连接设备
             </a>
@@ -240,13 +287,12 @@ function AdminApp() {
           <div className="admin-content">
             <div className="admin-page-heading">
               <div>
-                <p className="admin-eyebrow">OVERVIEW</p>
-                <h1>连接，从这里开始。</h1>
-                <p>你的电脑，始终由你掌控。</p>
+                <h1>中转服务概览</h1>
+                <p>查看设备连接状态，管理用户与服务配置。</p>
               </div>
               <Button
                 id="refresh"
-                variant="default"
+                variant="outline"
                 disabled={busy}
                 onClick={() => run(refresh)}
               >

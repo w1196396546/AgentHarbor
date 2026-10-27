@@ -52,6 +52,7 @@ async function fixture(
     plan = false,
     settings = false,
     locale = "en",
+    context = {},
   } = {},
 ) {
   const browser = await (engine === "webkit" ? webkit : chromium).launch();
@@ -92,6 +93,7 @@ async function fixture(
     request_id: "plan-request",
   };
   state.live = {
+    context,
     status: settings ? "idle" : "inProgress",
     turn_id: "original-turn",
     items: [],
@@ -338,6 +340,34 @@ async function fixture(
   return { page, state, posts, errors };
 }
 for (const engine of engines) {
+  test(engine + ": Desktop composer aligns settings and exposes context", async (t) => {
+    const { page, errors } = await fixture(t, engine, { settings: true });
+    const settings = await page.locator(".composer-right").boundingBox();
+    const send = await page.locator("#send").boundingBox();
+    assert(send.x - settings.x - settings.width <= 10, "settings must sit next to send");
+    assert(await page.locator("#contextUsage").isVisible());
+    assert.equal(await page.locator("#contextUsage").getAttribute("data-unknown"), "true");
+    await page.locator("#contextUsage").click();
+    assert(await page.locator("#contextUsageDialog").isVisible());
+    assert.match(await page.locator("#contextUsageSummary").textContent(), /Unknown/);
+    assert.deepEqual(errors, []);
+  });
+  test(engine + ": Desktop context displays native tokens and fits on phones", async (t) => {
+    const { page, errors } = await fixture(t, engine, { settings: true, locale: "zh", context: { used_tokens: 50000, window_tokens: 200000 } });
+    await page.locator("#contextUsage:visible").waitFor();
+    assert.equal(await page.locator("#contextUsage").getAttribute("data-unknown"), "false");
+    await page.locator("#contextUsage").click();
+    assert.match(await page.locator("#contextUsageSummary").textContent(), /50,000.*200,000.*25%/);
+    await page.locator("#closeContextUsage").click();
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const selector of ["#model", "#contextUsage", "#send"]) {
+        const rect = await page.locator(selector).boundingBox();
+        assert(rect && rect.x >= 0 && rect.x + rect.width <= width, selector + " must fit");
+      }
+    }
+    assert.deepEqual(errors, []);
+  });
   for (const locale of ["en", "zh", "zh-TW", "ja", "de"])
     test(
       engine +

@@ -17,8 +17,9 @@ export function Pairing() {
         hidden
         className="pair-card"
       >
-        <div className="pair-mark"><RemoteIcon name="brand" /></div>
-        <p className="eyebrow">anywhereToAgent</p>
+        <div className="pair-mark">
+          <RemoteIcon name="brand" />
+        </div>
         <h1 data-t="Your computer, within reach."></h1>
         <p data-t="Scan the QR code on the remote connection page in agentTools, or enter its authorization code."></p>
         <DeviceSwitcher />

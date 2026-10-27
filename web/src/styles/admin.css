@@ -4,7 +4,7 @@
 @import "./ui.css";
 @source "../";
 :root {
-  font: 14px/1.6 var(--font-sans);
+  font: 16px/1.6 var(--font-sans);
   color: var(--foreground);
   background: var(--background);
 }
@@ -13,6 +13,7 @@
 }
 body {
   margin: 0;
+  font-size: 14px;
 }
 button,
 input {
@@ -49,14 +50,15 @@ input:focus-visible {
 }
 input {
   width: 100%;
-  padding: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
   border: 1px solid var(--input);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: var(--foreground);
   background: var(--secondary);
 }
 .admin-login {
-  max-width: 460px;
+  max-width: 480px;
   margin: 10vh auto;
   padding: 16px;
 }
@@ -69,16 +71,16 @@ input {
   border-bottom: 1px solid var(--border);
 }
 .login-content {
-  padding: 30px;
+  padding: 32px;
 }
 .admin-mark {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
   place-items: center;
   border-radius: 12px;
   color: var(--primary);
-  background: var(--secondary);
+  background: transparent;
   margin-bottom: 24px;
 }
 .admin-eyebrow {
@@ -91,13 +93,16 @@ input {
   margin-bottom: 10px;
 }
 .login-content h1 {
-  font-size: 26px;
-  letter-spacing: -0.5px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
   margin: 0 0 8px;
 }
 .login-content > p {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.75;
 }
 .login-content form {
   display: grid;
@@ -105,13 +110,14 @@ input {
   margin: 28px 0 16px;
 }
 .login-content form > button {
-  height: 42px;
+  min-height: 44px;
   justify-content: space-between;
 }
 .login-content label {
-  font-size: 12px;
+  font-size: 13px;
 }
-.login-note {
+.login-content .login-note {
+  font-size: 12px;
   line-height: 1.8;
 }
 #loginError {
@@ -133,7 +139,9 @@ input {
   padding: 8px 16px;
   border-radius: 8px;
   text-decoration: none;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 .back-chat:hover {
   color: var(--foreground);
@@ -270,7 +278,7 @@ input {
 }
 .admin-page-heading p {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
 }
 .admin-page-heading .admin-eyebrow {
@@ -280,36 +288,58 @@ input {
 .admin-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  padding: 20px 0;
+  border-block: 1px solid var(--border);
 }
 .admin-stats > section {
-  border-radius: 12px;
-  padding: 14px 12px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0 24px;
+  background: transparent;
+}
+.admin-stats > section:first-child {
+  padding-left: 0;
+}
+.admin-stats > section + section {
+  border-left: 1px solid var(--border);
+}
+.admin-stats [data-slot="panel-header"] {
+  height: auto;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+}
+.admin-stats [data-slot="panel-header"] h2 {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
 }
 .admin-stats strong {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 500;
   line-height: 1.5;
-  padding: 8px 10px;
+  padding: 4px 0;
   letter-spacing: -0.5px;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .admin-stats small {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
   color: var(--muted-foreground);
   margin-left: 10px;
 }
 .admin-stats .registration-state {
-  font-size: 25px;
-  line-height: 54px;
+  font-size: 23px;
+  line-height: 48px;
 }
 .stat-note {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
-  padding: 2px 10px;
+  padding: 0;
   display: flex;
   gap: 6px;
   align-items: center;
@@ -329,8 +359,11 @@ input {
   height: 52px;
   border-bottom: 1px solid var(--border);
 }
+.admin-section > [data-slot="panel-header"] h2 {
+  font-size: 14px;
+}
 #deviceCount {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .relay-device {
@@ -364,12 +397,12 @@ input {
   margin: 0;
 }
 .relay-device code {
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
   color: var(--muted-foreground);
 }
 .relay-device p {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 4px 0 0;
 }
@@ -414,7 +447,7 @@ input {
   gap: 14px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 13px;
 }
 .config-values > div:last-child {
   border: 0;
@@ -426,11 +459,12 @@ input {
   margin: 0;
   overflow-wrap: anywhere;
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 12px;
 }
 .section-note {
-  padding: 0 20px 16px;
-  font-size: 11px;
+  padding: 16px 20px;
+  font-size: 12px;
+  line-height: 1.75;
   color: var(--muted-foreground);
   margin: 0;
 }
@@ -442,18 +476,18 @@ input {
   margin-bottom: 12px;
 }
 .credential-content h3 {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0 0 6px;
   font-weight: 500;
 }
 .credential-content p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-foreground);
   margin: 0 0 22px;
 }
 .credential-content > span {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin-bottom: 6px;
 }
@@ -462,7 +496,7 @@ input {
   background: var(--secondary);
   padding: 8px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 .admin-footnote {
@@ -471,7 +505,7 @@ input {
   align-items: center;
   justify-content: center;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-notice {
   padding: 12px 16px;
@@ -522,11 +556,8 @@ dialog p {
     grid-template-columns: 1fr;
     gap: 0;
   }
-  .admin-stats {
-    gap: 8px;
-  }
   .admin-stats > section {
-    padding: 10px 4px;
+    padding-inline: 16px;
   }
   .admin-page-heading h1 {
     font-size: 25px;
@@ -581,12 +612,16 @@ dialog p {
     display: grid;
     grid-template-columns: 1fr 1fr;
     align-items: center;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+    padding: 16px 0 0;
   }
   .admin-stats > section:last-child strong {
     grid-row: 1/3;
     grid-column: 2;
     text-align: right;
-    padding-right: 16px;
+    padding-right: 0;
   }
   .admin-stats strong {
     font-size: 30px;
@@ -616,7 +651,6 @@ dialog p {
     grid-template-columns: 90px minmax(0, 1fr);
   }
   .admin-footnote {
-    font-size: 10px;
     align-items: flex-start;
   }
   .admin-login {
@@ -647,13 +681,13 @@ dialog p {
 }
 
 .empty-devices [data-slot="empty-title"] {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
 }
 .empty-devices [data-slot="empty-description"] {
   max-width: 340px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 .admin-dashboard .workspace-modal {
   background: var(--popover);

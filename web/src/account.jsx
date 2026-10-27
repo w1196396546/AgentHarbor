@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  ArrowLeft,
-  LogOut,
-  Monitor,
-  RefreshCw,
-  Unplug,
-} from "lucide-react";
+import { ArrowLeft, LogOut, Monitor, RefreshCw, Unplug } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Panel } from "./components/ui/panel";
 import { Label } from "./components/ui/label";
@@ -34,7 +28,8 @@ function AccountApp() {
     [code, setCode] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [loadError, setLoadError] = useState("");
   async function api(path = "", body) {
     const response = await fetch("/api/account" + path, {
       method: body === undefined ? "GET" : "POST",
@@ -61,12 +56,19 @@ function AccountApp() {
   async function refresh() {
     setAccount(await api());
   }
+  async function loadAccount() {
+    setLoading(true);
+    setLoadError("");
+    try {
+      await refresh();
+    } catch (error) {
+      if (error.status !== 401) setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
   useEffect(() => {
-    refresh()
-      .catch((error) => {
-        if (error.status !== 401) setNotice(error.message);
-      })
-      .finally(() => setLoading(false));
+    loadAccount();
   }, []);
   async function run(action) {
     if (busy) return;
@@ -92,11 +94,19 @@ function AccountApp() {
                 <RemoteIcon name="brand" />
                 <span>anywhereToAgent</span>
               </a>
-              <h1>我的设备</h1>
+              <h1>
+                {account
+                  ? "我的设备"
+                  : loading || loadError
+                    ? "账户与设备"
+                    : factor
+                      ? "验证身份"
+                      : "登录 FullCupAI"}
+              </h1>
               <p>
                 {account
                   ? account.user.username || account.user.email
-                  : "使用 FullCupAI 账户管理你的远程设备。"}
+                  : "使用与 agentTools 相同的账户，查看和管理远程设备。"}
               </p>
               {account?.user.username && <p>{account.user.email}</p>}
             </div>
@@ -109,10 +119,22 @@ function AccountApp() {
             <p role="status" className="section-note">
               正在读取账户…
             </p>
+          ) : loadError ? (
+            <Empty>
+              <EmptyTitle>无法读取账户</EmptyTitle>
+              <EmptyDescription role="alert">{loadError}</EmptyDescription>
+              <EmptyDescription>
+                请检查网络连接，然后重新读取账户。
+              </EmptyDescription>
+              <Button type="button" onClick={loadAccount}>
+                <RefreshCw size={16} />
+                重新读取账户
+              </Button>
+            </Empty>
           ) : !account ? (
-            <Panel
-              title="登录 FullCupAI"
-              className="admin-section account-login-panel"
+            <section
+              aria-label="账户登录"
+              className="surface-panel account-login-panel"
             >
               <form
                 className="account-login-form"
@@ -206,10 +228,10 @@ function AccountApp() {
                   </Button>
                 </div>
                 <p className="section-note">
-                  与 agentTools 使用同一个 FullCupAI 账户。
+                  账户登录用于管理设备；连接电脑仍需单独配对。
                 </p>
               </form>
-            </Panel>
+            </section>
           ) : (
             <>
               <div className="account-toolbar">
@@ -219,14 +241,16 @@ function AccountApp() {
                     type="button"
                     variant="default"
                     disabled={busy}
-                    onClick={() => run(async () => setAccount(await api("/claim", {})))}
+                    onClick={() =>
+                      run(async () => setAccount(await api("/claim", {})))
+                    }
                   >
                     绑定当前设备
                   </Button>
                 )}
                 <Button
                   type="button"
-                  variant="default"
+                  variant="outline"
                   disabled={busy}
                   onClick={() => run(refresh)}
                 >

@@ -41,7 +41,7 @@ for (const engine of engines) {
     assert.equal(await page.locator('#notice').innerText(),'');
     await page.locator('#pair .theme-toggle').click();
     assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),false);
-    if(process.env.ARTIFACT_DIR){await fs.mkdir(process.env.ARTIFACT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.ARTIFACT_DIR,`react-pair-${engine}.png`)});}
+    if(process.env.ARTIFACT_DIR){await fs.mkdir(process.env.ARTIFACT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.ARTIFACT_DIR,`react-pair-${engine}.png`),animations:'disabled'});}
     await page.locator('#pairKey').fill(pairCode);await page.locator('#pairForm button').click();await page.waitForFunction(()=>document.getElementById('notice').textContent.includes('过期'));
     await page.locator('#pairKey').fill(pairCode);await page.locator('#pairForm button').click();
     await page.locator('#deviceOffline:visible').waitFor();assert.equal(await page.locator('#pairKey').inputValue(),'');

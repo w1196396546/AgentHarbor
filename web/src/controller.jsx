@@ -100,7 +100,6 @@ export function startRemote() {
     deviceTimer: null,
     deviceChecking: false,
     project: "",
-    listProject: "",
     session: null,
     selected: "",
     generation: 0,
@@ -428,7 +427,6 @@ export function startRemote() {
     state.archivedSelection = "";
     state.ownerUnavailable = false;
     state.project = "";
-    state.listProject = "";
     state.session = null;
     state.sessions = [];
     state.projects = [];
@@ -565,7 +563,6 @@ export function startRemote() {
     $("agentSelect").disabled =
       !state.agentDiscovered || state.sending || state.uploading > 0;
     $("startChat").disabled = state.sending || offline || agentUnavailable;
-    $("project").disabled = state.sending;
     $("breadcrumbProject").disabled = state.sending;
     for (const b of $("sessions").querySelectorAll("button"))
       b.disabled = state.sending;

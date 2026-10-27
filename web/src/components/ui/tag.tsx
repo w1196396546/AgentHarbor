@@ -40,8 +40,8 @@ function Tag({
       data-slot="tag"
       title={error}
       className={cn(
-        "control-selected relative flex h-7 w-fit max-w-44 items-center gap-1.5 overflow-hidden rounded-sm pl-2 text-[12px] text-foreground/90 [&_svg]:size-3.5 [&_svg]:shrink-0",
-        onRemove ? "pr-1" : "pr-2",
+        "control-selected relative flex w-fit max-w-44 items-center gap-1.5 overflow-hidden rounded-sm pl-2 text-[12px] text-foreground/90 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        onRemove ? "min-h-7 pr-1" : "h-7 pr-2",
         error && "text-destructive",
         armed && "control-armed",
         className,
@@ -73,6 +73,7 @@ function Tag({
       {onRemove && (
         <button
           type="button"
+          data-slot="tag-remove"
           aria-label={removeLabel}
           onClick={onRemove}
           className="relative shrink-0 rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground [&_svg]:size-3"

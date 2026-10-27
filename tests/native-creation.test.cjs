@@ -42,13 +42,13 @@ async function fixture() {
     device: { id: "device" },
     prefs: { model: "model", mode: "default", permission: "default" },
     sidebarProjects: [],
-    listProject: "/hidden",
     listSeq: 0,
     sessions: [],
     projects: ["/project"],
   };
   const context = {
     exports: {},
+    React: require("react"),
     sessionStorage,
     crypto: webcrypto,
     URLSearchParams,
@@ -91,10 +91,13 @@ async function fixture() {
   const session = context.exports.createSessions({
     state,
     $: (id) => {
-      if (!nodes.has(id)) nodes.set(id, { hidden: false, value: "draft" });
+      if (!nodes.has(id)) nodes.set(id, { hidden: false, value: "draft", querySelectorAll: () => [] });
       return nodes.get(id);
     },
     getAgent: () => ({ id: "claude-desktop", sourceID: "claude-desktop" }),
+    t: (value) => value,
+    getLanguage: () => "en",
+    sourceLabel: (value) => value,
     api: async (p, b) => {
       if (p.startsWith("options?")) return catalog;
       calls.push(JSON.parse(JSON.stringify(b)));

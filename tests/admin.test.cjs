@@ -96,8 +96,29 @@ async function fixture(t) {
 const engines = process.env.BROWSER
   ? [process.env.BROWSER]
   : ["chromium", "webkit"];
+async function screenshotThemes(page, engine, width, label) {
+  if (!process.env.ARTIFACT_DIR || engine !== "chromium") return;
+  await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
+  for (const theme of ["dark", "light"]) {
+    if (
+      (await page.evaluate(() =>
+        document.documentElement.classList.contains("dark"),
+      )) !==
+      (theme === "dark")
+    )
+      await page.locator(".theme-toggle:visible").click();
+    await page.screenshot({
+      animations: "disabled",
+      path: path.join(
+        process.env.ARTIFACT_DIR,
+        `relay-admin-${label}-${width}-${theme}.png`,
+      ),
+      fullPage: true,
+    });
+  }
+}
 for (const engine of engines)
-  for (const width of [390, 1280]) {
+  for (const width of [390, 768, 1280]) {
     test(
       `relay admin ${engine} ${width}px: real CLI configuration and independent authentication`,
       { skip: process.platform === "win32" },
@@ -113,19 +134,73 @@ for (const engine of engines)
         page.setDefaultTimeout(15000);
         const errors = [];
         page.on("pageerror", (error) => errors.push(error.message));
+        let failInitialRead = true,
+          failAfterLoginRead = false;
+        await page.route(f.url + "/api/admin/state", async (route) => {
+          if (failAfterLoginRead) {
+            failAfterLoginRead = false;
+            return route.fulfill({ status: 401 });
+          }
+          if (!failInitialRead) return route.continue();
+          failInitialRead = false;
+          await route.fulfill({
+            status: 503,
+            contentType: "text/plain",
+            body: "管理状态暂时不可用，请重试。",
+          });
+        });
         await page.goto(f.url + "/admin/");
+        await page.getByText("无法读取管理状态", { exact: true }).waitFor();
+        assert.equal(await page.locator("#loginForm").count(), 0);
+        assert.match(
+          await page.getByRole("alert").innerText(),
+          /管理状态暂时不可用/,
+        );
+        const retry = page.getByRole("button", { name: "重新读取管理状态" });
+        await retry.focus();
+        await page.keyboard.press("Enter");
         await page.locator("#login:visible").waitFor();
-        const icon = await page.request.get(new URL(await page.locator('link[rel="icon"]').getAttribute("href"), page.url()).href);
+        await page.locator("#token").waitFor();
+        assert((await page.locator("#token").boundingBox()).height >= 44);
+        await screenshotThemes(page, engine, width, "login");
+        const icon = await page.request.get(
+          new URL(
+            await page.locator('link[rel="icon"]').getAttribute("href"),
+            page.url(),
+          ).href,
+        );
         assert.equal(icon.status(), 200);
         assert.match(icon.headers()["content-type"], /image\/svg\+xml/);
         await page.locator("#token").fill("wrong");
-        await page.locator("#loginForm button").click();
+        await page.locator("#token").press("Enter");
         await page.waitForFunction(() =>
           document.getElementById("loginError").textContent.includes("无效"),
         );
+        assert.equal(
+          await page.locator("#token").getAttribute("aria-invalid"),
+          "true",
+        );
+        assert.match(
+          await page.locator("#token").getAttribute("aria-describedby"),
+          /loginError/,
+        );
+        assert.equal(await page.locator("#token").inputValue(), "wrong");
         await page.locator("#token").fill(f.token);
-        await page.locator("#loginForm button").click();
+        assert.equal(
+          await page.locator("#token").getAttribute("aria-invalid"),
+          "false",
+        );
+        failAfterLoginRead = true;
+        await page.locator("#token").press("Enter");
+        await page
+          .locator("#loginError")
+          .filter({ hasText: "请重新登录管理页" })
+          .waitFor();
+        assert.equal(await page.locator("#token").inputValue(), "");
+        await page.locator("#token").fill(f.token);
+        await page.locator("#token").press("Enter");
         await page.locator("#dashboard:visible").waitFor();
+        assert.equal(await page.locator(".admin-nav.selected").count(), 0);
         assert.equal(await page.locator("#token").inputValue(), "");
         assert.match(
           await page.locator("#configuration").innerText(),
@@ -194,16 +269,7 @@ for (const engine of engines)
           ),
           "admin credential persisted in localStorage",
         );
-        if (process.env.ARTIFACT_DIR && engine === "chromium") {
-          await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
-          await page.screenshot({
-            path: path.join(
-              process.env.ARTIFACT_DIR,
-              `relay-admin-${width}.png`,
-            ),
-            fullPage: true,
-          });
-        }
+        await screenshotThemes(page, engine, width, "overview");
         await page.locator("#logout").click();
         await page.locator("#login:visible").waitFor();
         const state = await context.request.get(f.url + "/api/admin/state");

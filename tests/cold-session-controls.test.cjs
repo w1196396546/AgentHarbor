@@ -35,7 +35,6 @@ function fixture(capabilities) {
   const state = {
     selected: "",
     project: "",
-    listProject: "",
     generation: 1,
     optionsSeq: 0,
     listSeq: 0,

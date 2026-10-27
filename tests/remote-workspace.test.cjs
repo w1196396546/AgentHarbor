@@ -1061,11 +1061,19 @@ for (const engine of engines) {
       await page.setViewportSize({width, height: 540});
       const controls = await page.evaluate(ids => ids.map(id => {
         const node = document.getElementById(id), rect = node.getBoundingClientRect();
-        return {id, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width};
+        return {id, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height};
       }), ids);
-      for (const rect of controls) assert(rect.width >= 24 && rect.left >= 0 && rect.right <= width + 1, "compact control leaves viewport: " + JSON.stringify({width, rect}));
-      for (let index = 1; index < controls.length; index++) assert(controls[index].left >= controls[index-1].right, "compact controls overlap: " + JSON.stringify(controls));
+      for (const rect of controls) assert(rect.width >= 24 && rect.height >= 24 && rect.left >= 0 && rect.right <= width + 1 && rect.bottom <= 540, "compact control needs an in-bounds target: " + JSON.stringify({width, rect}));
+      assert.equal((await page.locator('.conversation-heading').boundingBox()).height, 62, 'phone heading keeps its original compact height');
+      assert((await page.locator('.conversation-heading .breadcrumb').boundingBox()).width >= 24, 'the conversation identity retains space beside compact actions');
+      const rowCenter = (controls[0].top + controls[0].bottom) / 2;
+      assert(controls.every(rect => Math.abs((rect.top + rect.bottom) / 2 - rowCenter) <= 1), 'all composer controls stay on one row');
+      for (let index = 0; index < controls.length; index++) for (const other of controls.slice(index + 1)) {
+        const rect = controls[index];
+        assert(rect.right <= other.left || other.right <= rect.left || rect.bottom <= other.top || other.bottom <= rect.top, "compact controls overlap: " + JSON.stringify(controls));
+      }
       assert(await page.locator("#composer").evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+      await screenshot(page, `workspace-toolbar-${engine}-${width}.png`);
     }
     assert(await page.locator("#stop").isEnabled());
     assert(await page.locator("#send").isEnabled());
@@ -1074,6 +1082,52 @@ for (const engine of engines) {
     await page.locator("#closeContextUsage").click();
     assert.equal(await page.locator("#message").inputValue(), "Keep this queued draft");
     assert.equal(seen.posts.filter(post => /\/(turn|queue|settings)$/.test(post.path)).length, 0);
+    await f.clean();
+  });
+  test(`${engine}: phone turn statistics stay compact with large counts`, async (t) => {
+    const turn = { status: "completed", started_at_ms: 1700000000000, duration_ms: 1871200 };
+    const historyItems = Array.from({ length: 108 }, (_, index) => ({
+      id: `summary-command-${index}`, type: "commandExecution", turn_id: "summary-turn", status: "completed", turn,
+      data: { command: `echo fixture-${index}`, exitCode: index < 99 ? 0 : 1 },
+    }));
+    historyItems.push({ id: "summary-answer", type: "agentMessage", turn_id: "summary-turn", text: "Completed fixture answer.", turn });
+    const f = await fixture(t, engine, {
+      width: 390, locale: "zh-CN",
+      state: {
+        historyItems,
+        workspaceChanges: Array.from({ length: 9 }, (_, index) => ({
+          path: `${project}/file-${index}.txt`, turn_id: "summary-turn", source: "workspace", kind: "add", diff: "fixture\n",
+        })),
+        live: { status: "completed", turn_id: "summary-turn", items: [], requests: [] },
+      },
+    });
+    const { page } = f;
+    await page.locator('#sidebarToggle').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
+    const summary = page.locator('.turn-summary[data-turn="summary-turn"]');
+    await summary.getByRole('button', { name: '108 工具调用', exact: true }).waitFor({ state: 'attached' });
+    assert.match(await summary.textContent(), /99 成功的工具.*9 失败的工具/);
+    for (const width of [320, 390, 760]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const theme of ['dark', 'light']) {
+        await page.locator('#sidebarToggle').click();
+        if (await page.locator('html').evaluate(node => node.classList.contains('dark')) !== (theme === 'dark'))
+          await page.locator('#workspace .theme-toggle').click();
+        await page.keyboard.press('Escape');
+        const buttons = await summary.locator('button').evaluateAll(nodes => nodes.map(node => ({
+          height: node.getBoundingClientRect().height, fontSize: parseFloat(getComputedStyle(node).fontSize),
+        })));
+        assert(buttons.every(button => button.height >= 24 && button.height <= 28 && button.fontSize === 11), 'turn statistics use compact metadata controls: ' + JSON.stringify(buttons));
+        assert(await summary.evaluate(node => node.scrollWidth <= node.clientWidth), 'turn statistics stay within the reading column');
+        if (process.env.ARTIFACT_DIR) {
+          await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
+          await summary.screenshot({ path: path.join(process.env.ARTIFACT_DIR, `turn-summary-${engine}-${width}-${theme}.png`), animations: 'disabled' });
+        }
+      }
+    }
+    await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.fixtureClipboard = text; } } }));
+    await summary.getByRole('button', { name: '复制本轮回答', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.fixtureClipboard), 'Completed fixture answer.');
     await f.clean();
   });
   test(`${engine}: inspector tabs remain visible by keyboard and long records fit every language`, async (t) => {
@@ -1579,6 +1633,11 @@ for (const engine of engines) {
       await page.evaluate(() => window.fixtureClipboard),
       /^# Cart update/,
     );
+    const command = page.locator('[data-id="cmd-1"]');
+    for (const disclosure of [page.locator('.tool-batch').filter({ has: command }), command]) {
+      if (!(await disclosure.evaluate(node => node.open)))
+        await disclosure.locator(':scope > summary').click();
+    }
     await page
       .locator('[data-id="cmd-1"]')
       .getByRole("button", { name: "Copy command", exact: true })
@@ -3744,7 +3803,7 @@ for (const engine of engines) {
     await f.clean();
   });
 
-  test(`${engine}: selecting a conversation keeps all shared projects visible until an explicit list filter`, async (t) => {
+  test(`${engine}: selecting a conversation keeps all shared projects visible without a list filter`, async (t) => {
     const other = {
       ...session,
       id: "vscode-chat",
@@ -3773,19 +3832,16 @@ for (const engine of engines) {
       1,
       "another shared project disappeared",
     );
-    await page.locator("#project").click();
-    await page
-      .locator("#projects button")
-      .filter({ hasText: otherProject })
-      .click();
-    await page.waitForFunction(
-      () => [...new Set([...document.querySelectorAll("#sessions button[data-id]")].map(node => node.dataset.id))].join() === "vscode-chat",
-    );
-    assert.equal(seen.lists.at(-1).project, otherProject);
+    assert.equal(await page.locator('#project, #projects').count(), 0);
+    await page.locator('#search').fill('VS Code task');
+    assert.equal(await page.locator('#sessions button[data-id="remote-rich"]').count(), 0);
+    await page.locator('#search').fill('');
+    assert(await page.locator('#sessions button[data-id="remote-rich"]').count() > 0);
+    assert(await page.locator('#sessions button[data-id="vscode-chat"]').count() > 0);
     assert.equal(
       await page.locator("#title").innerText(),
       session.title,
-      "filtering the list discarded the selected conversation",
+      "searching the list discarded the selected conversation",
     );
     await f.clean();
   });
