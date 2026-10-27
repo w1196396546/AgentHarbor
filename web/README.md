@@ -52,6 +52,20 @@ The selected Agent identity follows encrypted discovery, including Codex, Claude
 and other supported adapters. Product branding and the SVG favicon use the blue
 robot mark from the reference; they do not change Agent capabilities.
 
+The four sidebar sections remain available for legacy and native catalogs, with
+independent folds and explicit empty states. Projects include shared folders that
+have no native project metadata. Latest orders loaded conversations by update time;
+Current shows the selected conversation and other reported running or waiting
+conversations. Search and project filters continue to apply to these sections.
+
+The inspector provides Details, Files, Diff, Logs and Artifacts tabs. Details
+reuses owner-reported session settings and loaded tool/change records; Logs links
+back to the corresponding loaded conversation records. Missing values stay unknown,
+and neither view requests a new execution. Keyboard tab navigation keeps the
+selected tab visible on narrow screens. Phone controls use one compact toolbar
+with icon-only permission/mode controls and a combined model/reasoning picker,
+plus viewport-bounded draft height; Latest output stays centered above the composer.
+
 `styles/tokens.css` defines the light/dark palette and Tailwind mappings;
 `styles/ui.css` supplies shared surface states; `styles/workspace.css` owns the
 remote layout. There are no style presets, glass materials, blur filters or
@@ -134,12 +148,16 @@ Native `project_id` and sidebar project roots preserve the selected original
 project for worktrees outside its directory, including immediately created rows.
 Clients advertising `controls_options` provide `scope=controls` for model, effort,
 mode and permission controls, including the existing permission requirements.
-The session list can advertise the two read capabilities (`controls_options` and
-`connection_metadata`) before initial history selection, avoiding a full inventory
+The session list can advertise the read capabilities (`controls_options`,
+`connection_metadata` and `inventory_options`) before initial history selection, avoiding a full inventory
 bootstrap; it never grants owner mutations.
-The full skills and MCP inventory loads independently after controls are ready;
-missing inventory fields remain not loaded, and a failed supplemental read does
-not disable confirmed controls. Late catalogs retain the existing selection and
+Skills and MCP inventory loads on demand when the composer uses `/` or the full
+session-info dialog opens. `inventory_options` enables `scope=inventory`, which
+reads only those inventories; older clients use full options on demand. Concurrent
+reads for the same selection share one request. Only inventory fields merge back,
+so a late result cannot replace confirmed control settings. Missing inventory
+fields remain not loaded, and a failed read does not disable confirmed controls.
+Late catalogs retain the existing selection and
 options-sequence guards. Queued native-owner messages inherit its current settings
 without replaying stale page preferences.
 
@@ -179,9 +197,9 @@ unloaded and failed catalogs, with reported runtime and authentication state.
 Changes can be filtered by turn or browsed as a tree, with numbered diffs,
 reported rename/binary/truncation states and current-file previews. A sibling
 artifact view groups real files/images from loaded records and links to their
-source. Conversation search defaults to loaded prose and tool output, with turn
-navigation and failure/change/artifact filters. Versioned optional indexes add
-full-history search, turn navigation and historical resources as described below. Bounded reading metadata preserves
+source. The conversation has no search/filter toolbar, turn-index loader or
+standalone interaction-history status panel. Historical resources use the optional
+indexes described below. Bounded reading metadata preserves
 anchors, disclosure state and change filters per device, Agent and session; it
 stores no extra messages, answers, attachments or credentials. Refresh restores a
 still-authorized conversation as read-only only when the composer has no draft,
@@ -212,10 +230,10 @@ approval, queue update or file write. The relay forwards ciphertext only.
 
 | Capability | Encrypted client endpoint | Presentation |
 | --- | --- | --- |
-| `conversation_index` | `GET /api/threads/{id}/turns?cursor=` | Paged turn navigation, including unloaded history |
-| `full_history_search` | `POST /api/threads/{id}/search` | Explicit loaded/full search mode; body contains `query`, `filter`, `turn_id`, `cursor`, `limit` |
+| `conversation_index` | `GET /api/threads/{id}/turns?cursor=` | Protocol support; no conversation toolbar entry |
+| `full_history_search` | `POST /api/threads/{id}/search` | Protocol support; no conversation search entry |
 | `artifact_index` | `GET /api/threads/{id}/artifacts?cursor=` and `/artifacts/{artifactID}` | Historical resources, availability, preview/download and source-record links |
-| `interaction_history` | `GET /api/threads/{id}/interactions?cursor=` | Observed past decisions/questions and reasons in tool cards and search |
+| `interaction_history` | `GET /api/threads/{id}/interactions?cursor=` | Observed past decisions/questions and reasons in tool cards |
 | `agent_run_graph` | `GET /api/threads/{id}/agent-graph?cursor=` | Confirmed descendant tree, task, activity, operations and result summaries |
 
 Index pages include `next_cursor`, `has_more`, `scope`, and optional `truncated` /

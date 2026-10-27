@@ -190,6 +190,7 @@ async function fixture(t, engine, config = {}) {
           } else if (url.searchParams.has("thread") && state.holdInventory)
             await new Promise((resolve) => {
               state.holdInventory.resolve = resolve;
+              state.holdInventory.started?.();
             });
         }
         if (selected) options.defaults = { ...selected };
@@ -345,7 +346,7 @@ async function fixture(t, engine, config = {}) {
         ) || state.agents.find(connected);
     if (initial)
       await page
-        .locator('#sessions button[data-id="' + initial.id + '-original"]')
+        .locator('#sessions button[data-id="' + initial.id + '-original"]').first()
         .waitFor();
   }
   return { page, seen, state, errors, release };
@@ -353,7 +354,7 @@ async function fixture(t, engine, config = {}) {
 async function chooseAgent(page, agent) {
   await page.locator("#agentSelect").selectOption(agent);
   await page
-    .locator('#sessions button[data-id="' + agent + '-original"]')
+    .locator('#sessions button[data-id="' + agent + '-original"]').first()
     .waitFor();
   await page.waitForFunction(() => !document.querySelector("#model").disabled);
 }
@@ -411,15 +412,21 @@ for (const engine of engines) {
       await page.waitForFunction(
         () => !document.querySelector("#model").disabled,
       );
-      state.holdInventory = {};
-      await page.locator('#sessions button[data-id="codex-original"]').click();
+      let inventoryRequested;
+      const inventoryStarted = new Promise((resolve) => { inventoryRequested = resolve; });
+      state.holdInventory = { started: inventoryRequested };
+      await page.locator('#sessions button[data-id="codex-original"]').first().click();
       await page.waitForFunction(() =>
         document.querySelector("#title").textContent.includes("Codex original"),
       );
       await page.waitForFunction(
         () => !document.querySelector("#model").disabled,
       );
+      assert.equal(state.holdInventory?.resolve, undefined, "connection must defer inventory");
+      await page.locator("#message").fill("/");
+      await inventoryStarted;
       assert.equal(typeof state.holdInventory?.resolve, "function");
+      await page.locator("#message").press("Escape");
       for (const id of ["model", "effort", "mode", "permission"])
         assert(await page.locator("#" + id).isEnabled());
       const controlsRead = seen.find(
@@ -461,7 +468,7 @@ for (const engine of engines) {
           "connected",
         );
         await page
-          .locator('#sessions button[data-id="codex-original"]')
+          .locator('#sessions button[data-id="codex-original"]').first()
           .click();
         await page.waitForFunction(() =>
           document
@@ -597,7 +604,7 @@ for (const engine of engines) {
       const { page, seen, state, errors } = await fixture(t, engine, {
         agents: connectedDescriptors(),
       });
-      await page.locator('#sessions button[data-id="codex-original"]').click();
+      await page.locator('#sessions button[data-id="codex-original"]').first().click();
       await page.waitForFunction(
         () =>
           document
@@ -644,7 +651,7 @@ for (const engine of engines) {
       });
       await chooseAgent(page, "claude-desktop");
       await page
-        .locator('#sessions button[data-id="claude-desktop-original"]')
+        .locator('#sessions button[data-id="claude-desktop-original"]').first()
         .click();
       await page.waitForFunction(
         () =>
@@ -670,7 +677,7 @@ for (const engine of engines) {
       );
       assert.equal(
         await page
-          .locator('#sessions button[data-id="claude-desktop-original"]')
+          .locator('#sessions button[data-id="claude-desktop-original"]').first()
           .getAttribute("aria-current"),
         "true",
       );
@@ -690,7 +697,7 @@ for (const engine of engines) {
       );
       assert.equal(
         await page
-          .locator('#sessions button[data-id="claude-desktop-original"]')
+          .locator('#sessions button[data-id="claude-desktop-original"]').first()
           .getAttribute("aria-current"),
         "true",
       );
@@ -747,7 +754,7 @@ for (const engine of engines) {
       const { page, seen, state, errors } = await fixture(t, engine, {
         agents: connectedDescriptors(),
       });
-      await page.locator('#sessions button[data-id="codex-original"]').click();
+      await page.locator('#sessions button[data-id="codex-original"]').first().click();
       await page.waitForFunction(() =>
         document.querySelector("#title").textContent.includes("Codex original"),
       );
@@ -761,7 +768,7 @@ for (const engine of engines) {
       assert.equal(await page.locator("#agentSelect").inputValue(), "codex");
       assert.equal(
         await page
-          .locator('#sessions button[data-id="codex-original"]')
+          .locator('#sessions button[data-id="codex-original"]').first()
           .getAttribute("aria-current"),
         "true",
       );
@@ -873,7 +880,7 @@ for (const engine of engines) {
       });
       await chooseAgent(page, "claude-desktop");
       await page
-        .locator('#sessions button[data-id="claude-desktop-original"]')
+        .locator('#sessions button[data-id="claude-desktop-original"]').first()
         .click();
       await page.waitForFunction(
         () =>
@@ -964,7 +971,7 @@ for (const engine of engines) {
         if (kind === "holdList") await page.locator("#refresh").click();
         else
           await page
-            .locator('#sessions button[data-id="codex-original"]')
+            .locator('#sessions button[data-id="codex-original"]').first()
             .click();
         for (let tries = 0; !state[kind].resolve && tries < 100; tries++)
           await page.waitForTimeout(10);
@@ -1030,7 +1037,7 @@ for (const engine of engines) {
         const { page, seen, state, errors } = await fixture(t, engine);
         state[error] = 503;
         await page
-          .locator('#sessions button[data-id="codex-original"]')
+          .locator('#sessions button[data-id="codex-original"]').first()
           .click();
         await page
           .locator("#notice")

@@ -4,7 +4,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { AskCard } from "../components/ui/ask-card";
 import { createReadIndexes } from "./indexes";
-import { normalizeInteractions, interactionItems } from "./interaction-history";
+import { normalizeInteractions } from "./interaction-history";
 import { questionFormAnswers } from "./question-answers";
 
 export function createApprovals({
@@ -105,63 +105,6 @@ export function createApprovals({
       </details>
     );
   }
-  function InteractionHistoryStatus() {
-    if (!history.supports("interaction_history")) return null;
-    const page = historyPage();
-    return (
-      <div className="interaction-history-status">
-        <p className="note" role="status">
-          {t("Interaction history")} ·{" "}
-          {t(
-            page.loading
-              ? "Loading…"
-              : !page.loaded || page.error
-                ? "Status unknown"
-                : page.scope === "full"
-                  ? "Full history"
-                  : "Loaded records only",
-          )}
-          {(page.truncated || page.hasMore || page.scope === "loaded") &&
-            " · " + t("Results are incomplete")}
-        </p>
-        {page.error && (
-          <p className="note" role="status">
-            {t(page.error)}
-          </p>
-        )}
-        {page.error && (
-          <Action
-            action={() =>
-              history.load(
-                "interaction_history",
-                "interactions",
-                "interactions",
-              )
-            }
-          >
-            {t("Retry")}
-          </Action>
-        )}
-        {page.hasMore && (
-          <Action
-            disabled={page.loading}
-            action={() =>
-              history.load(
-                "interaction_history",
-                "interactions",
-                "interactions",
-                undefined,
-                true,
-              )
-            }
-          >
-            {t("Load more interaction history")}
-          </Action>
-        )}
-      </div>
-    );
-  }
-
   function requestScope() {
     return JSON.stringify([
       state.device?.id,
@@ -735,10 +678,7 @@ export function createApprovals({
     renderRequests,
     dismissRequest,
     openRequest,
-    getInteractionHistory,
     InteractionHistory,
-    InteractionHistoryStatus,
     syncInteractionHistory,
-    interactionSearchItems: () => interactionItems(getInteractionHistory()),
   };
 }

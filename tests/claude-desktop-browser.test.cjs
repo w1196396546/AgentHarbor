@@ -331,7 +331,7 @@ async function fixture(
   await page.goto("https://remote.test/?locale=" + locale);
   await page.locator("#workspace:visible").waitFor();
   if (width < 760) await page.locator("#sidebarToggle").click();
-  await page.locator('#sessions button[data-id="' + session.id + '"]').click();
+  await page.locator('#sessions button[data-id="' + session.id + '"]').first().click();
   await page.waitForFunction(() =>
     document.querySelector("#title").textContent.includes("Desktop original"),
   );
@@ -353,7 +353,7 @@ for (const engine of engines) {
           () => !document.querySelector("#effort").disabled,
         );
         await page.locator("#message").fill("Preserve this native draft");
-        await page.locator("#effort").click();
+        await page.locator(await page.locator("#effort").isHidden() ? "#model" : "#effort").click();
         const range = page.locator("#reasoningRange");
         assert(await range.isEnabled());
         assert.equal(await range.getAttribute("max"), "2");

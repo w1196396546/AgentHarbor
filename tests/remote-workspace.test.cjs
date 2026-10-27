@@ -937,7 +937,7 @@ async function fixture(t, engine, options = {}) {
 }
 
 async function menu(page, control, label) {
-  await page.locator("#" + control).click();
+  await page.locator("#" + (control === "effort" && await page.locator("#effort").isHidden() ? "model" : control)).click();
   if (control === "model") await page.locator("#reasoningModel").click();
   if (control === "effort") {
     if (label === "Default effort")
@@ -1042,6 +1042,133 @@ async function visibleActionIcons(page) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: compact phone toolbar keeps stop, queue and context actions reachable`, async (t) => {
+    const f = await fixture(t, engine, {
+      width: 320, height: 540, locale: "de-DE",
+      state: { live: {
+        status: "inProgress", turn_id: "compact-turn", items: [], requests: [],
+        owner: { kind: "remote", state: "connected", epoch: "compact-owner",
+          capabilities: { send: true, queue: true, interrupt: true, configure: true } },
+        context: { used_tokens: 64000, window_tokens: 128000, used_percent: 50 },
+      } },
+    });
+    const { page, seen } = f;
+    await page.locator("#sidebarToggle").click();
+    await page.locator('[data-path="recent"] [data-id="remote-rich"]').click();
+    await page.locator("#message").fill("Keep this queued draft");
+    const ids = ["attach", "permission", "mode", "model", "contextUsage", "stop", "send"];
+    for (const width of [320, 390, 760]) {
+      await page.setViewportSize({width, height: 540});
+      const controls = await page.evaluate(ids => ids.map(id => {
+        const node = document.getElementById(id), rect = node.getBoundingClientRect();
+        return {id, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width};
+      }), ids);
+      for (const rect of controls) assert(rect.width >= 24 && rect.left >= 0 && rect.right <= width + 1, "compact control leaves viewport: " + JSON.stringify({width, rect}));
+      for (let index = 1; index < controls.length; index++) assert(controls[index].left >= controls[index-1].right, "compact controls overlap: " + JSON.stringify(controls));
+      assert(await page.locator("#composer").evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+    }
+    assert(await page.locator("#stop").isEnabled());
+    assert(await page.locator("#send").isEnabled());
+    await page.locator("#contextUsage").click();
+    await page.locator("#contextUsageDialog[open]").waitFor();
+    await page.locator("#closeContextUsage").click();
+    assert.equal(await page.locator("#message").inputValue(), "Keep this queued draft");
+    assert.equal(seen.posts.filter(post => /\/(turn|queue|settings)$/.test(post.path)).length, 0);
+    await f.clean();
+  });
+  test(`${engine}: inspector tabs remain visible by keyboard and long records fit every language`, async (t) => {
+    for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"]) {
+      const command = "npm run verify -- " + "long-project-directory/".repeat(12);
+      const f = await fixture(t, engine, {
+        width: 390,
+        height: 844,
+        locale,
+        state: {
+          historyItems: [
+            ...richItems(),
+            {
+              id: "inspector-long-command",
+              type: "commandExecution",
+              turn_id: "turn-1",
+              status: "completed",
+              data: { command, exitCode: 0 },
+            },
+          ],
+        },
+      });
+      const { page } = f;
+      await page.locator("#sidebarToggle").click();
+      await page.locator('[data-path="recent"] [data-id="remote-rich"]').click();
+      await page.locator("#message").fill("Preserve inspector draft");
+      await page.locator("#changesToggle").click();
+      for (const width of [320, 390, 760, 1440]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.locator("#detailsTab").click();
+        for (const key of ["End", "Home"]) {
+          await page.locator('#inspectorTabs [aria-selected="true"]').press(key);
+          const tab = await page
+            .locator('#inspectorTabs [aria-selected="true"]')
+            .evaluate((node) => {
+              const rect = node.getBoundingClientRect(),
+                bar = node.parentElement.getBoundingClientRect();
+              return {
+                id: node.id,
+                focused: node === document.activeElement,
+                left: rect.left,
+                right: rect.right,
+                min: bar.left,
+                max: bar.right,
+              };
+            });
+          assert.equal(tab.id, key === "End" ? "artifactsTab" : "detailsTab");
+          assert(
+            tab.focused && tab.left >= tab.min - 1 && tab.right <= tab.max + 1,
+            "selected tab is clipped: " + JSON.stringify({ locale, width, tab }),
+          );
+        }
+        const details = await page.locator("#detailsInfo").textContent();
+        assert(
+          details.includes("Build checkout") && details.includes("/work/shop"),
+        );
+        await page.locator("#logsTab").click();
+        const record = page
+          .locator("#logsContent .inspector-log")
+          .filter({ hasText: command });
+        assert.equal(await record.count(), 1);
+        assert(
+          await record.evaluate(
+            (node) => node.scrollWidth <= node.clientWidth + 1,
+          ),
+          "long log overflows the inspector",
+        );
+        assert(
+          await page
+            .locator("#changesPanel")
+            .evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+        );
+        assert.equal(
+          await page.locator("#message").inputValue(),
+          "Preserve inspector draft",
+        );
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator("#detailsTab").click();
+      await screenshot(page, `inspector-details-${engine}-${locale}-390.png`);
+      await page.locator("#logsTab").click();
+      await screenshot(page, `inspector-logs-${engine}-${locale}-390.png`);
+      await page
+        .locator("#logsContent .inspector-log")
+        .filter({ hasText: command })
+        .click();
+      assert(await page.locator("#changesPanel").isHidden());
+      assert(
+        await page
+          .locator('[data-id="inspector-long-command"]')
+          .evaluate((node) => node.open),
+      );
+      await f.clean();
+    }
+  });
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"])
     test(`${engine} ${locale}: long history keeps reading, focused drafts and request-only updates`, async (t) => {
       const history = Array.from({ length: 120 }, (_, index) => ({
@@ -1069,7 +1196,7 @@ for (const engine of engines) {
         } },
       });
       const { page, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.locator('[data-id="history-perf-0"]').waitFor();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page.locator('[data-id="history-perf-command"] > summary').click();
@@ -1284,7 +1411,7 @@ for (const engine of engines) {
         packet,
       );
     };
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#requestDialog[open]").waitFor();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page.evaluate(() => window.fixtureStreams[0].open());
@@ -1431,24 +1558,9 @@ for (const engine of engines) {
     );
 
     await page.locator("#message").fill("Keep this draft");
-    await page.locator("#conversationSearch").fill("cart.test.ts");
-    assert.match(
-      await page.locator("#conversationSearchResults").textContent(),
-      /Loaded messages and tool output only.*1 matches/,
-    );
-    await page.locator("#conversationSearchResults .search-result").click();
-    assert.equal(
-      await page.locator('[data-id="cmd-1"]').evaluate((node) => node.open),
-      true,
-    );
+    assert.equal(await page.locator("#conversationNavigator").count(), 0);
+    assert.equal(await page.locator(".interaction-history-status").count(), 0);
     assert.equal(await page.locator("#message").inputValue(), "Keep this draft");
-    await page.locator("#conversationSearch").fill("");
-    await page.locator("#conversationFilter").selectOption("failed");
-    assert.match(
-      await page.locator("#conversationSearchResults").textContent(),
-      /2 matches.*npm run missing.*hook/,
-    );
-    await page.locator("#conversationFilter").selectOption("all");
     await page.evaluate(() =>
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -1511,6 +1623,18 @@ for (const engine of engines) {
       );
     await page.locator("#closeSessionInfo").click();
     await page.locator("#changesToggle").click();
+    await page.locator("#detailsTab").click();
+    assert.match(await page.locator("#detailsInfo").textContent(), /Task details.*Build checkout.*Project.*shop.*Owner-reported settings.*Codex Main/s);
+    assert.match(await page.locator("#detailsActivity").textContent(), /Tool usage.*docs \/ lookup.*Changed files.*src\/cart.ts/s);
+    await page.locator("#detailsTab").press("ArrowRight");
+    assert.equal(await page.locator("#filesTab").getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator("#filesTab").evaluate((node) => node === document.activeElement), true);
+    await page.locator("#logsTab").click();
+    assert.match(await page.locator("#logsContent").textContent(), /Execution log.*Loaded messages and tool output only.*npm run missing.*Failed/s);
+    await page.locator("#logsContent .inspector-log").filter({hasText: "npm run missing"}).click();
+    assert.equal(await page.locator('[data-id="failed-command"]').evaluate((node) => node.open), true);
+    assert.equal(await page.locator("#message").inputValue(), "Keep this draft");
+    await page.locator("#changesTab").click();
     await page.locator("#changesContent .diff-number").first().waitFor();
     assert.equal(
       await page.locator("#changesContent .diff-file").count(),
@@ -1680,7 +1804,7 @@ for (const engine of engines) {
           !(await page.locator("#title").innerText()).includes("Build checkout")
         ) {
           await page.locator("#sidebarToggle").click();
-          await page.locator('#sessions button[data-id="remote-rich"]').click();
+          await page.locator('#sessions button[data-id="remote-rich"]').first().click();
           await page.locator("#history .markdown h1").waitFor();
         }
         await page.locator("#message").fill("保留这段草稿");
@@ -1693,7 +1817,6 @@ for (const engine of engines) {
           "permission",
           "mode",
           "model",
-          "effort",
         ]) {
           const control = await page.locator("#" + id).evaluate((node) => {
             const style = getComputedStyle(node),
@@ -1802,7 +1925,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#message").fill("Keep this only for Codex.");
     state.online = false;
     await page.evaluate(() => document.getElementById("retryDevice").click());
@@ -1871,7 +1994,7 @@ for (const engine of engines) {
       await page.evaluate(async (href) => (await fetch(href)).text(), icon),
       /<svg[\s>]/,
     );
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#history .markdown h1").waitFor();
     await page.locator("#message").fill("主题切换后保留的草稿");
     assert(
@@ -1925,7 +2048,7 @@ for (const engine of engines) {
       "application interactions must respect CSP",
     );
     // WebKit screenshots inject an inline animation-sync style, so capture after CSP assertions.
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#history .markdown h1").waitFor();
     await page.locator("#message").fill("主题切换后保留的草稿");
     await page.locator("#changesToggle").click();
@@ -1959,7 +2082,7 @@ for (const engine of engines) {
           1,
           "conversation search needs its localized accessible name",
         );
-        await page.locator('#sessions button[data-id="remote-rich"]').click();
+        await page.locator('#sessions button[data-id="remote-rich"]').first().click();
         await visibleActionIcons(page);
         const viewport = await page
           .locator('meta[name="viewport"]')
@@ -2143,7 +2266,7 @@ for (const engine of engines) {
     const { page, state, seen } = f;
     const settings = () =>
       seen.posts.filter((post) => post.path.endsWith("/settings"));
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page
       .locator("#message")
       .fill("Keep this draft while choosing reasoning.");
@@ -2295,7 +2418,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", items: [], requests: [], owner } },
     });
     const { page, seen } = f;
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page.locator("#model").click();
     const range = page.locator("#reasoningRange");
     await range.focus();
@@ -2416,7 +2539,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page.locator("#model").click();
     assert.equal(
       await page.locator("#reasoningModelName").innerText(),
@@ -2482,7 +2605,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", items: [], requests: [], owner } },
     });
     const { page, state, seen } = f;
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page.locator("#message").fill("Preserve this unsent draft.");
     state.sessionOptions = {
       ...defaults,
@@ -2549,7 +2672,7 @@ for (const engine of engines) {
     });
     const { page, seen } = f;
     t.after(() => releaseSettings());
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page.locator("#message").fill("Retain me if saving fails.");
     await page.locator("#permission").click();
     await page
@@ -2869,7 +2992,7 @@ for (const engine of engines) {
           buffer: Buffer.from("attached draft"),
         });
       await page.locator("#attachments .attachment-chip").waitFor();
-      await page.locator("#" + control).click();
+      await page.locator("#" + (control === "effort" && await page.locator("#effort").isHidden() ? "model" : control)).click();
       await page
         .locator("#notice")
         .filter({ hasText: "still loading this created conversation" })
@@ -3179,7 +3302,7 @@ for (const engine of engines) {
         if (failure === "failed")
           state.optionsError = "Options temporarily unavailable.";
         else state.nativeReady = false;
-        await page.locator("#" + control).click();
+        await page.locator("#" + (control === "effort" && await page.locator("#effort").isHidden() ? "model" : control)).click();
         await page
           .locator("#notice")
           .filter({
@@ -3241,11 +3364,12 @@ for (const engine of engines) {
     let checked = page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/api/device",
     );
-    await page.clock.fastForward(10000);
-    await checked;
-    await page.waitForResponse(
+    const listed = page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/api/sessions",
     );
+    await page.clock.fastForward(10000);
+    await checked;
+    await listed;
     assert.equal(
       seen.options.length,
       2,
@@ -3452,7 +3576,7 @@ for (const engine of engines) {
       await page.locator("#navigation").evaluate((nav) => {
         nav.scrollTop = nav.scrollHeight;
       });
-      const last = page.locator('#sessions button[data-id="many-session-59"]');
+      const last = page.locator('[data-path="recent"] button[data-id="many-session-59"], [data-path="current"] button[data-id="many-session-59"]');
       await last.waitFor({ state: "visible" });
       const scroll = await last.evaluate((button) => {
         const nav = document.getElementById("navigation"),
@@ -3565,7 +3689,7 @@ for (const engine of engines) {
       for (const row of rows) {
         const button = page.locator(
           '#sessions button[data-id="' + row.id + '"]',
-        );
+        ).first();
         await button.focus();
         let layout = await bounded();
         assert(
@@ -3592,7 +3716,7 @@ for (const engine of engines) {
         );
         if (width < 760) await page.locator("#sidebarToggle").click();
         await page
-          .locator('#sessions button[data-id="' + row.id + '"]')
+          .locator('#sessions button[data-id="' + row.id + '"]').first()
           .focus();
         layout = await bounded();
         assert(
@@ -3634,7 +3758,7 @@ for (const engine of engines) {
       rows: [session, other],
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#refresh").click();
     await page.waitForFunction(
       () => !document.getElementById("refresh").disabled,
@@ -3645,7 +3769,7 @@ for (const engine of engines) {
       "selecting a thread silently narrowed the list filter",
     );
     assert.equal(
-      await page.locator('#sessions button[data-id="vscode-chat"]').count(),
+      await page.locator('[data-path="recent"] button[data-id="vscode-chat"]').count(),
       1,
       "another shared project disappeared",
     );
@@ -3655,7 +3779,7 @@ for (const engine of engines) {
       .filter({ hasText: otherProject })
       .click();
     await page.waitForFunction(
-      () => document.querySelectorAll("#sessions button").length === 1,
+      () => [...new Set([...document.querySelectorAll("#sessions button[data-id]")].map(node => node.dataset.id))].join() === "vscode-chat",
     );
     assert.equal(seen.lists.at(-1).project, otherProject);
     assert.equal(
@@ -3736,7 +3860,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page
       .locator("#ownerNotice")
@@ -3999,7 +4123,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page
       .locator("#message")
@@ -4088,7 +4212,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page.locator("#planAction:visible").waitFor();
     await page.locator("#message").fill("Keep the current native-task draft.");
@@ -4200,7 +4324,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .getByText("History from the original app.", { exact: true })
       .waitFor();
@@ -4218,7 +4342,7 @@ for (const engine of engines) {
       .locator("#message")
       .fill("Keep this draft until background connection is available.");
     await page.locator("#connectOwner").dispatchEvent("click");
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#refresh").click();
     await page.waitForFunction(
       () => !document.getElementById("refresh").disabled,
@@ -4276,7 +4400,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(
       () =>
         !document.getElementById("model").disabled &&
@@ -4304,7 +4428,7 @@ for (const engine of engines) {
         buffer: Buffer.from("history attachment"),
       });
     await page.locator("#attachments .attachment-chip").waitFor();
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     assert.equal(
       await page.locator("#message").inputValue(),
       "Keep the selected history draft.",
@@ -4386,7 +4510,7 @@ for (const engine of engines) {
     });
     const { page, seen } = f;
     const connection = page.waitForResponse((response) => response.url().endsWith("/connect"));
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await pending;
     await connection;
     await page.waitForFunction(() => document.getElementById("connectOwner").hidden);
@@ -4424,7 +4548,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await Promise.all([requestedMetadata, requestedHistory]);
     await page.waitForFunction(() => window.fixtureStreams.length > 0);
     await page.evaluate(() => window.fixtureStreams.at(-1).emit({ items: [], state: {
@@ -4483,7 +4607,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .getByText("History arrived before catalog.", { exact: true })
       .waitFor();
@@ -4560,7 +4684,7 @@ for (const engine of engines) {
         },
       });
       const { page, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await pending;
       await page.locator("#message").fill("Continue the conversation.");
       if (newerStream) {
@@ -4722,7 +4846,7 @@ for (const engine of engines) {
             throw error;
         }
       });
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await pending;
       let aborted = false;
       page.on("requestfailed", (request) => {
@@ -4732,7 +4856,7 @@ for (const engine of engines) {
         )
           aborted = true;
       });
-      await page.locator('#sessions button[data-id="native-second"]').click();
+      await page.locator('#sessions button[data-id="native-second"]').first().click();
       await page.waitForFunction(
         () =>
           document.getElementById("title").textContent ===
@@ -4795,7 +4919,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", owner, items: [], requests: [] } },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(
       () => !document.getElementById("attach").disabled,
     );
@@ -4820,9 +4944,9 @@ for (const engine of engines) {
       }
       return route.fallback();
     });
-    await page.locator('#sessions button[data-id="cleanup-second"]').click();
+    await page.locator('#sessions button[data-id="cleanup-second"]').first().click();
     await pending;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     release();
     await page.waitForTimeout(60);
     assert.equal(
@@ -4851,7 +4975,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", owner, items: [], requests: [] } },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(
       () => !document.getElementById("attach").disabled,
     );
@@ -4882,7 +5006,7 @@ for (const engine of engines) {
       .filter({ hasText: otherProject })
       .click();
     await pending;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     release();
     await page.waitForTimeout(60);
     assert.equal(
@@ -4917,7 +5041,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(
       () => document.getElementById("title").textContent === "Build checkout",
     );
@@ -4932,7 +5056,7 @@ for (const engine of engines) {
     await page.locator("#retryDevice").dispatchEvent("click");
     await page.locator("#deviceOffline:visible").waitFor();
     await page
-      .locator('#sessions button[data-id="remote-rich"]')
+      .locator('#sessions button[data-id="remote-rich"]').first()
       .dispatchEvent("click");
     assert.equal(
       await page.locator("#message").inputValue(),
@@ -4962,7 +5086,7 @@ for (const engine of engines) {
         },
       });
       await blocked.page
-        .locator('#sessions button[data-id="remote-rich"]')
+        .locator('#sessions button[data-id="remote-rich"]').first()
         .click();
       await blocked.page
         .locator("#notice")
@@ -4996,7 +5120,7 @@ for (const engine of engines) {
           },
         });
       const { page, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page
         .locator("#message")
@@ -5149,7 +5273,7 @@ for (const engine of engines) {
         await logoutHeld;
         return route.fallback();
       });
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await pending;
       await page.locator("#logout").click();
       await loggingOut;
@@ -5216,7 +5340,7 @@ for (const engine of engines) {
       },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     const history = page.locator('#history [data-id="app-steering-detail"]');
     await history.locator(".user-text").filter({ hasText: rawText }).waitFor();
@@ -5354,7 +5478,7 @@ for (const engine of engines) {
       },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     assert.equal(
       await page
@@ -5508,7 +5632,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page.locator("#message").fill("连接时保留草稿");
     await page
@@ -5662,7 +5786,7 @@ for (const engine of engines) {
         state: { live: { status: "idle", owner, items: [], requests: [] } },
       });
       const { page, state, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page.locator("#message").fill("Keep archived draft");
       await page
@@ -5764,7 +5888,7 @@ for (const engine of engines) {
         state: { live: { status: "idle", owner, items: [], requests: [] } },
       });
       const { page, seen, state } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page.locator("#message").fill("Keep uncertain draft");
       if (unavailableVia === "list") {
@@ -5845,7 +5969,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#stop:visible").click();
     await page
       .locator("#notice")
@@ -5877,7 +6001,7 @@ for (const engine of engines) {
   test(`${engine}: native approval modes use three choices and preserve selected permissions in requests`, async (t) => {
     const f = await fixture(t, engine);
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     assert.match(
       await page.locator("#permission").innerText(),
       /Ask for approval/,
@@ -6025,7 +6149,7 @@ for (const engine of engines) {
       catalog: { permissions: unavailable },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#permission").click();
     const auto = page
       .locator('#menu [role="menuitemradio"]')
@@ -6070,7 +6194,7 @@ for (const engine of engines) {
       },
     });
     await legacy.page
-      .locator('#sessions button[data-id="remote-rich"]')
+      .locator('#sessions button[data-id="remote-rich"]').first()
       .click();
     await legacy.page.locator("#permission").click();
     assert.deepEqual(
@@ -6150,7 +6274,7 @@ for (const engine of engines) {
         "new draft presented configured workspace access as actual App permissions",
       );
       if (entry === "new-from-existing") {
-        await page.locator('#sessions button[data-id="remote-rich"]').click();
+        await page.locator('#sessions button[data-id="remote-rich"]').first().click();
         await page
           .locator("#permission")
           .filter({ hasText: "Read only" })
@@ -6222,7 +6346,7 @@ for (const engine of engines) {
         state: { sessionOptions: { ...defaults, permission: "read-only" } },
       });
       await existing.page
-        .locator('#sessions button[data-id="remote-rich"]')
+        .locator('#sessions button[data-id="remote-rich"]').first()
         .click();
       await existing.page
         .locator("#permission")
@@ -6274,7 +6398,7 @@ for (const engine of engines) {
         },
       });
       await nativeHistory.page
-        .locator('#sessions button[data-id="remote-rich"]')
+        .locator('#sessions button[data-id="remote-rich"]').first()
         .click();
       await nativeHistory.page
         .locator("#permission")
@@ -6468,7 +6592,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#cwd")
       .filter({ hasText: project })
@@ -6884,9 +7008,9 @@ for (const engine of engines) {
     const { page, seen, state } = f;
     const row = page.locator(
       '#sessions button[data-id="' + original.id + '"] .session-title',
-    );
+    ).first();
     await page
-      .locator('#sessions button[data-id="' + original.id + '"]')
+      .locator('#sessions button[data-id="' + original.id + '"]').first()
       .click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     state.rows = [{ ...original, title: "Title from native details" }, second];
@@ -6917,7 +7041,7 @@ for (const engine of engines) {
     assert.equal(await page.locator("#title").innerText(), title);
     assert.equal(await row.innerText(), title);
     assert.equal(
-      await page.locator('#sessions button[data-id="' + original.id + '"]').getAttribute("title"),
+      await page.locator('#sessions button[data-id="' + original.id + '"]').first().getAttribute("title"),
       title,
     );
     assert.deepEqual(
@@ -6976,7 +7100,7 @@ for (const engine of engines) {
     assert.equal(await page.locator("#notice").textContent(), "", "a recovered native title left a stale naming warning");
     assert.equal(await row.innerText(), "Confirmed desktop title");
     const confirmedTitle = "Confirmed desktop title";
-    await page.locator('#sessions button[data-id="' + second.id + '"]').click();
+    await page.locator('#sessions button[data-id="' + second.id + '"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 2);
     await page.locator("#title").filter({ hasText: second.title }).waitFor();
     await page.evaluate(() =>
@@ -7028,7 +7152,7 @@ for (const engine of engines) {
         ({ index, packet }) => window.fixtureStreams[index].emit(packet),
         { index, packet },
       );
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     const url = new URL(
       await page.evaluate(() => window.fixtureStreams[0].url),
@@ -7236,7 +7360,7 @@ for (const engine of engines) {
       1,
       "new turn discarded the previous streamed answer",
     );
-    await page.locator('#sessions button[data-id="remote-second"]').click();
+    await page.locator('#sessions button[data-id="remote-second"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 2);
     assert.equal(
       await page.evaluate(() => window.fixtureStreams[0].closed),
@@ -7337,7 +7461,7 @@ for (const engine of engines) {
       },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     const timeline = page.locator(
       '#history [data-id="native-patches"] .changed-file-button',
     );
@@ -7440,7 +7564,7 @@ for (const engine of engines) {
       },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     for (const [marker, complete] of [
       ["1. ", "1. Ordered item"],
@@ -7521,7 +7645,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, origin } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     for (const label of ["Relative file", "Absolute file", "中文文件"]) {
       await page.getByRole("link", { name: label, exact: true }).click();
       await page.locator("#filePreview:visible").waitFor();
@@ -7666,7 +7790,7 @@ for (const engine of engines) {
       },
     });
     const { page } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#changesToggle").click();
     await page.waitForFunction(
       () =>
@@ -7718,7 +7842,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="nested-session"]').click();
+    await page.locator('#sessions button[data-id="nested-session"]').first().click();
     await page.locator("#filesToggle").click();
     await page
       .locator("#filesContent button")
@@ -7788,7 +7912,7 @@ for (const engine of engines) {
     const { page, seen, state } = f;
     const executions = () =>
       seen.posts.filter((post) => post.path.endsWith("/execute-plan"));
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#planAction:visible").waitFor();
     assert.equal(
       executions().length,
@@ -7823,7 +7947,7 @@ for (const engine of engines) {
     assert(state.pendingPlan, "cancel discarded the pending plan");
     await page.reload();
     await page.locator("#workspace:visible").waitFor();
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#planAction:visible").waitFor();
     assert.equal(executions().length, 0, "reloading executed the pending plan");
     await page.locator("#executePlan").click();
@@ -7908,7 +8032,7 @@ for (const engine of engines) {
       seen.posts.filter((post) => post.path.endsWith("/turn"));
     const executions = () =>
       seen.posts.filter((post) => post.path.endsWith("/execute-plan"));
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#planAction:visible").waitFor();
     await menu(page, "model", "Codex Fast");
     await menu(page, "effort", "High");
@@ -8063,7 +8187,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#planAction:visible").waitFor();
     await page.locator("#message").fill("Keep this unrelated draft.");
     await page.locator("#continuePlanning").click();
@@ -8126,7 +8250,7 @@ for (const engine of engines) {
         },
       });
       const { page, state, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.locator("#planAction:visible").waitFor();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page.evaluate(() => window.fixtureStreams[0].open());
@@ -8219,7 +8343,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#planAction:visible").waitFor();
     await page.locator("#executePlan").click();
     await page.locator("#confirmExecutePlan").click();
@@ -8256,7 +8380,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page.evaluate(() => window.fixtureStreams[0].open());
     state.workspaceChanges = [
@@ -8350,7 +8474,7 @@ for (const engine of engines) {
       });
       const { page, seen } = f;
       await page.locator("#sidebarToggle").click();
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.locator("#requestDialog[open]").waitFor();
       await page.getByText("Which computer?", { exact: true }).waitFor();
       await page
@@ -8443,7 +8567,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     const question = {
       id: "stream-question",
@@ -8575,7 +8699,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#requestDialog[open]").waitFor();
     await page.locator('#requests input[name="scope"][value="Cart"]').check();
     await page.locator('#requests input[name="notes-text"]').fill("keep me");
@@ -8640,7 +8764,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#fileInput")
       .setInputFiles({
@@ -8805,7 +8929,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     const row = page.locator('#queueList [data-queue-id="edit-queue"]');
     await page.locator("#message").fill("Keep this separate composer draft.");
     await row.locator(".queue-edit").click();
@@ -8932,7 +9056,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#queueList .queue-edit").click();
     await page
       .locator("#queueEditText")
@@ -8944,7 +9068,7 @@ for (const engine of engines) {
       (request) => request.method() === "PATCH",
     );
     await page
-      .locator('#sessions button[data-id="other-edit-thread"]')
+      .locator('#sessions button[data-id="other-edit-thread"]').first()
       .dispatchEvent("click");
     await page.locator('#queueList [data-queue-id="second-edit"]').waitFor();
     await page.locator("#queueList .queue-edit").click();
@@ -9003,7 +9127,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator('#queueList [data-queue-id="old-native-queue"]')
       .waitFor();
@@ -9131,7 +9255,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator('#queueList [data-queue-id="app-native-queue"]')
       .waitFor();
@@ -9204,7 +9328,7 @@ for (const engine of engines) {
       },
     });
     const { page, state, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator('#queueList [data-queue-id="stale-turn-queue"]')
       .waitFor();
@@ -9283,7 +9407,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.locator("#requestDialog[open]").waitFor();
     await page.locator('#requests input[name="scope"][value="Cart"]').check();
     await page
@@ -9376,7 +9500,7 @@ for (const engine of engines) {
       beforeEnqueue: () => accepted,
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#fileInput")
       .setInputFiles({
@@ -9502,7 +9626,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page
       .locator("#queueList .queue-message-text")
@@ -9604,7 +9728,7 @@ for (const engine of engines) {
       1,
       "an older queue revision replaced newer delivery state",
     );
-    await page.locator('#sessions button[data-id="queued-second"]').click();
+    await page.locator('#sessions button[data-id="queued-second"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 2);
     await page
       .locator("#queueList .queue-message-text")
@@ -9636,7 +9760,7 @@ for (const engine of engines) {
     );
     await page.reload();
     await page.locator("#workspace:visible").waitFor();
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(
       () =>
         document.querySelectorAll("#queueList [data-queue-id]").length === 2,
@@ -9670,7 +9794,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page.locator("#message").fill("Deliver this task exactly once.");
     await page.locator("#send").click();
@@ -9761,7 +9885,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#message")
       .fill("An earlier authorization submitted this task.");
@@ -9842,7 +9966,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => window.fixtureStreams.length === 1);
     await page
       .locator("#message")
@@ -9936,7 +10060,7 @@ for (const engine of engines) {
         state: { live: { status: "idle", owner, items: [], requests: [] } },
       });
       const { page } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.waitForFunction(() => window.fixtureStreams.length === 1);
       await page
         .locator("#message")
@@ -10023,7 +10147,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#message")
       .fill("Keep this draft until queueing is available.");
@@ -10121,7 +10245,7 @@ for (const engine of engines) {
         },
       });
       const { page, seen } = f;
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.locator("#requestDialog[open]").waitFor();
       if (scenario.capability) {
         await page
@@ -10219,12 +10343,12 @@ for (const engine of engines) {
       historyPages,
     });
     const { page, seen, state } = f;
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#cwd")
       .filter({ hasText: project })
       .waitFor({ state: "attached" });
-    await page.locator('#sessions button[data-id="docs-session"]').click();
+    await page.locator('#sessions button[data-id="docs-session"]').first().click();
     await page
       .locator("#cwd")
       .filter({ hasText: otherProject })
@@ -10240,7 +10364,7 @@ for (const engine of engines) {
       project: otherProject,
       thread: other.id,
     });
-    await page.locator('#sessions button[data-id="remote-rich"]').click();
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page
       .locator("#cwd")
       .filter({ hasText: project })
@@ -10339,7 +10463,7 @@ for (const engine of engines) {
     });
     const { page } = f;
     await page.locator("#sidebarToggle").click();
-    await page.locator("#sessions button").click();
+    await page.locator("#sessions button").first().click();
     await page.locator("#history .agent h1").waitFor();
     assert(
       !(await page
@@ -10454,7 +10578,7 @@ for (const engine of engines)
       assert(await page.locator("#menu").isVisible());
       await page.keyboard.press("Escape");
       await page.locator("#sidebarToggle").click();
-      await page.locator('#sessions button[data-id="remote-rich"]').click();
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
       await page.locator("#planAction:visible").waitFor();
       await page.waitForFunction(
         () =>

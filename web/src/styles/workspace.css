@@ -831,28 +831,6 @@ body.inspector-resizing * {
 .cwd {
   display: none;
 }
-.conversation-navigator {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 18px;
-}
-.conversation-navigator input {
-  width: auto;
-  flex: 1 1 220px;
-  min-width: 120px;
-}
-.conversation-navigator select {
-  width: auto;
-  flex: 0 1 auto;
-  max-width: 100%;
-  padding: 7px;
-  font-size: 11px;
-}
-#conversationIndexStatus,
-#conversationSearchResults {
-  flex-basis: 100%;
-}
 .welcome {
   display: flex;
   flex-direction: column;
@@ -1475,6 +1453,9 @@ body.inspector-resizing * {
 .composer-chip .icon {
   width: 12px;
   height: 12px;
+}
+.mobile-model-effort {
+  display: none;
 }
 .composer-chip[data-active="true"] {
   background: color-mix(in srgb, var(--primary) 12%, var(--surface));
@@ -2803,6 +2784,7 @@ dialog p {
 @media (max-width: 760px) {
   #workspace,
   #workspace.has-changes {
+    --mobile-heading-height: calc(62px + env(safe-area-inset-top));
     display: flex;
   }
   .main-shell {
@@ -2851,8 +2833,9 @@ dialog p {
     min-height: 41px;
   }
   .conversation-heading {
-    height: 62px;
-    padding: 0 8px;
+    height: var(--mobile-heading-height);
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0
+      max(8px, env(safe-area-inset-left));
     gap: 3px;
   }
   .breadcrumb {
@@ -2913,7 +2896,8 @@ dialog p {
     min-width: 0;
   }
   .conversation-content {
-    padding: 24px 18px 28px;
+    padding: 24px max(18px, env(safe-area-inset-right)) 28px
+      max(18px, env(safe-area-inset-left));
   }
   .welcome {
     margin-top: 12vh;
@@ -2926,26 +2910,28 @@ dialog p {
     font-size: 13px;
   }
   .composer-dock {
-    padding: 8px 12px max(12px, env(safe-area-inset-bottom));
+    padding: 8px max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
   }
   #composer {
-    padding: 11px;
+    padding: 10px;
     border-radius: 14px;
   }
   #message {
-    min-height: 46px;
+    min-height: 44px;
+    max-height: min(210px, 25dvh);
     font-size: 16px;
+    padding-bottom: 8px;
   }
-  .composer-toolbar {
-    gap: 5px;
+  .composer-controls {
+    align-items: center;
+    gap: 4px;
   }
-  .conversation-navigator input {
-    flex-basis: 100%;
-    width: 100%;
-  }
-  .conversation-navigator select {
-    flex: 1 1 90px;
-    min-width: 0;
+  .composer-toolbar,
+  .composer-left,
+  .composer-right {
+    display: contents;
   }
   .agent-message-heading {
     font-size: 14px;
@@ -2957,26 +2943,59 @@ dialog p {
   .agent-message-heading ~ .markdown {
     margin-left: 38px;
   }
-  .composer-left,
-  .composer-right {
-    gap: 4px;
-  }
   .composer-chip {
-    font-size: 10px;
-    min-height: 30px;
-    padding: 5px 7px;
+    flex: 0 0 auto;
+    height: 32px;
+    min-height: 32px;
+    font-size: 11px;
+    padding: 4px 6px;
     gap: 4px;
-    max-width: 140px;
+    border-radius: 8px;
+    border-color: transparent;
   }
   .composer-chip#model {
-    max-width: 130px;
+    flex: 1 1 0;
+    max-width: none;
+    justify-content: flex-end;
   }
-  .composer-chip#permission {
-    max-width: min(190px, 52vw);
+  .composer-chip:is(#permission, #mode) {
+    width: 30px;
+    padding: 0;
   }
-  .composer-right {
-    flex-wrap: wrap;
-    max-width: 100%;
+  .composer-chip:is(#permission, #mode) > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  #effort {
+    display: none;
+  }
+  .composer-chip:is(#permission, #mode) .icon {
+    width: 15px;
+    height: 15px;
+  }
+  .mobile-model-effort {
+    display: inline;
+    max-width: 5em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 4px;
+    border-left: 1px solid var(--line);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  #composer :is(#attach, .send-button, .stop-button) {
+    width: 32px;
+    height: 32px;
+    padding: 7px;
+  }
+  #attach {
+    background: transparent;
   }
   .composer-caption {
     display: none;
@@ -2985,10 +3004,8 @@ dialog p {
     width: 27px;
     height: 27px;
   }
-  .latest-button {
-    left: auto;
-    right: 12px;
-    transform: none;
+  .composer-dock:has(.subagents-bar:not([hidden])) .latest-button {
+    bottom: calc(100% + 48px);
   }
   .message {
     margin-bottom: 22px;
@@ -2999,6 +3016,9 @@ dialog p {
   .message.user .message-body {
     font-size: 14px;
     padding: 10px 13px;
+  }
+  .message-user-attachments .image-message {
+    max-width: 100%;
   }
   .message.agent,
   .message.agent .message-body {
@@ -3037,11 +3057,13 @@ dialog p {
   }
   .panel-heading,
   .changes-panel > [data-slot="panel-header"] {
-    height: 62px;
-    min-height: 62px;
+    height: var(--mobile-heading-height);
+    min-height: var(--mobile-heading-height);
+    padding-top: env(safe-area-inset-top);
+    padding-right: max(12px, env(safe-area-inset-right));
   }
   #filePreview {
-    top: 62px;
+    top: var(--mobile-heading-height);
   }
   .floating-menu {
     max-height: 330px;
@@ -3107,6 +3129,29 @@ dialog p {
   }
   #pair h1 {
     font-size: 26px;
+  }
+}
+@media (max-width: 760px) and (max-height: 600px) {
+  #sidebar {
+    overflow-y: auto;
+  }
+  #navigation {
+    flex: none;
+    min-height: 120px;
+    overflow: visible;
+  }
+  .brand {
+    padding-bottom: 10px;
+  }
+  .agent-switcher {
+    padding-bottom: 8px;
+  }
+  .nav-action,
+  #new {
+    margin-bottom: 10px;
+  }
+  #message {
+    max-height: min(210px, max(46px, calc(100dvh - 320px)));
   }
 }
 /* Safari zooms focused fields below 16px. Preserve pinch zoom and touch targets. */

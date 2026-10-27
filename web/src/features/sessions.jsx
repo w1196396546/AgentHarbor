@@ -47,6 +47,7 @@ export function createSessions({
     restoredScope = "",
     createdScope = "";
   const createdSessions = new Map();
+  let inventoryRequest = null;
   let creationRequests;
   const creationWrites = new Map();
   function clearCreatedThreads() {
@@ -156,7 +157,7 @@ export function createSessions({
         rows.push(...value.sessions);
         if (!(value.next > offset)) break;
       }
-      for (const capability of ["controls_options", "connection_metadata"])
+      for (const capability of ["controls_options", "connection_metadata", "inventory_options"])
         if (typeof value.capabilities?.[capability] === "boolean")
           state.catalog.capabilities[capability] =
             value.capabilities[capability];
@@ -270,64 +271,86 @@ export function createSessions({
         group.open,
       ]),
     );
-    const groups = new Map();
-    if (state.sidebarProjects && state.projects.length) {
-      const pinned = new Set(state.pinnedIDs);
-      groups.set("pinned", { name: t("Pinned"), icon: "pin", sessions: [] });
-      for (const project of state.sidebarProjects.filter(
-        (project) =>
-          !state.listProject ||
-          project.root_paths?.some((root) =>
-            sameProjectPath(root, state.listProject),
-          ),
-      ))
-        groups.set("project:" + project.id, {
-          name: project.name,
-          path: project.root_paths?.join("\n"),
+    const pinned = new Set(state.pinnedIDs);
+    const groups = new Map([
+      [
+        "pinned",
+        {
+          name: t("Pinned"),
+          icon: "pin",
+          sessions: [],
+          empty: "No pinned conversations.",
+        },
+      ],
+    ]);
+    const nativeProjects = state.sidebarProjects || [];
+    for (const project of nativeProjects.filter(
+      (project) =>
+        !state.listProject ||
+        project.root_paths?.some((root) =>
+          sameProjectPath(root, state.listProject),
+        ),
+    ))
+      groups.set("project:" + project.id, {
+        name: project.name,
+        path: project.root_paths?.join("\n"),
+        icon: "folder",
+        project,
+        sessions: [],
+      });
+    for (const root of state.projects.filter(
+      (root) =>
+        (!state.listProject || sameProjectPath(root, state.listProject)) &&
+        !nativeProjects.some((project) =>
+          project.root_paths?.some((path) => sameProjectPath(path, root)),
+        ),
+    ))
+      groups.set(root, {
+        name: projectName(root),
+        path: root,
+        icon: "folder",
+        project: { root_paths: [root] },
+        sessions: [],
+      });
+    for (const session of rows) {
+      if (session.pinned || pinned.has(session.id)) {
+        groups.get("pinned").sessions.push(session);
+        continue;
+      }
+      const nativeProject = nativeProjects.find(
+          (project) => project.id === session.project_id,
+        ),
+        key = nativeProject
+          ? "project:" + nativeProject.id
+          : owningProject(state.projects, session.cwd) || session.cwd || "";
+      if (!state.sidebarProjects && !groups.has(key))
+        groups.set(key, {
+          name: projectName(key),
+          path: key,
           icon: "folder",
-          project,
           sessions: [],
         });
-      groups.set("recent", {
-        name: t("Latest"),
-        icon: "clock",
-        sessions: rows
-          .filter((session) => session.id !== state.selected)
-          .sort(
-            (a, b) => (Date.parse(b.last) || 0) - (Date.parse(a.last) || 0),
-          ),
-      });
-      for (const session of rows) {
-        const key =
-          session.pinned || pinned.has(session.id)
-            ? "pinned"
-            : "project:" + session.project_id;
-        groups.get(key)?.sessions.push(session);
-      }
-    } else {
-      for (const session of rows) {
-        if (session.id === state.selected) continue;
-        const owner =
-          owningProject(state.projects, session.cwd) || session.cwd || "";
-        if (!groups.has(owner))
-          groups.set(owner, {
-            name: projectName(owner),
-            path: owner,
-            icon: "folder",
-            sessions: [],
-          });
-        groups.get(owner).sessions.push(session);
-      }
+      groups.get(key)?.sessions.push(session);
     }
-    const current = rows.find((session) => session.id === state.selected);
-    if (current)
-      groups.set("current", {
-        name: t("Current"),
-        icon: "agent",
-        sessions: [current],
-      });
+    groups.set("recent", {
+      name: t("Latest"),
+      icon: "clock",
+      empty: "No sessions yet.",
+      sessions: rows
+        .filter((session) => session.id !== state.selected)
+        .sort((a, b) => (Date.parse(b.last) || 0) - (Date.parse(a.last) || 0)),
+    });
+    groups.set("current", {
+      name: t("Current"),
+      icon: "agent",
+      empty: "No active conversations.",
+      sessions: rows.filter(
+        (session) => session.id === state.selected || running(session.status),
+      ),
+    });
     const visibleGroups = [...groups].filter(
-      ([, group]) => group.sessions.length || (!query && group.project),
+      ([, group]) =>
+        group.sessions.length || (!query && (group.project || group.empty)),
     );
     const projectGroups = visibleGroups.filter(
       ([, group]) => group.icon === "folder",
@@ -344,6 +367,9 @@ export function createSessions({
           <span>{group.name}</span>
           <Icon name="chevron" className="fold-icon" />
         </summary>
+        {group.empty && !group.sessions.length && (
+          <p className="note session-section-empty">{t(group.empty)}</p>
+        )}
         {group.project && group.sessions.length === 0 && (
           <Action
             action={async () => {
@@ -392,6 +418,7 @@ export function createSessions({
                         inProgress: "Running",
                         starting: "Running",
                         waiting: "Waiting for you",
+                        idle: "Ready",
                         completed: "Completed",
                         failed: "Failed",
                         interrupted: "Interrupted",
@@ -438,7 +465,7 @@ export function createSessions({
         {visibleGroups
           .filter(([, group]) => group.icon === "pin")
           .map(renderGroup)}
-        {projectGroups.length > 0 && (
+        {(projectGroups.length > 0 || !query) && (
           <details
             className="project-group project-collection"
             data-path="all-projects"
@@ -451,6 +478,11 @@ export function createSessions({
             </summary>
             <div className="project-collection-items">
               {projectGroups.map(renderGroup)}
+              {!projectGroups.length && (
+                <p className="note session-section-empty">
+                  {t("No shared projects.")}
+                </p>
+              )}
             </div>
           </details>
         )}
@@ -460,7 +492,7 @@ export function createSessions({
         {visibleGroups
           .filter(([owner]) => owner === "current")
           .map(renderGroup)}
-        {!rows.length && (
+        {query && !rows.length && (
           <p className="note">
             {t(query ? "No matching conversations." : "No sessions yet.")}
           </p>
@@ -471,6 +503,7 @@ export function createSessions({
   }
 
   async function loadOptions(required = false, projectOnly = false) {
+    state.inventoryLoading = false;
     const seq = ++state.optionsSeq,
       query = new URLSearchParams();
     if (!state.selected && !state.project) {
@@ -507,21 +540,11 @@ export function createSessions({
       ensureStream();
       refreshQueue();
       $("capabilityIssue").hidden = !result.errors?.length;
+      if ($("sessionInfoDialog").open) void loadInventory();
       return result;
     };
     try {
-      const result = apply(await api("options?" + query));
-      if (result && controls) {
-        query.delete("scope");
-        api("options?" + query)
-          .then(apply)
-          .catch((error) => {
-            if (seq !== state.optionsSeq) return;
-            $("capabilityIssue").hidden = false;
-            notice(error.message);
-          });
-      }
-      return result;
+      return apply(await api("options?" + query));
     } catch (e) {
       if (seq !== state.optionsSeq) return;
       state.optionsLoaded = false;
@@ -530,6 +553,43 @@ export function createSessions({
       updateControls();
       if (required) throw e;
     }
+  }
+  function loadInventory() {
+    if (!state.optionsLoaded) return Promise.resolve();
+    const seq = state.optionsSeq, generation = state.generation;
+    const current = () => seq === state.optionsSeq && generation === state.generation;
+    if (Array.isArray(state.catalog.skills) && Array.isArray(state.catalog.tools))
+      return Promise.resolve(state.catalog);
+    if (inventoryRequest?.seq === seq && inventoryRequest.generation === generation)
+      return inventoryRequest.promise;
+    const query = new URLSearchParams({ project: state.project });
+    if (state.selected) query.set("thread", state.selected);
+    if (state.catalog.capabilities?.inventory_options === true)
+      query.set("scope", "inventory");
+    const request = { seq, generation, promise: null };
+    inventoryRequest = request;
+    state.inventoryLoading = true;
+    updateControls();
+    request.promise = api("options?" + query).then((result) => {
+      if (!current()) return;
+      if (result.agent && result.agent.id !== getAgent().id)
+        throw new Error("The active agent changed. Refresh before continuing.");
+      for (const key of ["skills", "tools", "mcp_servers"])
+        if (Object.hasOwn(result, key)) state.catalog[key] = result[key];
+      state.catalog.errors = [...new Set([...(state.catalog.errors || []), ...(result.errors || [])])];
+      $("capabilityIssue").hidden = !state.catalog.errors.length;
+      updateControls();
+      return result;
+    }).catch((error) => {
+      if (current()) notice(error.message);
+    }).finally(() => {
+      if (inventoryRequest === request) inventoryRequest = null;
+      if (current()) {
+        state.inventoryLoading = false;
+        updateControls();
+      }
+    });
+    return request.promise;
   }
   async function resetSelection() {
     saveReading();
@@ -926,6 +986,7 @@ export function createSessions({
     projectName,
     resetSelection,
     loadOptions,
+    loadInventory,
     clearDraft,
     setNavigation,
     showWorkspace,

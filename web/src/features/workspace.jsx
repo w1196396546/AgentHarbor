@@ -10,6 +10,9 @@ import {
   collectChanges,
   numberedDiff,
   normalizeFilePath,
+  toolStatus,
+  commandSummary,
+  searchAction,
 } from "./presentation";
 import { Button } from "../components/ui/button";
 
@@ -47,6 +50,8 @@ export function createWorkspace({
   onChangesChanged,
   turnLabel,
   getChangedFiles,
+  getConversationItems,
+  renderSessionInfo,
 }) {
   function changedFiles() {
     return getChangedFiles ? getChangedFiles() : collectChanges(state);
@@ -177,6 +182,162 @@ export function createWorkspace({
       </>,
     );
     renderArtifacts();
+    if (!$("changesPanel").hidden) renderInspector();
+  }
+  function activityRecords() {
+    const names = {
+      commandExecution: ["Command", "terminal"],
+      mcpToolCall: ["Tool call", "tool"],
+      dynamicToolCall: ["Tool call", "tool"],
+      webSearch: ["Web search", "globe"],
+      collabAgentToolCall: ["Agent", "agent"],
+      collabToolCall: ["Agent", "agent"],
+      legacyTool: ["Tool call", "tool"],
+      fileChange: ["Changes", "diff"],
+      error: ["Error", "warning"],
+      hook: ["Hook", "tool"],
+      systemEvent: ["System notice", "file"],
+    };
+    return getConversationItems()
+      .filter((item) => names[item.type])
+      .map((item) => {
+        const data = item.data || {},
+          [name, icon] = names[item.type],
+          summary =
+            item.type === "commandExecution"
+              ? commandSummary(data, t) || data.command
+              : item.type === "webSearch"
+                ? searchAction(data).query
+                : [data.server, data.tool || data.name]
+                    .filter(Boolean)
+                    .join(" / ") ||
+                  item.text ||
+                  data.message,
+          status = toolStatus(item);
+        return {
+          item,
+          name,
+          icon,
+          summary: typeof summary === "string" ? summary : "",
+          status,
+        };
+      });
+  }
+  function renderInspector() {
+    if (state.sideTab === "details") {
+      const records = activityRecords(),
+        tools = records.filter(
+          ({ item }) =>
+            !["fileChange", "error", "hook", "systemEvent"].includes(item.type),
+        ),
+        files = [
+          ...new Map(changedFiles().map((file) => [file.path, file])).values(),
+        ];
+      renderSessionInfo($("detailsInfo"));
+      renderView(
+        $("detailsActivity"),
+        <>
+          <section className="inspector-card">
+            <h3>
+              {t("Tool usage")} <span className="count">{tools.length}</span>
+            </h3>
+            <p className="note">{t("Loaded records only")}</p>
+            {tools.length ? (
+              tools.map(({ item, name, icon, summary, status }) => (
+                <TreeAction
+                  key={item.id}
+                  className="inspector-record"
+                  action={() => showRecord(item.id)}
+                >
+                  <Icon name={icon} />
+                  <span>
+                    <strong>{t(name)}</strong>
+                    <small>{summary || turnLabel(item.turn_id)}</small>
+                  </span>
+                  <span className="note">{recordStatus(status)}</span>
+                </TreeAction>
+              ))
+            ) : (
+              <p className="note">{t("No tool calls in loaded messages.")}</p>
+            )}
+          </section>
+          <section className="inspector-card">
+            <h3>
+              {t("Changed files")} <span className="count">{files.length}</span>
+              <Button variant="ghost" onClick={() => setPanelTab("changes")}>
+                {t("View all")}
+              </Button>
+            </h3>
+            {files.length ? (
+              files.map((file) => (
+                <TreeAction
+                  key={file.path}
+                  className="inspector-record inspector-file"
+                  action={() => openChanges(file.path, file.key)}
+                >
+                  <Icon name="file" />
+                  <span>{file.path}</span>
+                  <DiffStats change={file} />
+                </TreeAction>
+              ))
+            ) : (
+              <p className="note">{t("No file changes yet.")}</p>
+            )}
+          </section>
+        </>,
+      );
+    } else if (state.sideTab === "logs") {
+      const records = activityRecords();
+      renderView(
+        $("logsContent"),
+        <>
+          <h3>
+            {t("Execution log")} <span className="count">{records.length}</span>
+          </h3>
+          <p className="note">{t("Loaded messages and tool output only.")}</p>
+          {records.length ? (
+            records.map(({ item, name, icon, summary, status }) => (
+              <TreeAction
+                key={item.id}
+                className="inspector-record inspector-log"
+                action={() => showRecord(item.id)}
+              >
+                <Icon name={icon} />
+                <span>
+                  <strong>{t(name)}</strong>
+                  <small>{summary || turnLabel(item.turn_id)}</small>
+                  <small>
+                    {turnLabel(item.turn_id)} · {recordStatus(status)}
+                  </small>
+                </span>
+                <Icon name="external" />
+              </TreeAction>
+            ))
+          ) : (
+            <p className="note">
+              {t("No execution records in loaded messages.")}
+            </p>
+          )}
+        </>,
+      );
+    }
+  }
+  function recordStatus(status) {
+    return t(
+      {
+        completed: "Completed",
+        failed: "Failed",
+        inProgress: "Running",
+        running: "Running",
+        starting: "Running",
+        interrupted: "Interrupted",
+        cancelled: "Cancelled",
+      }[status] || "Status unknown",
+    );
+  }
+  function showRecord(id) {
+    if (matchMedia("(max-width: 1180px)").matches) closeChanges();
+    jumpToItem(id);
   }
   function DiffFile({ file, initialOpen }) {
     const reading = getReadingState(),
@@ -494,19 +655,16 @@ export function createWorkspace({
   }
   function setPanelTab(tab) {
     state.sideTab = tab;
-    $("changesTab").setAttribute("aria-selected", String(tab === "changes"));
-    $("filesTab").setAttribute("aria-selected", String(tab === "files"));
-    $("artifactsTab").setAttribute(
-      "aria-selected",
-      String(tab === "artifacts"),
-    );
-    $("changesContent").hidden = tab !== "changes";
-    $("filesContent").hidden = tab !== "files";
-    $("artifactsContent").hidden = tab !== "artifacts";
+    for (const name of ["details", "files", "changes", "logs", "artifacts"]) {
+      $(name + "Tab").setAttribute("aria-selected", String(tab === name));
+      $(name + "Tab").tabIndex = tab === name ? 0 : -1;
+      $(name + "Content").hidden = tab !== name;
+    }
     $("changesWarning").hidden = tab !== "changes" || !state.workspaceWarning;
     closeFilePreview();
     if (tab === "files") run(loadProjectFiles);
     else if (tab === "artifacts") renderArtifacts();
+    else if (tab === "details" || tab === "logs") renderInspector();
     else renderChanges();
   }
   function openChanges(path, record) {
@@ -558,6 +716,7 @@ export function createWorkspace({
     $("changesToggle").setAttribute("aria-expanded", "false");
   }
   function resetSideData() {
+    for (const id of ["detailsInfo", "detailsActivity", "logsContent"]) clearView($(id));
     if ($("sessionInfoDialog").open) $("sessionInfoDialog").close();
     resetSubagents();
     if ($("revisePlanDialog").open) $("revisePlanDialog").close();

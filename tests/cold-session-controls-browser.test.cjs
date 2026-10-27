@@ -28,6 +28,10 @@ for (const engine of engines)
         const held = new Promise((resolve) => {
           release = resolve;
         });
+        let inventoryRequested;
+        const inventoryStarted = new Promise((resolve) => {
+          inventoryRequested = resolve;
+        });
         t.after(async () => {
           release();
           await browser.close();
@@ -36,6 +40,7 @@ for (const engine of engines)
         const capabilities = {
           controls_options: true,
           connection_metadata: true,
+          inventory_options: true,
         };
         const row = {
           id: "cold-native",
@@ -117,8 +122,28 @@ for (const engine of engines)
                 },
               });
             if (url.pathname === "/api/options") {
+              if (url.searchParams.get("scope") === "inventory")
+                inventoryRequested();
               if (url.searchParams.get("scope") !== "controls") await held;
-              return route.fulfill({ json: catalog }).catch(() => {});
+              return route
+                .fulfill({
+                  json:
+                    url.searchParams.get("scope") === "inventory"
+                      ? {
+                          skills: [
+                            {
+                              name: "fixture-skill",
+                              description: "Lazy skill",
+                              path: "/fixture/skill",
+                            },
+                          ],
+                          tools: [],
+                          mcp_servers: [],
+                          defaults: { model: "stale-model" },
+                        }
+                      : catalog,
+                })
+                .catch(() => {});
             }
             if (url.pathname === "/api/sessions/" + row.id) {
               if (url.searchParams.get("scope") !== "connection") await held;
@@ -165,7 +190,10 @@ for (const engine of engines)
           });
         });
         await page.goto("https://cold.test/?locale=" + locale);
-        await page.locator('#sessions button[data-id="cold-native"]').click();
+        await page
+          .locator('#sessions button[data-id="cold-native"]')
+          .first()
+          .click();
         await page.waitForFunction(
           () => !document.querySelector("#model").disabled,
         );
@@ -192,6 +220,35 @@ for (const engine of engines)
             (call) =>
               call.path === "/api/sessions/cold-native" && call.scope === null,
           ),
+        );
+        assert.equal(
+          calls.filter(
+            (call) => call.path === "/api/options" && call.scope !== "controls",
+          ).length,
+          0,
+          "inventory must not load during connection",
+        );
+        await page.locator("#message").fill("/fixture");
+        await inventoryStarted;
+        for (const id of ["model", "effort", "mode", "permission"])
+          assert(
+            await page.locator("#" + id).isEnabled(),
+            "held inventory disabled controls",
+          );
+        release();
+        await page
+          .locator("#suggestions")
+          .getByText("fixture-skill", { exact: true })
+          .waitFor();
+        assert(
+          (await page.locator("#model").innerText()).includes("Fixture Model"),
+        );
+        assert.equal(
+          calls.filter(
+            (call) =>
+              call.path === "/api/options" && call.scope === "inventory",
+          ).length,
+          1,
         );
         assert.equal(calls.filter((call) => call.method !== "GET").length, 0);
         assert.deepEqual(errors, []);

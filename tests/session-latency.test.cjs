@@ -127,7 +127,7 @@ test("confirmed settings unlock controls without waiting for history", async () 
   assert.equal(f.reads(), 0);
 });
 
-test("advertised control options unlock settings while supplemental tools are pending", async () => {
+test("control options defer inventory until requested and reuse the in-flight inventory", async () => {
   let releaseInventory;
   const calls = [],
     f = fixture(async (path) => {
@@ -137,7 +137,7 @@ test("advertised control options unlock settings while supplemental tools are pe
         return {
           agent: { id: "codex" },
           models: [{ id: "confirmed" }],
-          capabilities: { controls_options: true, tools: true },
+          capabilities: { controls_options: true, inventory_options: true, tools: true },
         };
       return new Promise((resolve) => {
         releaseInventory = resolve;
@@ -153,18 +153,24 @@ test("advertised control options unlock settings while supplemental tools are pe
   await loading;
   assert.equal(f.state.optionsLoaded, true);
   assert.deepEqual(f.state.catalog.models, [{ id: "confirmed" }]);
+  assert.equal(calls.length, 1);
+  const inventory = f.sessions.loadInventory();
+  assert.equal(f.sessions.loadInventory(), inventory);
   assert.equal(calls.length, 2);
-  assert.equal(new URLSearchParams(calls[1].split("?")[1]).has("scope"), false);
+  assert.equal(new URLSearchParams(calls[1].split("?")[1]).get("scope"), "inventory");
   releaseInventory({
     agent: { id: "codex" },
-    models: [{ id: "confirmed" }],
+    models: [{ id: "stale-must-not-replace-controls" }],
     skills: [],
     tools: [{ name: "supplemental-tool" }],
     capabilities: { controls_options: true, tools: true },
   });
-  await new Promise(setImmediate);
+  await inventory;
   assert.equal(f.state.catalog.tools[0].name, "supplemental-tool");
+  assert.deepEqual(f.state.catalog.models, [{ id: "confirmed" }]);
   assert.equal(f.state.optionsLoaded, true);
+  await f.sessions.loadInventory();
+  assert.equal(calls.length, 2);
 });
 
 test("failed or superseded supplemental catalogs cannot disable confirmed controls", async () => {
@@ -182,12 +188,13 @@ test("failed or superseded supplemental catalogs cannot disable confirmed contro
     await new Promise(setImmediate);
     assert.equal(f.state.optionsLoaded, true);
     await loading;
+    const inventory = f.sessions.loadInventory();
     const confirmed = f.state.catalog;
     if (stale) {
       f.state.optionsSeq++;
       completeInventory({ models: [{ id: "old-model" }] });
     } else completeInventory(new Error("Tool inventory unavailable"));
-    await new Promise(setImmediate);
+    await inventory;
     assert.equal(f.state.catalog, confirmed);
     assert.equal(f.state.optionsLoaded, true);
   }

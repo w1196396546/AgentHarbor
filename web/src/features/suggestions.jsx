@@ -14,6 +14,7 @@ export function createSuggestions({
   notice,
   Action,
   canConfigure,
+  loadInventory = async () => {},
   renderAttachments,
   resizeComposer,
   run,
@@ -119,6 +120,20 @@ export function createSuggestions({
     state.suggestions = entries;
     state.suggestionIndex = 0;
     drawSuggestions();
+    if (
+      token.kind === "/" &&
+      state.optionsLoaded &&
+      (!Array.isArray(state.catalog.skills) ||
+        !Array.isArray(state.catalog.tools))
+    ) {
+      await loadInventory();
+      if (
+        seq === state.suggestionSeq &&
+        Array.isArray(state.catalog.skills) &&
+        Array.isArray(state.catalog.tools)
+      )
+        return suggest();
+    }
   }
   function drawSuggestions() {
     const root = $("suggestions");

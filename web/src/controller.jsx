@@ -8,7 +8,6 @@ import { createReading } from "./features/reading";
 import {
   loadedItems,
   itemResources,
-  searchItems,
   collectChanges,
   groupByTurn,
 } from "./features/presentation";
@@ -79,9 +78,20 @@ export function startRemote() {
       <>
         {symbol && <Icon name={symbol} />}
         <span>{t(text)}</span>
+        {id === "model" && (
+          <small className="mobile-model-effort">
+            {effortName(state.prefs.effort)}
+          </small>
+        )}
         {["model", "effort"].includes(id) && <Icon name="chevron" />}
       </>,
     );
+    const label =
+      id === "model"
+        ? [t(text), effortName(state.prefs.effort)].join(" · ")
+        : t(text);
+    $(id).setAttribute("aria-label", label);
+    $(id).title = label;
   }
 
   const state = {
@@ -224,7 +234,6 @@ export function startRemote() {
     getAgent,
     api: (...args) => api(...args),
     onChange: () => {
-      renderSearch();
       renderArtifacts();
     },
   });
@@ -331,259 +340,6 @@ export function startRemote() {
       "The source is outside the loaded history. Load older messages to continue.",
     );
   }
-  function searchInput() {
-    return {
-      query: $("conversationSearch").value.trim(),
-      filter: $("conversationFilter").value,
-      turn_id: $("conversationTurn").value,
-      limit: 100,
-    };
-  }
-  function renderSearch() {
-    return withConversationView(drawSearch);
-  }
-  function drawSearch() {
-    const items = conversationItems(),
-      scope = [state.device?.id, getAgent().id, state.selected].join("|");
-    if ($("conversationSearch").dataset.scope !== scope) {
-      $("conversationSearch").dataset.scope = scope;
-      $("conversationSearch").value = "";
-      $("conversationFilter").value = "all";
-      $("conversationTurn").value = "";
-      $("conversationSearchScope").value = "loaded";
-    }
-    const turnsPage = indexedTurns(),
-      turns = allTurnIDs(),
-      selectedTurn = $("conversationTurn").value,
-      canIndex = readIndexes.supports("conversation_index"),
-      canSearch = canIndex && readIndexes.supports("full_history_search");
-    $("conversationFullHistory").disabled = !canSearch;
-    if (!canSearch) $("conversationSearchScope").value = "loaded";
-    renderView(
-      $("conversationTurn"),
-      <>
-        <option value="">{t("All turns")}</option>
-        {turns.map((id) => {
-          const turn = conversationView.turns.get(id);
-          return (
-            <option key={id} value={id}>
-              {turnLabel(id)}
-              {turn
-                ? " · " +
-                  t(
-                    {
-                      completed: "Completed",
-                      inProgress: "Running",
-                      starting: "Running",
-                      failed: "Failed",
-                      interrupted: "Interrupted",
-                      idle: "Ready",
-                    }[turn.status] || "Status unknown",
-                  ) +
-                  (turn.partial ? " · " + t("Partial history") : "")
-                : ""}
-            </option>
-          );
-        })}
-      </>,
-    );
-    $("conversationTurn").value = turns.includes(selectedTurn)
-      ? selectedTurn
-      : "";
-    $("conversationNavigator").hidden = !state.selected;
-    renderView(
-      $("conversationIndexStatus"),
-      canIndex ? (
-        <>
-          <span className="note">
-            {t(
-              turnsPage.loaded &&
-                turnsPage.scope === "full" &&
-                !turnsPage.truncated &&
-                !turnsPage.hasMore
-                ? "Turn index covers readable history."
-                : "Turn index is incomplete.",
-            )}
-          </span>
-          {turnsPage.loading && (
-            <span className="note">{t("Loading history index…")}</span>
-          )}
-          {turnsPage.error && (
-            <span className="note" role="status">
-              {t(turnsPage.error)}
-            </span>
-          )}
-          {(!turnsPage.loaded || turnsPage.error) && (
-            <Action
-              disabled={turnsPage.loading}
-              action={() =>
-                readIndexes.load("conversation_index", "turns", "turns")
-              }
-            >
-              {t(turnsPage.error ? "Retry" : "Load turn index")}
-            </Action>
-          )}
-          {turnsPage.hasMore && (
-            <Action
-              disabled={turnsPage.loading}
-              action={() =>
-                readIndexes.load(
-                  "conversation_index",
-                  "turns",
-                  "turns",
-                  undefined,
-                  true,
-                )
-              }
-            >
-              {t("Load more turns")}
-            </Action>
-          )}
-        </>
-      ) : null,
-    );
-    const body = searchInput(),
-      { query, filter } = body,
-      active = !!query || filter !== "all" || !!selectedTurn,
-      full = $("conversationSearchScope").value === "full" && canSearch;
-    if (full) {
-      const page = readIndexes.read(
-        "full_history_search",
-        "search",
-        "matches",
-        body,
-      );
-      renderView(
-        $("conversationSearchResults"),
-        <>
-          <p className="note">
-            {t(
-              page.loaded
-                ? page.scope === "full"
-                  ? "Search scope: full readable history."
-                  : "Search scope: loaded history."
-                : "Full history search is ready.",
-            )}{" "}
-            · {page.items.length} {t("matches")}
-          </p>
-          <Action
-            disabled={page.loading || !active}
-            action={() =>
-              readIndexes.load("full_history_search", "search", "matches", body)
-            }
-          >
-            {t(page.loading ? "Searching…" : "Search history")}
-          </Action>
-          {page.error && (
-            <p className="note" role="status">
-              {t(page.error)}
-            </p>
-          )}
-          {(page.truncated ||
-            page.hasMore ||
-            (page.loaded && page.scope !== "full")) && (
-            <p className="note">{t("Results are incomplete.")}</p>
-          )}
-          {page.items.map((match) => (
-            <Action
-              key={match.id}
-              className="search-result"
-              action={() => locateRecord(match)}
-            >
-              <span>{turnLabel(match.turn_id)}</span>
-              <span>
-                {String(match.snippet || match.type || t("Unknown")).slice(
-                  0,
-                  600,
-                )}
-              </span>
-            </Action>
-          ))}
-          {page.hasMore && (
-            <Action
-              disabled={page.loading}
-              action={() =>
-                readIndexes.load(
-                  "full_history_search",
-                  "search",
-                  "matches",
-                  body,
-                  true,
-                )
-              }
-            >
-              {t("Load more matches")}
-            </Action>
-          )}
-          <InteractionHistoryStatus />
-        </>,
-      );
-      return;
-    }
-    const interactionItems = interactionSearchItems();
-    const matches = searchItems(
-        [...items, ...interactionItems],
-        query,
-        filter,
-      ).filter((item) => !selectedTurn || item.turn_id === selectedTurn),
-      changes =
-        filter === "changes"
-          ? changedFiles().filter(
-              (file) =>
-                !file.item_id &&
-                (!selectedTurn || file.turn_id === selectedTurn) &&
-                (!query ||
-                  (file.path + "\n" + (file.diff || ""))
-                    .toLocaleLowerCase()
-                    .includes(query.toLocaleLowerCase())),
-            )
-          : [];
-    renderView(
-      $("conversationSearchResults"),
-      <>
-        {active && (
-          <>
-            <p className="note">
-              {t("Loaded messages and tool output only.")} ·{" "}
-              {matches.length + changes.length} {t("matches")}
-            </p>
-            {matches.slice(0, 100).map((item) => (
-              <Action
-                key={item.id}
-                className="search-result"
-                action={() => locateRecord(item)}
-              >
-                <span>{turnLabel(item.turn_id)}</span>
-                <span>
-                  {String(
-                    item.text ||
-                      item.data?.command ||
-                      item.data?.aggregatedOutput ||
-                      item.type,
-                  ).slice(0, 150)}
-                </span>
-              </Action>
-            ))}
-            {changes.slice(0, Math.max(0, 100 - matches.length)).map((file) => (
-              <Action
-                key={file.key}
-                className="search-result"
-                action={() => openTurnChanges(file.turn_id)}
-              >
-                {file.path}
-              </Action>
-            ))}
-            {matches.length + changes.length > 100 && (
-              <p className="note">
-                {t("Showing first 100 matches. Refine your search.")}
-              </p>
-            )}
-          </>
-        )}
-        <InteractionHistoryStatus />
-      </>,
-    );
-  }
   function renderTimeline() {
     return withConversationView(drawTimeline);
   }
@@ -602,7 +358,6 @@ export function startRemote() {
       conversationView,
     );
     renderItems($("live"), live.items || [], new Set(), conversationView);
-    renderSearch();
     reading.afterRender();
   }
   const notice = (text = "") => {
@@ -884,6 +639,8 @@ export function startRemote() {
           ? "Background conversations are unavailable. Update agentTools on your computer and reconnect."
           : state.settingsMutation
             ? "Saving settings…"
+            : ownerCan("configure") && !state.optionsLoaded
+              ? "Loading conversation settings…"
             : !ownerCan(queued ? "queue_add" : "send")
               ? "Viewing the original application. Your draft stays here until control reconnects."
               : state.uploading
@@ -908,7 +665,7 @@ export function startRemote() {
     renderReasoning();
     syncSubagents();
   }
-  async function connectionMetadata(generation) {
+  async function connectionMetadata(generation, refresh = false) {
     const id = state.selected, revision = state.liveRevision;
     const value = await api(
       "sessions/" + encodeURIComponent(id) + "?scope=connection",
@@ -916,7 +673,7 @@ export function startRemote() {
     if (generation !== state.generation || id !== state.selected) return;
     if (value.session?.id !== id || !value.live?.owner)
       throw new Error("Connection failed.");
-    if (revision !== state.liveRevision || state.live.owner) return;
+    if (revision !== state.liveRevision || (!refresh && state.live.owner)) return;
     state.agentReadPending = false;
     state.session = value.session;
     state.cwd = value.session.cwd || "";
@@ -1106,8 +863,10 @@ export function startRemote() {
     refreshPendingPlan();
     refreshQueue();
   }
-  function renderSessionInfo() {
-    if (!$("sessionInfoDialog").open) return;
+  function renderSessionInfo(target) {
+    if (!target && !$("changesPanel").hidden && state.sideTab === "details")
+      renderSessionInfo($("detailsInfo"));
+    if (!target && !$("sessionInfoDialog").open) return;
     const owner = state.live.owner || {},
       options =
         state.live.options ||
@@ -1203,13 +962,52 @@ export function startRemote() {
         cancelled: "Cancelled",
         disabled: "Disabled",
       };
+    if (target) {
+      renderView(
+        target,
+        <>
+          <h3>{t("Task details")}</h3>
+          <dl className="session-info-fields">
+            <div>
+              <dt>{t("Session")}</dt>
+              <dd>{state.session?.title || t("Untitled session")}</dd>
+            </div>
+            {rows.map(([name, value]) => (
+              <div key={name}>
+                <dt>{t(name)}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <h3>{t("Owner-reported settings")}</h3>
+          <p className="note">
+            {t(
+              owner.state === "connected" &&
+                state.device?.online === true &&
+                !state.ownerUnavailable
+                ? "Reported by the connected execution owner."
+                : "Last reported values; the execution owner is not currently confirmed.",
+            )}
+          </p>
+          <dl className="session-info-fields">
+            {Object.entries(settingLabels).map(([key, name]) => (
+              <div key={key}>
+                <dt>{t(name)}</dt>
+                <dd>{formatSetting(key, options[key])}</dd>
+              </div>
+            ))}
+          </dl>
+        </>,
+      );
+      return;
+    }
     const servers = Array.isArray(catalog.mcp_servers)
       ? catalog.mcp_servers
       : [
           ...new Set((catalog.tools || []).map((tool) => tool.server || "")),
         ].map((name) => ({ name }));
     renderView(
-      $("sessionInfoContent"),
+      target || $("sessionInfoContent"),
       <>
         <dl className="session-info-fields">
           {rows.map(([name, value]) => (
@@ -1271,7 +1069,7 @@ export function startRemote() {
         )}
         <h3>{t("Skills")}</h3>
         {!state.optionsLoaded || !Array.isArray(catalog.skills) ? (
-          <p>{t("Catalog not loaded")}</p>
+          <p>{t(state.inventoryLoading ? "Loading skills and tools…" : "Catalog not loaded")}</p>
         ) : catalog.skills?.length ? (
           catalog.skills.map((skill) => (
             <div className="catalog-entry" key={skill.path || skill.name}>
@@ -1285,7 +1083,7 @@ export function startRemote() {
         )}
         <h3>{t("Tools")}</h3>
         {!state.optionsLoaded || !Array.isArray(catalog.tools) ? (
-          <p>{t("Catalog not loaded")}</p>
+          <p>{t(state.inventoryLoading ? "Loading skills and tools…" : "Catalog not loaded")}</p>
         ) : !servers.length ? (
           <p>
             {t(
@@ -1362,6 +1160,7 @@ export function startRemote() {
     if (!state.selected) return;
     $("sessionInfoDialog").showModal();
     renderSessionInfo();
+    void loadInventory().then(() => renderSessionInfo());
   };
   $("closeSessionInfo").onclick = () => $("sessionInfoDialog").close();
   const getMarkdownRenderKey = () =>
@@ -1478,15 +1277,11 @@ export function startRemote() {
     renderRequests,
     dismissRequest,
     openRequest,
-    getInteractionHistory,
-    interactionSearchItems,
     InteractionHistory,
-    InteractionHistoryStatus,
     syncInteractionHistory,
   } = createApprovals({
     onHistoryChanged: () => {
       renderCurrent();
-      renderSearch();
     },
     getAgent,
     $,
@@ -1543,6 +1338,7 @@ export function startRemote() {
   });
   const { hideSuggestions, suggest, drawSuggestions, pickSuggestion } =
     createSuggestions({
+      loadInventory: (...args) => loadInventory(...args),
       state,
       $,
       ownerCan: (...args) => ownerCan(...args),
@@ -1590,6 +1386,8 @@ export function startRemote() {
     requestPlanRevision,
     revisePendingPlan,
   } = createWorkspace({
+    getConversationItems: conversationItems,
+    renderSessionInfo,
     getChangedFiles: () => conversationView?.changes || collectChanges(state),
     getReadingState: () => reading.get(),
     onReadingChange: () => reading.persist(),
@@ -1662,6 +1460,7 @@ export function startRemote() {
     projectName,
     resetSelection,
     loadOptions,
+    loadInventory,
     clearDraft,
     setNavigation,
     showWorkspace,
@@ -1733,6 +1532,7 @@ export function startRemote() {
     updateConnection: (...args) => updateConnection(...args),
     api,
     detail: (...args) => detail(...args),
+    connectionMetadata: (...args) => connectionMetadata(...args),
     ensureStream,
     renderCurrent,
     mergeOrdered,
@@ -1817,14 +1617,6 @@ export function startRemote() {
     });
   $("agentSelect").onchange = () =>
     run(() => chooseAgent($("agentSelect").value), $("agentSelect"));
-  $("conversationSearch").oninput = renderSearch;
-  $("conversationFilter").onchange = renderSearch;
-  $("conversationTurn").onchange = () => {
-    renderSearch();
-    const turn = $("conversationTurn").value;
-    if (turn) run(() => locateRecord({ turn_id: turn }));
-  };
-  $("conversationSearchScope").onchange = renderSearch;
   bindWorkspace({
     openRequest,
     $,

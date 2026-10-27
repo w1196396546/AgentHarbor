@@ -255,7 +255,7 @@ for (const engine of engines)
           "pairing key remained in browser history",
         );
         if (width < 760) await page.locator("#sidebarToggle").click();
-        await page.locator("#sessions button").click();
+        await page.locator("#sessions button[data-id]").first().click();
         await page.getByText("An old request", { exact: true }).waitFor();
         assert.equal(
           await page.evaluate(() => window.unsafe),
@@ -271,7 +271,7 @@ for (const engine of engines)
         const previousOptionCount = optionQueries.length;
         await page.locator("#new").click();
         await page
-          .locator('#sessions [data-id="remote-session"][aria-current="true"]')
+          .locator('[data-path="current"] [data-id="remote-session"][aria-current="true"]')
           .waitFor({ state: "attached" });
         const creationChecks = optionQueries
           .slice(previousOptionCount)

@@ -121,7 +121,7 @@ SSE 增量经 WebSocket 转到 Remote，再持续发送给浏览器；代理必�
 
 `internal/remoteclient` 位于 agentTools：连接管理、设备身份、配对和浏览器授权；其 `agent` 子包定义执行适配接口，`engine` 子包注册和选择适配器；当前 Codex 实现负责原有会话能力。模型供应商、API 接入和 Codex 数据目录都来自用户电脑的配置。需要经过 agentTools 网关时，沿用 agentTools 的 Codex 接入；Remote 不改变模型请求路径。
 
-Codex 原生项目目录与明确配置的额外目录限定历史列表、文件搜索/引用、预览和下载。目录由本机只读 App 状态和官方 SQLite 索引确定，无需先发现或逐个共享；浏览器不能指定范围外目录。网页主菜单使用 Codex 的三档审批模式：请求批准（内部值 `workspace-write`）映射为 workspace-write 沙箱、`approvalPolicy: on-request` 和 `approvalsReviewer: user`；帮我批准（`auto-review`）使用同一沙箱与审批策略，并设置 `approvalsReviewer: auto_review`；完全访问（`full-access`）使用 danger-full-access 沙箱、`approvalPolicy: never` 和 reviewer user。旧 `read-only` 会话保留兼容。full-access 按本机运行用户权限执行，不能把共享文件列表误认为操作系统沙箱。
+Codex 原生项目目录与明确配置的额外目录限定历史列表和文件搜索。文件引用、预览和下载还允许当前用户临时目录及 Codex home 下的 `worktrees` 子目录，以显示运行中生成的文件；浏览器不能指定这些目录以外的范围。目录由本机只读 App 状态、官方 SQLite 索引和上述固定本机路径确定，无需逐个共享。网页主菜单使用 Codex 的三档审批模式：请求批准（内部值 `workspace-write`）映射为 workspace-write 沙箱、`approvalPolicy: on-request` 和 `approvalsReviewer: user`；帮我批准（`auto-review`）使用同一沙箱与审批策略，并设置 `approvalsReviewer: auto_review`；完全访问（`full-access`）使用 danger-full-access 沙箱、`approvalPolicy: never` 和 reviewer user。旧 `read-only` 会话保留兼容。full-access 按本机运行用户权限执行，不能把共享文件列表误认为操作系统沙箱。
 
 原应用会话以实际 owner 的设置为准。网页更改模型、强度、模式或权限时调用 `POST /api/threads/{id}/settings`，携当前 owner epoch，仅传用户改变的字段；等待本机原 owner 的规范快照确认后返回 `options`，详情及 SSE 的 `live.options` 同步实际设置。请求未确认时保留原设置与草稿，不伪装为保存成功。普通发送未明确选择新设置时继承原 owner，不重新应用网页默认沙箱或 reviewer。自定义沙箱、额外根目录和不能准确映射的命名 profile 保持自定义，不自动转换成只读或完全访问。组织 requirements 和原 App 的验证仍适用，原生拒绝或未确认时报告错误，不降级伪装为已启用。
 
@@ -181,7 +181,7 @@ Markdown 正文按实例复用，只有文本或语言、设备、Agent、会话
 
 详情、options 并行获取，完整模型/工具目录不阻塞历史、后台连接或已有 SSE。选择变化、归档及退出取消旧请求；迟到的详情/连接/事件不能覆盖新选择。刷新、轮询和 SSE 只读跟随，不恢复所有历史或重发消息。后台连接成功可附带已确认的 `live` 快照（与 SSE 相同的 owner、epoch、选项和队列形状），网页直接应用并恢复控制，不为解除连接提示再下载整份历史；已有更新的 SSE 状态优先。旧客户端仅返回 `connected` 时仍读取详情确认，不推测控制权限。
 
-连接端明确声明 `capabilities.controls_options:true` 时，网页用 `scope=controls` 先读取模型、强度、模式、有效设置及权限 requirements；确认后即可操作控制栏，技能和 MCP 工具目录另行补读。缺失的库存字段表示尚未读取，显示“目录未加载”，不能等同成功空目录或不可用。补读失败不禁用已确认的控制；迟到响应仍受原 options序号和选择代际约束，不覆盖另一设备、Agent或会话。未声明能力的旧连接端沿用完整options。
+连接端明确声明 `capabilities.controls_options:true` 时，网页用 `scope=controls` 先读取模型、强度、模式、有效设置及权限 requirements；确认后即可操作控制栏，技能和 MCP 工具目录在输入斜杠或打开完整会话详情时按需读取，不在连接后自动扫描。inventory_options:true 启用仅包含库存的 scope=inventory；旧连接端仍按需读完整 options，但只合并库存字段。同一选择代际内去重在途请求，库存不能覆盖已确认设置。缺失的库存字段表示尚未读取，显示“目录未加载”，不能等同成功空目录或不可用。补读失败不禁用已确认的控制；迟到响应仍受原 options序号和选择代际约束，不覆盖另一设备、Agent或会话。未声明能力的旧连接端沿用完整options。
 
 侧栏读取加密 sessions 响应的 sidebar_projects（id、name、root_paths）、pinned_ids 及会话行 project_id / pinned，按原生顺序显示置顶、本机项目和最近会话；空项目仍可从侧栏选择后新建，项目名称来自 App 元数据。“最近”按更新时间倒序汇总所有已加载会话，包含项目和置顶会话；同一会话可同时出现在“最近”和原分组，共用会话 ID、选择状态及标题，计数仍按唯一会话数计算。列表沿用在线轮询和返回页面时的刷新，更新同时反映在两个位置，加载更多继续扩展可见历史。搜索和项目筛选继续生效，缺少新字段的旧客户端保留路径分组。项目/置顶状态由 agentTools 只读原生 App 状态与 SQLite 目录得到，不在中转持久化，也不借网页修改官方 App 数据。项目统一放在可折叠的“项目”分组内，各项目保留独立折叠状态；折叠总分组再展开不会重置单个项目，列表刷新也保留当前折叠状态，搜索时展开匹配结果。
 
@@ -234,7 +234,7 @@ GUI 和命令行均要求经过验证的共享 App 服务就绪后才连接中�
 
 右侧面板保留更改列表、文件树和轮次筛选，并增加按轮次归集已加载真实图片/文件的产物入口，可定位原消息、预览和下载。文件更改显示上游明确提供的重命名前后路径、二进制和截断状态，任务结束与更改仍在读取分别表示；当前文件预览与历史差异分开。会话内搜索默认覆盖已加载正文和工具输出，支持失败、更改、产物筛选及轮次跳转；完整历史模式仅在连接端声明下述版本化索引能力时启用。阅读锚点、展开状态和更改筛选以设备 / Agent / 会话隔离保存到有界本地元数据；不额外持久化正文、回答、附件或凭据，草稿和附件沿用原生命周期。刷新后只在当前授权列表仍包含该会话，且没有输入草稿、附件、技能、提及、工具选择或队列编辑时恢复只读详情，不自动连接 owner；锚点不在已加载记录时提示用户加载更早内容，主动滚动或返回最新会取消等待恢复，不自动抓取完整历史。
 
-资源读取继续通过加密 `project-file` / `attachments/{id}`。本机只允许授权项目内文件，以及与当前项目登记上传路径完全一致的附件；不开放任意本机路径。助手 Markdown 中的本机文件链接和图片通过与点击预览相同的 `localFileTarget` 识别并归集产物；`file:` 只接受空 host 或 `localhost`，仍交给原项目文件授权校验，远程 host 不作为本机文件。内联图片仅允许有界 PNG/JPEG/GIF/WebP 数据，资源被截断、已删除、需要授权或不可访问时按实际结果提示原因；外部 HTTP(S) 资源作为链接，不为预览抓取外部资源。中转仍不解析或保存资源明文。会话信息复用已有 options 目录和错误，不额外创建执行进程。
+资源读取继续通过加密 `project-file` / `attachments/{id}`。相对路径限定在会话项目；绝对路径仅允许本机 Codex 索引 / App 状态、明确配置、当前用户临时目录或 Codex home 下 `worktrees` 目录内的文件，上传附件须与当前项目登记路径完全一致。浏览器不能扩大本机允许目录，不按工具输出或文件名扩展权限。助手 Markdown 中的本机文件链接和图片通过与点击预览相同的 `localFileTarget` 识别并归集产物；`file:` 只接受空 host 或 `localhost`，仍交给本机允许目录校验，远程 host 不作为本机文件。内联图片仅允许有界 PNG/JPEG/GIF/WebP 数据，资源被截断、已删除、需要授权或不可访问时按实际结果提示原因；外部 HTTP(S) 资源作为链接，不为预览抓取外部资源。中转仍不解析或保存资源明文。会话信息复用已有 options 目录和错误，不额外创建执行进程。
 
 可选 `options.mcp_servers` 为 `{name, tools_known, tools_error?, runtime_status?, auth_status?}[]`，现有 `tools` 列表不变。成功读取且无服务返回 `[]`；整体目录不可读为 `null` 并保留错误，旧客户端省略此字段。每个服务区分目录成功但无工具、未加载和读取失败；运行连接与认证状态只显示上游提供的值。来源为安装版 Codex CLI `0.163.0` 的 `app-server generate-json-schema`：`McpServerStatus`、`HookRunSummary`、`GuardianApprovalReview` 和 `PatchChangeKind`；自动审查 schema 标记为 unstable，未知或缺失字段继续保留降级。
 
@@ -261,10 +261,13 @@ GUI 和命令行均要求经过验证的共享 App 服务就绪后才连接中�
 
 完整历史搜索每次只扫描一页真实历史，单源页最多 100 项、合并源最多 1000 项 / 4 MiB，结果 `limit` 为 1–100（默认 50）；结果页继续后可读下一源页，最多 256 源页，达到边界显示截断。搜索词和筛选条件绑定加密游标，内容续页同时校验源内容代际。网页显式切换“已加载 / 完整历史”范围，可继续加载结果和未加载轮次；点击结果按需拉取对应记录，保留输入草稿、附件和阅读锚点。搜索仅匹配可读历史，不接受控制方法或任意本机路径。
 
-产物 ID 为本机生成的不透明认证值，绑定会话、授权项目、owner、来源页、引用位置和内容代际，不能跨会话或项目使用。只索引实际历史中的资源引用；读取仍限制在当前授权项目文件或当前项目已登记的附件，不因历史文本扩大权限，也不接受浏览器传入本机路径。`availability` 为 `available`、`unavailable` 或 `unknown`；`cut_reason` 可为 `deleted`、`outside_project`、`unavailable`、`truncated`、`too_large`。资源最多 20 MiB，预览最多 256 KiB；截断预览不冒充完整下载。预览 JSON 仅提供安全文件名，原字节响应沿用内容类型与 sandbox 约束。网页可按轮次 / 类型分页筛选、预览、下载和跳回源记录；旧端仍仅归集已加载消息的资源。
+产物 ID 为本机生成的不透明认证值，绑定会话、授权项目、owner、来源页、引用位置和内容代际，不能跨会话或项目使用。只索引实际历史中的资源引用；读取限制在本机允许目录文件或当前项目已登记的附件，不因历史文本扩大权限，也不接受浏览器传入其它未授权路径。`availability` 为 `available`、`unavailable` 或 `unknown`；`cut_reason` 可为 `deleted`、`outside_project`、`unavailable`、`truncated`、`too_large`。资源最多 20 MiB，预览最多 256 KiB；截断预览不冒充完整下载。预览 JSON 仅提供安全文件名，原字节响应沿用内容类型与 sandbox 约束。网页可按轮次 / 类型分页筛选、预览、下载和跳回源记录；旧端仍仅归集已加载消息的资源。
 
 交互历史与 `live.requests` 当前待处理请求分开。`status` 仅取 `pending`、`approved`、`declined`、`answered`、`cancelled`、`expired`、`unknown`；请求消失或上游只说 completed 都不能推断 approved / answered，未观测生命周期通过 `available: false` / 读错误说明。`resolved_at_ms` 只在真实来源明确提供毫秒时返回；当前来源没有该字段时省略。历史仅有请求摘要、原因与状态，不保存或返回秘密答案、问询 content 或原始回答。工具卡片和会话搜索显示已观测的过去交互，当前请求继续原 `/answer` / `/steer`、owner epoch 和轮次校验，答案草稿只存在现有内存生命周期，不新增 dispatcher。
 
 关系图仅包含本机已确认、仍属于当前授权项目且未归档的后代，复用既有后代授权检查。每个 operation 为 `{id,item_id,turn_id,thread_id,operation,status,summary?,result_summary?}`，`operation` 为真实 `spawnAgent` / `sendInput` / `wait` / `closeAgent` / `resumeAgent`；任务和结果只取真实创建 prompt、返回结果，最近活动仅取真实会话时间。未知状态保持 unknown，关闭不代表完成。历史分页可重复同一 agent ID，网页按 operation ID 合并，不让后页缺失摘要覆盖已知值；树防循环并限制深度，操作总量最多 5000，超出显示不完整。跳回操作仅使用当前父会话的源 item；后代操作保留 thread ID，但不借此开放另一会话。子会话详情继续原授权只读 `/agents/{agentID}`，没有 `subagents` 能力时关系图本身不会开放详情。
 
 实现位于 [indexes.js](../web/src/features/indexes.js)、[approvals.jsx](../web/src/features/approvals.jsx)、[interaction-history.js](../web/src/features/interaction-history.js)、[subagents.jsx](../web/src/features/subagents.jsx)、[agent-graph.js](../web/src/features/agent-graph.js) 及既有 controller / conversation / workspace / files。纯观测回归见 [read-observation.test.cjs](../tests/read-observation.test.cjs)。本节描述源码协议，不代表已安装 App、真实模型会话、平台实机或公网部署已验证。
+
+
+连接成功回执若与 observing SSE 竞争，网页以轻量 connection 元数据进行最多三次只读确认；新的已连接 owner 和选择代际优先，不能重发 connect。仍未确认则显示连接失败并允许明确重试。设置本身仍由本机适配器直接发给原 owner，relay 不解释模型、强度、模式或权限，也不代替 owner 确认。

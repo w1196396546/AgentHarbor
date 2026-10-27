@@ -1,0 +1,141 @@
+.inspector-tabs {
+  flex: 1;
+  gap: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.inspector-tabs::-webkit-scrollbar {
+  display: none;
+}
+.inspector-tabs button {
+  flex: 1 0 auto;
+  gap: 5px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.inspector-tabs .icon {
+  width: 14px;
+  height: 14px;
+}
+.inspector-tabs + #closeChanges {
+  flex-shrink: 0;
+}
+.inspector-content,
+#artifactsContent {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+}
+.inspector-card {
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+.inspector-card h3,
+#logsContent > h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.inspector-card h3 > button {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  color: var(--primary);
+  font-size: 11px;
+}
+.inspector-card .session-info-fields {
+  margin: 8px 0 16px;
+}
+.inspector-card .session-info-fields:last-child {
+  margin-bottom: 0;
+}
+.inspector-card .session-info-fields > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+}
+.inspector-card .session-info-fields dd {
+  text-align: right;
+}
+.inspector-card > .note {
+  margin: 6px 0 10px;
+}
+.inspector-record {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  white-space: normal;
+  gap: 9px;
+  padding: 10px 3px;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+  min-width: 0;
+}
+.inspector-record > .icon {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.inspector-record > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.inspector-record strong,
+.inspector-record small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.inspector-record strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.inspector-record small {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.inspector-record > .note {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.inspector-record + .inspector-record {
+  border-top: 1px solid var(--line);
+}
+.inspector-file {
+  font-size: 11px;
+}
+.inspector-file > span:first-of-type {
+  overflow-wrap: anywhere;
+}
+.inspector-file .change-stats {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.inspector-log {
+  padding: 12px 5px;
+}
+@media (max-width: 760px) {
+  .inspector-tabs button {
+    min-height: 44px;
+    padding-inline: 7px;
+  }
+  .inspector-content,
+  #artifactsContent {
+    padding: 12px;
+  }
+  .inspector-record {
+    min-height: 44px;
+  }
+}

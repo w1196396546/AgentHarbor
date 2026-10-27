@@ -18,6 +18,7 @@ export function createOwners({
   updateConnection,
   api,
   detail,
+  connectionMetadata,
   ensureStream,
   renderCurrent,
   mergeOrdered,
@@ -151,7 +152,9 @@ export function createOwners({
       state.archivedSelection
         ? "This conversation is archived in Codex. Your unsent draft is preserved."
         : state.connectingOwner
-          ? "Connecting this conversation…"
+          ? state.connectingOwner.confirming
+            ? "Confirming conversation connection…"
+            : "Connecting this conversation…"
           : state.connectOwnerFailed && canConnect
             ? "Connection failed. Your draft is preserved. Retry the connection."
             : needsUpdate
@@ -243,6 +246,21 @@ export function createOwners({
           state.live = result.live;
           state.liveRevision++;
           renderCurrent();
+        } else if (state.live.owner?.state !== "connected") {
+          request.confirming = true;
+          renderOwner();
+          if (state.catalog.capabilities?.connection_metadata === true) {
+            for (
+              let attempt = 0;
+              attempt < 3 &&
+              current() &&
+              state.live.owner?.state !== "connected";
+              attempt++
+            )
+              await connectionMetadata(generation, true);
+          } else await detail(generation);
+          if (current() && state.live.owner?.state !== "connected")
+            throw new Error("Connection failed.");
         }
       } else await detail(generation);
       if (current()) ensureStream();

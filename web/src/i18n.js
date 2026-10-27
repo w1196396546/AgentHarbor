@@ -240,6 +240,9 @@ for (const [key, zh, tw, ja, de] of [
   ['Download file', '下载文件', '下載檔案', 'ファイルをダウンロード', 'Datei herunterladen'],
   ['Open file', '打开文件', '開啟檔案', 'ファイルを開く', 'Datei öffnen'],
   ['Loading file…', '正在读取文件…', '正在讀取檔案…', 'ファイルを読み込み中…', 'Datei wird geladen…'],
+  ['Loading conversation settings…', '正在加载会话设置…', '正在載入對話設定…', '会話設定を読み込み中…', 'Unterhaltungseinstellungen werden geladen…'],
+  ['Confirming conversation connection…', '正在确认会话连接…', '正在確認對話連線…', '会話接続を確認中…', 'Unterhaltungsverbindung wird bestätigt…'],
+  ['Loading skills and tools…', '正在加载技能和工具…', '正在載入技能與工具…', 'スキルとツールを読み込み中…', 'Skills und Tools werden geladen…'],
   ['Binary file. Download to view it.', '此文件无法以文本预览，请下载查看。', '此檔案無法以文字預覽，請下載查看。', 'このファイルはダウンロードして確認してください。', 'Binärdatei. Zum Ansehen herunterladen.'],
   ['Preview truncated. Download the complete file.', '预览已截断，可下载完整文件。', '預覽已截斷，可下載完整檔案。', 'プレビューは省略されています。完全なファイルをダウンロードしてください。', 'Vorschau gekürzt. Vollständige Datei herunterladen.'],
   ['Search to find more files.', '输入文件名查找更多文件。', '輸入檔案名稱尋找更多檔案。', '検索して他のファイルを探してください。', 'Suchen, um weitere Dateien zu finden.'],
@@ -258,7 +261,7 @@ for (const [key, zh, tw, ja, de] of [
 
 for (const [key, zh, tw, ja, de] of [
   ['Choose a file inside this project.', '请选择项目内的文件。', '請選擇專案內的檔案。', 'プロジェクト内のファイルを選んでください。', 'Wähle eine Datei innerhalb dieses Projekts.'],
-  ['File references must stay inside the selected shared project.', '只能打开所选共享项目内的文件。', '只能開啟所選共享專案內的檔案。', '選択した共有プロジェクト内のファイルのみ開けます。', 'Dateiverweise müssen im ausgewählten freigegebenen Projekt bleiben.'],
+  ['File references must stay inside an allowed local directory.', '文件必须位于本机允许访问的目录内。', '檔案必須位於本機允許存取的目錄內。', 'ファイルは許可されたローカルディレクトリ内にある必要があります。', 'Dateiverweise müssen in einem erlaubten lokalen Verzeichnis liegen.'],
   ['This project file is unavailable or is not a regular file.', '此文件无法读取，可能已删除或不是普通文件。', '此檔案無法讀取，可能已刪除或不是一般檔案。', 'このファイルは利用できないか、通常のファイルではありません。', 'Diese Datei ist nicht verfügbar oder keine reguläre Datei.'],
   ['This project root is unavailable or is not shared.', '项目目录无法访问，或尚未共享。', '專案目錄無法存取，或尚未共用。', 'プロジェクトのルートを利用できないか、共有されていません。', 'Der Projektordner ist nicht verfügbar oder nicht freigegeben.'],
   ['The completed plan is empty or truncated. Ask Codex to produce a complete plan.', '计划为空或已截断，请让 Codex 重新生成完整计划。', '計畫為空或已截斷，請讓 Codex 重新產生完整計畫。', '計画が空または省略されています。完全な計画を作成するよう Codex に依頼してください。', 'Der Plan ist leer oder gekürzt. Bitte Codex um einen vollständigen Plan.'],
@@ -723,4 +726,25 @@ for (const [key, zh, tw, ja, de] of [
 for (const [key, zh, tw, ja, de] of [
   ['Latest', '最新', '最新', '最新', 'Zuletzt'],
   ['Current', '当前', '目前', '現在', 'Aktuell'],
+]) for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;
+
+for (const [key, zh, tw, ja, de] of [
+  ['Workspace inspector', '工作区详情', '工作區詳情', 'ワークスペースの詳細', 'Arbeitsbereichdetails'],
+  ['Details', '详情', '詳情', '詳細', 'Details'],
+  ['Session', '会话', '對話', 'セッション', 'Sitzung'],
+  ['Diff', 'Diff', 'Diff', '差分', 'Diff'],
+  ['Logs', '日志', '日誌', 'ログ', 'Protokoll'],
+  ['Task details', '任务详情', '任務詳情', 'タスクの詳細', 'Aufgabendetails'],
+  ['Tool usage', '工具使用', '工具使用', 'ツールの使用', 'Toolnutzung'],
+  ['Changed files', '修改的文件', '修改的檔案', '変更したファイル', 'Geänderte Dateien'],
+  ['View all', '查看全部', '檢視全部', 'すべて表示', 'Alle anzeigen'],
+  ['Execution log', '执行日志', '執行日誌', '実行ログ', 'Ausführungsprotokoll'],
+  ['No tool calls in loaded messages.', '已加载消息中没有工具调用。', '已載入的訊息中沒有工具呼叫。', '読み込み済みのメッセージにツール呼び出しはありません。', 'Keine Toolaufrufe in geladenen Nachrichten.'],
+  ['No execution records in loaded messages.', '已加载消息中没有执行记录。', '已載入的訊息中沒有執行記錄。', '読み込み済みのメッセージに実行記録はありません。', 'Keine Ausführungseinträge in geladenen Nachrichten.'],
+]) for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;
+
+for (const [key, zh, tw, ja, de] of [
+  ['No pinned conversations.', '暂无置顶会话。', '尚無置頂對話。', 'ピン留めした会話はありません。', 'Keine angehefteten Unterhaltungen.'],
+  ['No active conversations.', '暂无进行中的会话。', '尚無進行中的對話。', '進行中の会話はありません。', 'Keine aktiven Unterhaltungen.'],
+  ['No shared projects.', '暂无共享项目。', '尚無共用專案。', '共有プロジェクトはありません。', 'Keine freigegebenen Projekte.'],
 ]) for (const [code, value] of [['zh', zh], ['zh-TW', tw], ['ja', ja], ['de', de]]) window.REMOTE_I18N[code][key] = value;

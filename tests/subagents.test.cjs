@@ -203,11 +203,11 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
     }
   });
   await page.goto("https://remote.test/#key=" + pairCode);
-  await page.locator('#sessions [data-id="parent"]').waitFor();
+  await page.locator('#sessions [data-id="parent"]').first().waitFor();
   async function select(id) {
     if (width <= 760 && !(await page.locator("#navBackdrop").isVisible()))
       await page.locator("#sidebarToggle").click();
-    await page.locator('#sessions [data-id="' + id + '"]').click();
+    await page.locator('#sessions [data-id="' + id + '"]').first().click();
     await page
       .locator("#title")
       .filter({ hasText: id === "parent" ? "Parent task" : "Another task" })
@@ -455,9 +455,16 @@ for (const engine of engines) {
         bubble.y + bubble.height <= composer.y,
         "agents bubble is above composer",
       );
+      await page.locator("#latest").evaluate((node) => { node.hidden = false; });
+      const latest = await page.locator("#latest").boundingBox(),
+        dock = await page.locator(".composer-dock").boundingBox();
+      assert(
+        Math.abs(latest.x + latest.width / 2 - dock.x - dock.width / 2) <= 1,
+        "latest output stays centered above the composer",
+      );
       if (width <= 760) {
         const permission = await page.locator("#permission").boundingBox();
-        const toolbar = await page.locator(".composer-toolbar").boundingBox();
+        const toolbar = await page.locator(".composer-controls").boundingBox();
         const scroll = await page.locator("#conversationScroll").boundingBox();
         assert(
           permission.x >= toolbar.x &&
@@ -479,12 +486,17 @@ for (const engine of engines) {
           bubble.y >= scroll.y && bubble.x >= 0 && bubble.x + bubble.width <= width,
           "agents stay visible below the conversation header",
         );
-        await page.locator("#latest").evaluate((node) => { node.hidden = false; });
-        const latest = await page.locator("#latest").boundingBox();
-        assert(bubble.x + bubble.width <= latest.x, "latest output does not overlap agents");
+        assert(
+          bubble.x + bubble.width <= latest.x ||
+            latest.x + latest.width <= bubble.x ||
+            bubble.y + bubble.height <= latest.y ||
+            latest.y + latest.height <= bubble.y,
+          "latest output does not overlap agents",
+        );
         assert(latest.y + latest.height <= permission.y, "latest output does not overlap composer controls");
       }
-      assert.equal(await page.locator("#sessions [data-id]").count(), 2);
+      assert.deepEqual(await page.locator("#sessions [data-id]").evaluateAll(nodes => [...new Set(nodes.map(node => node.dataset.id))].sort()), ["other", "parent"]);
+      assert.equal(await page.locator('[data-path="all-projects"] [data-id="parent"]').count(), 1, "selected conversation remains in its project");
       await page.locator("#message").fill("Keep my draft");
       await page.locator("#subagentsToggle").click();
       await page
@@ -576,7 +588,7 @@ for (const engine of engines) {
       /Reviewing the source now/,
     );
     assert.equal(await page.locator("#title").textContent(), "Parent task");
-    assert.equal(await page.locator('#sessions [data-id="parent"]').count(), 1);
+    assert.equal(await page.locator('[data-path="current"] [data-id="parent"]').count(), 1);
     await page.locator("#subagentsBack").click();
     await page.locator('#subagentsList [data-agent-id="child-two"]').click();
     await waitForDelayed();

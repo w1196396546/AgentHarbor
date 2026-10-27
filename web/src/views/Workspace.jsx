@@ -335,45 +335,6 @@ export function Workspace() {
             </Empty>
             <div className="conversation-content">
               <p id="cwd" className="cwd"></p>
-              <div
-                id="conversationNavigator"
-                className="conversation-navigator"
-                hidden
-              >
-                <Input
-                  id="conversationSearch"
-                  type="search"
-                  data-label="Search this conversation"
-                  data-placeholder="Search loaded messages"
-                  autoComplete="off"
-                  maxLength={1024}
-                />
-                <select id="conversationSearchScope" data-label="Search scope">
-                  <option value="loaded" data-t="Loaded history"></option>
-                  <option
-                    id="conversationFullHistory"
-                    value="full"
-                    data-t="Full history"
-                    disabled
-                  ></option>
-                </select>
-                <select
-                  id="conversationFilter"
-                  data-label="Filter loaded records"
-                >
-                  <option value="all" data-t="All records"></option>
-                  <option value="failed" data-t="Failed"></option>
-                  <option value="changes" data-t="Changes"></option>
-                  <option value="artifacts" data-t="Artifacts"></option>
-                  <option
-                    value="interactions"
-                    data-t="Interaction history"
-                  ></option>
-                </select>
-                <select id="conversationTurn" data-label="Turn"></select>
-                <div id="conversationIndexStatus" aria-live="polite"></div>
-                <div id="conversationSearchResults" aria-live="polite"></div>
-              </div>
               <Button
                 variant="ghost"
                 id="older"
@@ -674,19 +635,20 @@ export function Workspace() {
         <Panel
           id="changesPanel"
           title="Project files"
+          data-label="Workspace inspector"
           className="changes-panel"
           hidden
           bar={
-            <div className="panel-tabs" role="tablist">
+            <div id="inspectorTabs" className="panel-tabs inspector-tabs" role="tablist" data-label="Workspace inspector">
               <Button
                 variant="ghost"
-                id="changesTab"
+                id="detailsTab"
                 type="button"
                 role="tab"
-                aria-selected="true"
-                aria-controls="changesContent"
-                data-t="Changes"
-              ></Button>
+                aria-selected="false"
+                aria-controls="detailsContent"
+                tabIndex={-1}
+              ><Icon name="settings" /><span data-t="Details"></span></Button>
               <Button
                 variant="ghost"
                 id="filesTab"
@@ -694,8 +656,25 @@ export function Workspace() {
                 role="tab"
                 aria-selected="false"
                 aria-controls="filesContent"
-                data-t="Files"
-              ></Button>
+                tabIndex={-1}
+              ><Icon name="folder" /><span data-t="Files"></span></Button>
+              <Button
+                variant="ghost"
+                id="changesTab"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="changesContent"
+              ><Icon name="diff" /><span data-t="Diff"></span></Button>
+              <Button
+                variant="ghost"
+                id="logsTab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="logsContent"
+                tabIndex={-1}
+              ><Icon name="terminal" /><span data-t="Logs"></span></Button>
               <Button
                 variant="ghost"
                 id="artifactsTab"
@@ -703,9 +682,10 @@ export function Workspace() {
                 role="tab"
                 aria-selected="false"
                 aria-controls="artifactsContent"
+                tabIndex={-1}
               >
-                <span data-t="Artifacts"></span>{" "}
-                <span id="artifactCount"></span>
+                <Icon name="file" />
+                <span><span data-t="Artifacts"></span> <span id="artifactCount"></span></span>
               </Button>
             </div>
           }
@@ -741,9 +721,14 @@ export function Workspace() {
             role="status"
             hidden
           ></div>
-          <div id="changesContent" role="tabpanel"></div>
-          <div id="artifactsContent" role="tabpanel" hidden></div>
-          <div id="filesContent" role="tabpanel" hidden>
+          <div id="detailsContent" className="inspector-content" role="tabpanel" aria-labelledby="detailsTab" tabIndex={0} hidden>
+            <div id="detailsInfo" className="inspector-card"></div>
+            <div id="detailsActivity"></div>
+          </div>
+          <div id="logsContent" className="inspector-content" role="tabpanel" aria-labelledby="logsTab" tabIndex={0} hidden></div>
+          <div id="changesContent" role="tabpanel" aria-labelledby="changesTab" tabIndex={0}></div>
+          <div id="artifactsContent" role="tabpanel" aria-labelledby="artifactsTab" tabIndex={0} hidden></div>
+          <div id="filesContent" role="tabpanel" aria-labelledby="filesTab" tabIndex={0} hidden>
             <SearchField className="file-search">
               <span data-icon="search">
                 <Icon name="search" />

@@ -294,9 +294,38 @@ export function bindWorkspace({
     $("changesPanel").hidden ? openChanges() : closeChanges();
   };
   $("closeChanges").onclick = closeChanges;
+  $("detailsTab").onclick = () => setPanelTab("details");
   $("changesTab").onclick = () => setPanelTab("changes");
   $("filesTab").onclick = () => setPanelTab("files");
+  $("logsTab").onclick = () => setPanelTab("logs");
   $("artifactsTab").onclick = () => setPanelTab("artifacts");
+  $("inspectorTabs").onkeydown = (event) => {
+    const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')],
+      index = tabs.indexOf(event.target);
+    if (
+      index < 0 ||
+      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+    )
+      return;
+    event.preventDefault();
+    const next =
+      tabs[
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? tabs.length - 1
+            : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+              tabs.length
+      ];
+    next.click();
+    next.focus({ preventScroll: true });
+    const bounds = next.getBoundingClientRect(),
+      bar = event.currentTarget.getBoundingClientRect();
+    if (bounds.left < bar.left)
+      event.currentTarget.scrollLeft += bounds.left - bar.left;
+    else if (bounds.right > bar.right)
+      event.currentTarget.scrollLeft += bounds.right - bar.right;
+  };
   $("filesToggle").onclick = () => openPanel("files");
   $("filesSearch").oninput = () => run(loadProjectFiles);
   $("closeFilePreview").onclick = closeFilePreview;
