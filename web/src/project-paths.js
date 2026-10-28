@@ -47,7 +47,17 @@ export function owningProject(projects, cwd) {
   );
 }
 
+export function selectableProjects(projects, nativeProjects) {
+  return (nativeProjects || []).flatMap((project) => {
+    const root = project.root_paths?.find((path) =>
+      projects.some((shared) => sameProjectPath(shared, path)),
+    );
+    return root ? [{ ...project, root_paths: [root, ...project.root_paths.filter((path) => !sameProjectPath(root, path))] }] : [];
+  });
+}
+
 export function sessionProject(projects, sidebarProjects, session) {
+  if (session?.projectless === true) return session.cwd || "";
   const project = sidebarProjects?.find(
     (project) => project.id === session?.project_id,
   );

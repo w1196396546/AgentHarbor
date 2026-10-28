@@ -49,6 +49,9 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["Work outside a project", "不在项目中工作", "不在專案中工作", "プロジェクトを使わずに作業", "Außerhalb eines Projekts arbeiten"],
+  ["Start a conversation, or pick up one from your history.", "开始新会话，或从历史会话继续工作。", "開始新對話，或從歷史對話繼續工作。", "新しい会話を始めるか、履歴から再開してください。", "Starte eine Unterhaltung oder setze eine frühere fort."],
+  ["Working outside a project requires an updated agentTools client.", "不在项目中工作需要更新电脑端 agentTools。", "不在專案中工作需要更新電腦端 agentTools。", "プロジェクトを使わずに作業するには agentTools を更新してください。", "Für die Arbeit außerhalb eines Projekts ist ein aktueller agentTools-Client erforderlich."],
   ["Creating switches this folder's branch. Other conversations using this folder are affected.", "创建时会切换此目录的分支，使用同一目录的其他对话也会受影响。", "建立時會切換此目錄的分支，使用同一目錄的其他對話也會受影響。", "作成時にこのフォルダーのブランチを切り替えます。同じフォルダーを使う他の会話にも影響します。", "Beim Erstellen wird der Branch dieses Ordners gewechselt. Andere Unterhaltungen mit diesem Ordner sind ebenfalls betroffen."],
   ["Choose an existing local branch.", "请选择现有本地分支。", "請選擇現有本機分支。", "既存のローカルブランチを選択してください。", "Wähle einen vorhandenen lokalen Branch."],
   ["Branch selection requires an updated agentTools client.", "选择分支需要更新电脑端 agentTools。", "選擇分支需要更新電腦端 agentTools。", "ブランチの選択には agentTools の更新が必要です。", "Die Branch-Auswahl erfordert einen aktuellen agentTools-Client."],

@@ -61,3 +61,23 @@ test("late Git reads cannot replace another project; failures stay unknown and o
   f.renderWorkspace(); await tick();
   assert.equal(f.calls.length, count);
 });
+
+test("projectless drafts retain the project picker without requesting or exposing a branch", async () => {
+  const f = await fixture();
+  let release;
+  f.respond(() => new Promise(resolve => release = resolve));
+  f.renderWorkspace();
+  f.state.project = ""; f.state.projectless = true; f.state.generation++;
+  f.renderWorkspace();
+  release({ cwd: "/projects/one", repository: true, branch: "main", branches: ["main"] });
+  await tick();
+  assert.equal(f.$("workspaceContext").hidden, false);
+  assert.equal(f.$("workspaceProject").textContent, "Work outside a project");
+  assert(!f.$("workspaceProject").disabled);
+  assert.equal(f.$("workspaceProject").title, "");
+  assert.equal(f.$("workspaceBranchControl").hidden, true);
+  await f.$("workspaceBranch").onclick();
+  assert.deepEqual(f.calls, ["workspace?project=%2Fprojects%2Fone"]);
+  f.$("workspaceProject").onclick();
+  assert.equal(f.calls.at(-1), "chooseProject");
+});

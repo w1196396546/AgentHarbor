@@ -20,7 +20,7 @@ vm.runInNewContext(
   { module: capabilities },
 );
 
-function fixture() {
+function fixture({ create } = {}) {
   const requests = [],
     notices = [],
     cleanups = [],
@@ -94,6 +94,7 @@ function fixture() {
     t: (value) => value,
     run: (task) => task(),
     getAgent: () => ({ id: "codex" }),
+    create: () => create?.(state),
     api: (url, form, options) => {
       if (options?.method === "DELETE") {
         requests.push({ url, deleted: true });
@@ -174,4 +175,42 @@ test("oversized files are skipped and navigation prevents later upload batches",
   assert.equal(f.requests[1].deleted, true);
   assert.equal(f.state.uploading, 0);
   assert.equal(f.state.attachments.length, 0);
+});
+
+test("projectless attachments wait for creation and stay bound to its selected conversation", async () => {
+  for (const change of ["none", "thread", "generation"]) {
+    let finishCreation;
+    const f = fixture({
+      create: () => new Promise(resolve => { finishCreation = resolve; }),
+    });
+    Object.assign(f.state, { selected: "", project: "", projectless: true });
+    const work = f.attachments.upload([new File(["fictional"], "note.txt")]);
+    assert.equal(f.requests.length, 0, "upload must wait for its managed directory");
+    Object.assign(f.state, { selected: "created", project: "/managed/working", generation: 2 });
+    if (change === "thread") f.state.selected = "other";
+    if (change === "generation") f.state.generation++;
+    finishCreation({ id: "created", generation: 2 });
+    await tick();
+    if (change === "none") {
+      assert.equal(f.requests.length, 1);
+      assert.equal(f.requests[0].url, "attachments?project=%2Fmanaged%2Fworking");
+      f.requests[0].resolve({ id: "note", name: "note.txt" });
+    } else {
+      assert.equal(f.requests.length, 0, "a changed selection must never receive the file");
+    }
+    await work;
+    assert.equal(f.state.attachments.length, change === "none" ? 1 : 0);
+  }
+});
+
+test("empty and oversized projectless uploads do not create a conversation", async () => {
+  const f = fixture({ create: () => assert.fail("invalid files created a conversation") });
+  Object.assign(f.state, { selected: "", project: "", projectless: true });
+  await f.attachments.upload([]);
+  assert.deepEqual(f.notices, []);
+  await f.attachments.upload([{ size: 21 * 1024 * 1024 }, { size: 22 * 1024 * 1024 }]);
+  assert.equal(f.notices.length, 1);
+  assert.match(f.notices[0], /20 MB/);
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.state.selected, "");
 });

@@ -24,7 +24,8 @@ export function createComposer({
     if (
       state.archivedSelection ||
       state.ownerUnavailable ||
-      (!state.selected && !state.project) ||
+      (!state.selected && !state.project &&
+        !(state.projectless && state.catalog.capabilities?.projectless_creation === true)) ||
       state.sending ||
       state.queueMutation ||
       state.settingsMutation ||

@@ -1,39 +1,21 @@
 .subagents-bar {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 4;
-}
-.subagents-chip {
-  gap: 7px;
-  min-height: 34px;
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  font-size: 12px;
-}
-.subagents-chip .icon {
-  width: 14px;
-  height: 14px;
+  flex-shrink: 0;
 }
 #subagentsCount {
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
-.subagents-dialog {
-  width: min(780px, calc(100vw - 32px));
-  max-width: none;
-  max-height: min(800px, calc(100dvh - 40px));
-  padding: 20px;
-  overflow-y: auto;
-}
-.subagents-dialog .dialog-heading {
+.subagents-heading {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  margin-bottom: 12px;
 }
-.subagents-dialog .dialog-heading h2 {
+.subagents-heading h2 {
   flex: 1;
   min-width: 0;
+  margin: 0;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .subagents-list {
@@ -72,11 +54,8 @@
 .subagent-conversation .user-text {
   white-space: pre-wrap;
 }
-@media (max-width: 640px) {
-  .subagents-dialog {
-    padding: 14px;
-  }
-  .subagents-chip {
-    min-height: 40px;
+@media (max-width: 760px) {
+  .subagents-label {
+    display: none;
   }
 }

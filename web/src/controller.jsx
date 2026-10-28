@@ -102,6 +102,7 @@ export function startRemote() {
     deviceTimer: null,
     deviceChecking: false,
     project: "",
+    projectless: false,
     session: null,
     selected: "",
     generation: 0,
@@ -111,6 +112,7 @@ export function startRemote() {
     next: 0,
     sessions: [],
     projects: [],
+    creationProjects: [],
     catalog: {
       models: [],
       modes: [],
@@ -437,9 +439,11 @@ export function startRemote() {
     state.archivedSelection = "";
     state.ownerUnavailable = false;
     state.project = "";
+    state.projectless = false;
     state.session = null;
     state.sessions = [];
     state.projects = [];
+    state.creationProjects = [];
     state.history = [];
     state.live = {};
     state.prefs = {};
@@ -563,7 +567,8 @@ export function startRemote() {
       agentUnavailable =
         !state.agentDiscovered ||
         (activeAgent?.state && activeAgent.state !== "connected"),
-      noProject = !state.selected && !state.project,
+      noProject = !state.selected && !state.project &&
+        !(state.projectless && state.catalog.capabilities?.projectless_creation === true),
       noBackgroundCreation =
         !state.selected &&
         state.optionsLoaded &&
@@ -576,7 +581,7 @@ export function startRemote() {
     $("breadcrumbProject").disabled = state.sending || !!state.selected;
     for (const b of $("sessions").querySelectorAll("button"))
       b.disabled = state.sending;
-    $("composer").hidden = !state.selected && !state.project;
+    $("composer").hidden = noProject;
     const desktopURL = state.selected
       ? getAgent().desktopURL(state.selected)
       : "";
@@ -586,7 +591,7 @@ export function startRemote() {
     $("welcome").hidden = !!state.selected || !!state.archivedSelection;
     if (state.archivedSelection)
       $("title").textContent = t("Archived conversation");
-    $("startChat").hidden = !state.project || !!state.archivedSelection;
+    $("startChat").hidden = noProject || !!state.archivedSelection;
     const model = selectedModel();
     labelButton(
       "model",
@@ -684,6 +689,7 @@ export function startRemote() {
     if (revision !== state.liveRevision || (!refresh && state.live.owner)) return;
     state.agentReadPending = false;
     state.session = value.session;
+    state.projectless = value.session.projectless === true;
     state.cwd = value.session.cwd || "";
     $("cwd").textContent = state.cwd;
     state.project = sessionProject(state.projects, state.sidebarProjects, value.session);
@@ -722,6 +728,7 @@ export function startRemote() {
     state.reportedOptionsEpoch = value.live?.owner?.epoch || "";
     state.ownerUnavailable = false;
     state.session = session;
+    state.projectless = session.projectless === true;
     state.cwd = session.cwd || "";
     $("cwd").textContent = session.cwd;
     if (!state.settingsMutation) {
@@ -1229,8 +1236,10 @@ export function startRemote() {
     openChanges: (...args) => openChanges(...args),
     projectName: (path) => projectName(path, false),
   });
-  const { syncSubagents, resetSubagents, getSubagents, openSubagent } =
+  const { syncSubagents, resetSubagents, getSubagents, openSubagent, onSubagentsPanelChange } =
     createSubagents({
+      openPanel: (...args) => openPanel(...args),
+      closePanel: () => closeChanges(),
       getRenderKey: getMarkdownRenderKey,
       jumpToItem: (id) => run(() => locateRecord({ item_id: id })),
       onAgentsChanged: () => renderCurrent(),
@@ -1337,6 +1346,7 @@ export function startRemote() {
     run: (...args) => run(...args),
   });
   const { renderAttachments, upload } = createAttachments({
+    create: (...args) => create(...args),
     getAgent,
     requireOwner: (...args) => requireOwner(...args),
     state,
@@ -1398,6 +1408,7 @@ export function startRemote() {
     requestPlanRevision,
     revisePendingPlan,
   } = createWorkspace({
+    onPanelChange: () => onSubagentsPanelChange(),
     getConversationItems: conversationItems,
     renderSessionInfo,
     getChangedFiles: () => conversationView?.changes || collectChanges(state),

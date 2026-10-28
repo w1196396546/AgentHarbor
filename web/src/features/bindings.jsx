@@ -76,7 +76,7 @@ export function bindWorkspace({
   positionReasoning,
   renderChanges,
 }) {
-  $("breadcrumbProject").onclick = chooseComposeProject;
+  $("breadcrumbProject").onclick = () => chooseComposeProject($("breadcrumbProject"));
   $("sidebarToggle").onclick = () =>
     setNavigation(!document.body.classList.contains("nav-open"));
   $("navBackdrop").onclick = () => setNavigation(false);
@@ -295,7 +295,7 @@ export function bindWorkspace({
   $("logsTab").onclick = () => setPanelTab("logs");
   $("artifactsTab").onclick = () => setPanelTab("artifacts");
   $("inspectorTabs").onkeydown = (event) => {
-    const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')],
+    const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')].filter((tab) => !tab.hidden),
       index = tabs.indexOf(event.target);
     if (
       index < 0 ||

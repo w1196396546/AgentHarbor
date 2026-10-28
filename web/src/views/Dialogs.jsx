@@ -11,47 +11,6 @@ export function Dialogs() {
         <div className="dialog-heading"><h2 id="sessionInfoTitle" data-t="Session information"></h2><Button variant="ghost" id="closeSessionInfo" className="icon-button" type="button" data-label="Close dialog"><Icon name="close" /></Button></div>
         <div id="sessionInfoContent"></div>
       </Modal>
-      <Modal
-        id="subagentsDialog"
-        className="subagents-dialog"
-        aria-labelledby="subagentsTitle"
-      >
-        <div className="dialog-heading">
-          <Button
-            variant="ghost"
-            id="subagentsBack"
-            className="icon-button"
-            type="button"
-            data-label="Back to agents"
-            hidden
-          >
-            <Icon name="back" />
-          </Button>
-          <h2 id="subagentsTitle" data-t="Agents"></h2>
-          <Button
-            variant="ghost"
-            id="closeSubagents"
-            className="icon-button"
-            type="button"
-            data-label="Close dialog"
-          >
-            <Icon name="close" />
-          </Button>
-        </div>
-        <p id="subagentsStatus" className="note" role="status"></p>
-        <div id="subagentsList" className="subagents-list"></div>
-        <div id="subagentConversation" className="subagent-conversation" hidden>
-          <Button
-            variant="ghost"
-            id="subagentOlder"
-            className="subtle"
-            type="button"
-            data-t="Load older conversation"
-            hidden
-          ></Button>
-          <div id="subagentMessages"></div>
-        </div>
-      </Modal>
       <Modal id="deviceDialog" aria-labelledby="deviceDialogTitle">
         <div className="dialog-heading">
           <h2 id="deviceDialogTitle" data-t="Connected computer"></h2>

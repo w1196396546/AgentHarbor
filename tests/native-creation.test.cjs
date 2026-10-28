@@ -184,6 +184,25 @@ test("actual createThread reuses uncertain request UUID and sends default creati
   assert.equal(f.calls[0].model, "model");
 });
 
+test("projectless creation requires capability and keeps an uncertain UUID separate from project drafts", async () => {
+  const f = await fixture();
+  f.state.project = "";
+  f.state.projectless = true;
+  await assert.rejects(f.session.createThread(), /updated agentTools/);
+  assert.equal(f.calls.length, 0);
+  f.catalog.capabilities.projectless_creation = true;
+  f.setRespond(async () => { throw Error("response lost"); });
+  await assert.rejects(f.session.createThread(), /response lost/);
+  const requestID = f.calls[0].request_id;
+  f.setRespond(async () => ({ id: "outside", cwd: "/managed/working", projectless: true }));
+  const row = await f.session.createThread();
+  assert.equal(row.cwd, "/managed/working");
+  assert.equal(row.projectless, true);
+  assert.equal(f.calls[1].request_id, requestID);
+  assert.equal(f.calls[1].project, "");
+  assert.equal(f.calls[1].projectless, true);
+});
+
 test("nondefault mode and permissions preserve draft and reject before creation", async () => {
   for (const prefs of [{ mode: "plan" }, { permission: "bypassPermissions" }]) {
     const f = await fixture();

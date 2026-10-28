@@ -15,17 +15,27 @@ export function createAttachments({
   t,
   run,
   getAgent,
+  create,
 }) {
   const previews = new Map();
   async function upload(files) {
+    files = Array.from(files);
+    if (!files.length) return;
     requireOwner(messageCapability(state));
+    if (!state.selected && state.projectless) {
+      if (!files.some((file) => file.size <= 20 * 1024 * 1024)) {
+        notice("Attachments must be 20 MB or smaller.");
+        return;
+      }
+      const created = await create();
+      if (!created || created.id !== state.selected || created.generation !== state.generation) return;
+    }
     if (!state.project) {
       notice("Choose a project first.");
       return;
     }
     const project = state.project,
       generation = state.generation;
-    files = Array.from(files);
     for (let offset = 0; offset < files.length; offset += 2) {
       if (state.generation !== generation) break;
       const batch = files.slice(offset, offset + 2).filter((file) => {

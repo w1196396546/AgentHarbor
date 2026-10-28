@@ -52,13 +52,25 @@ The selected Agent identity follows encrypted discovery, including Codex, Claude
 and other supported adapters. Product branding and the SVG favicon use the blue
 robot mark from the reference; they do not change Agent capabilities.
 
-The four sidebar sections remain available for legacy and native catalogs, with
-independent folds and explicit empty states. Projects include shared folders that
-have no native project metadata. Latest orders loaded conversations by update time;
+The four sidebar sections remain available, with independent folds and explicit
+empty states. Projects and the creation picker use the current native App catalog
+(`creation_projects`, with `sidebar_projects` as the older-client fallback).
+Authorized paths in `projects` support history and files; they do not create menu
+entries or project groups. Worktrees stay under their original project. Removed,
+archived and unavailable project directories are filtered by the client, and an
+explicit empty current catalog never falls back to old paths. Latest orders loaded conversations by update time;
 Current shows the selected conversation and other reported running or waiting
 conversations. Search continues to apply across these sections; the separate
 "All projects" list filter is removed, so all shared project groups remain visible.
-Choosing the folder for a new conversation remains available in its breadcrumb.
+Each shared project heading has a new-session button that opens a draft in that
+project. The compact project and branch controls sit in a separate row above the
+composer; long labels truncate and full paths remain available on hover.
+The project picker is also available from the breadcrumb. Clients advertising
+`projectless_creation` offer "Work outside a project"; older clients show an
+update explanation. The computer allocates a separate persistent working folder,
+and these conversations remain in Latest/Current without adding a project group.
+Choosing an attachment in a projectless draft creates the empty conversation
+first, preserving its text, then uploads into its confirmed working folder.
 Branding occupies one line, search and the labeled new-session icon share a row,
 and device/account controls use a compact footer on desktop and phones. Desktop
 keeps its keyboard shortcuts and resizable sidebar, with compact 36px search/new

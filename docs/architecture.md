@@ -80,7 +80,7 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 
 ## 对话目录与新会话分支
 
-输入区显示项目名称与当前 Git 分支，悬停项目名可查看本机授权的实际 cwd。已有对话的项目及分支只读；
+输入框上方的独立紧凑区域显示项目名称与当前 Git 分支，悬停项目名可查看本机授权的实际 cwd。侧栏每个共享项目提供新建草稿入口。已有对话的项目及分支只读；
 从已有对话点击新建先进入草稿，选择项目/分支后才创建。目录和分支请求继续端到端
 加密，仅 options 声明 `workspace_git:true` 时请求 `GET /api/workspace?project=…`
 或 `?thread=…`。会话 ID 优先，浏览器不能用 project 改写已有对话的目录。
@@ -88,6 +88,23 @@ POST /api/pair 接收 {device_id,id,data}，向电脑 /_remote/pair 转交 {id,d
 branches 是有界的现有本地分支，旧客户端保留目录显示与未知分支。
 Windows Claude Desktop 使用本机 Windows cwd；网页沿用已有盘符、反斜杠、UNC
 及路径大小写匹配规则获取项目名称，完整目录保留原值用于提示和加密请求。
+
+sessions 可提供 `creation_projects:[{id,name,root_paths}]`，只列当前 App 中仍有效、
+本机目录存在且在授权范围内的原生项目；归档、删除项目和仅来自历史 cwd 或额外
+共享配置的目录不进入此集合，外置工作树仅保留原项目关系。网页的项目菜单与侧栏
+使用这个集合；旧连接端可回退到 `sidebar_projects`，不会把 `projects` 授权根列表
+补成可选项目。明确返回空数组时不恢复旧项目，刷新后移除失效的草稿项目选择，
+保留正文。已有会话的读取与文件范围仍由客户端独立校验。
+
+客户端通过加密 sessions / options 的 `capabilities.projectless_creation:true` 声明
+“不在项目中工作”。草稿读取 options 使用 `projectless=true`，创建使用
+`{project:"",projectless:true,request_id:UUID,executor:"background"}`；UUID 按设备、
+Agent 和无项目模式隔离，仍保留未知结果防重。实际 cwd 由本机连接端分配到其私有
+数据目录下独立工作目录并持久保留，不使用中继目录，也不授权整个系统临时目录。
+回执及会话行带 `projectless:true`；网页显示“不在项目中工作”并隐藏分支，真实 cwd
+仍供文件及附件使用。工作目录不进入共享项目列表，会话继续显示在最新/当前列表。
+无项目草稿添加附件时先创建空会话、保留正文，再向已确认的 cwd 上传。
+旧客户端不开放此选项，不以省略项目或猜测路径替代能力确认。
 
 创建请求可选携带 branch，纳入原有 UUID 参数指纹。后台创建选择其他现有本地分支时，
 agentTools 在原项目目录执行不强制的 Git 分支切换，确认后使用原 cwd 创建
@@ -152,7 +169,7 @@ Codex 原生项目目录与明确配置的额外目录限定历史列表和文�
 
 ## 子智能体观测
 
-连接端声明 `options.capabilities.subagents: true` 时，网页读取加密 `GET /api/threads/{id}/agents`。父会话有子智能体或明确的子智能体调用记录时，在输入框上方显示“智能体”气泡；点击列出名称及可确认状态，再点击名称打开只读对话。列表和详情沿用本地组件、工具/思考展示及五语言翻译，支持手机布局和加载更早历史，不改变父会话选择、草稿、附件或 owner。未声明能力的旧连接端不请求该接口。
+连接端声明 `options.capabilities.subagents: true` 时，网页读取加密 `GET /api/threads/{id}/agents`。父会话有子智能体或明确的子智能体调用记录时，顶部显示“智能体”入口和数量；点击打开右侧检查栏的“智能体”页签，列出名称及可确认状态，再点击名称查看只读对话。窄屏沿用右侧抽屉，列表和详情保留本地组件、工具/思考展示、五语言翻译和历史分页，不改变父会话选择、草稿、附件或 owner。未声明能力的旧连接端不请求该接口。
 
 列表返回 `{agents:[{id,name,role,parent_id,status,cwd,last}]}`；详情使用加密 `GET /api/threads/{id}/agents/{agentID}?cursor=`，返回 `session`、`history` / `history_items`、`history_next_cursor`、`history_has_more`、`read_only: true`，富历史降级时可能附带 `history_error`。执行中或弹窗打开时每 2.5 秒串行轮询，隐藏页面暂缓读取，切换父会话、设备、Agent 或关闭详情时取消/隔离迟到响应。子会话读取失败只影响观测区域，不把子会话的归档错误应用到父会话。
 

@@ -52,6 +52,7 @@ export function createWorkspace({
   getChangedFiles,
   getConversationItems,
   renderSessionInfo,
+  onPanelChange,
 }) {
   function changedFiles() {
     return getChangedFiles ? getChangedFiles() : collectChanges(state);
@@ -655,7 +656,7 @@ export function createWorkspace({
   }
   function setPanelTab(tab) {
     state.sideTab = tab;
-    for (const name of ["details", "files", "changes", "logs", "artifacts"]) {
+    for (const name of ["details", "agents", "files", "changes", "logs", "artifacts"]) {
       $(name + "Tab").setAttribute("aria-selected", String(tab === name));
       $(name + "Tab").tabIndex = tab === name ? 0 : -1;
       $(name + "Content").hidden = tab !== name;
@@ -666,6 +667,7 @@ export function createWorkspace({
     else if (tab === "artifacts") renderArtifacts();
     else if (tab === "details" || tab === "logs") renderInspector();
     else renderChanges();
+    onPanelChange();
   }
   function openChanges(path, record) {
     if (path) path = normalizeFilePath(path, state.cwd || state.project);
@@ -714,6 +716,7 @@ export function createWorkspace({
     $("changesPanel").hidden = true;
     $("workspace").classList.remove("has-changes");
     $("changesToggle").setAttribute("aria-expanded", "false");
+    onPanelChange();
   }
   function resetSideData() {
     for (const id of ["detailsInfo", "detailsActivity", "logsContent"]) clearView($(id));

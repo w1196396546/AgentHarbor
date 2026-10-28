@@ -16,12 +16,14 @@ export function createWorkspaceContext({ $, t, state, api, getAgent, showMenu, c
     }
     const cwd = value?.cwd || (state.selected ? state.session?.cwd || state.cwd : state.project) || "";
     const available = state.catalog.capabilities?.workspace_git === true;
-    $("workspaceContext").hidden = !cwd;
-    $("workspaceProject").textContent = projectName(state.project || cwd);
+    $("workspaceContext").hidden = false;
+    const projectless = state.projectless || state.session?.projectless === true;
+    $("workspaceProject").textContent = projectless ? t("Work outside a project") : cwd ? projectName(state.project || cwd) : t("Choose a project");
     $("workspaceProject").setAttribute("aria-label", t("Project folder") + ": " + $("workspaceProject").textContent);
     $("workspaceProject").title = cwd;
     $("workspaceProject").disabled = !!state.selected || state.sending;
     $("workspaceProject").onclick = () => { if (!state.selected) chooseComposeProject(); };
+    $("workspaceBranchControl").hidden = !cwd || projectless;
     $("workspaceBranch").textContent = state.creationBranch || value?.branch ||
       (value?.head ? t("Detached HEAD") + " · " + value.head.slice(0, 8) :
         value?.repository === false ? t("No Git repository") : t("Branch unknown"));
@@ -29,7 +31,7 @@ export function createWorkspaceContext({ $, t, state, api, getAgent, showMenu, c
     $("workspaceBranch").setAttribute("aria-label", t("Branch") + ": " + $("workspaceBranch").textContent);
     $("workspaceBranch").disabled = !!state.selected || state.sending || !available || !value?.branches?.length || !!error;
     $("workspaceBranch").onclick = chooseBranch;
-    if (cwd && available && state.optionsLoaded && !state.agentReadPending && state.device?.online !== false && !pending && Date.now() - readAt > 10000)
+    if (cwd && !projectless && available && state.optionsLoaded && !state.agentReadPending && state.device?.online !== false && !pending && Date.now() - readAt > 10000)
       void loadWorkspace();
   }
   async function loadWorkspace(force = false) {
@@ -59,7 +61,7 @@ export function createWorkspaceContext({ $, t, state, api, getAgent, showMenu, c
     return request;
   }
   async function chooseBranch() {
-    if (state.selected || state.sending || state.catalog.capabilities?.workspace_git !== true) return;
+    if (state.selected || state.projectless || !state.project || state.sending || state.catalog.capabilities?.workspace_git !== true) return;
     const expected = context(), result = await loadWorkspace(true);
     if (!result || expected !== context() || state.selected || state.sending) return;
     showMenu($("workspaceBranch"), [

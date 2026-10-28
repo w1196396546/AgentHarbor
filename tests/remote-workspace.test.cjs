@@ -2442,7 +2442,7 @@ for (const engine of engines) {
     const { page, state, seen } = f;
     const settings = () =>
       seen.posts.filter((post) => post.path.endsWith("/settings"));
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page
       .locator("#message")
       .fill("Keep this draft while choosing reasoning.");
@@ -2594,7 +2594,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", items: [], requests: [], owner } },
     });
     const { page, seen } = f;
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page.locator("#model").click();
     const range = page.locator("#reasoningRange");
     await range.focus();
@@ -2715,7 +2715,7 @@ for (const engine of engines) {
       },
     });
     const { page, seen } = f;
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page.locator("#model").click();
     assert.equal(
       await page.locator("#reasoningModelName").innerText(),
@@ -2781,7 +2781,7 @@ for (const engine of engines) {
       state: { live: { status: "idle", items: [], requests: [], owner } },
     });
     const { page, state, seen } = f;
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page.locator("#message").fill("Preserve this unsent draft.");
     state.sessionOptions = {
       ...defaults,
@@ -2848,7 +2848,7 @@ for (const engine of engines) {
     });
     const { page, seen } = f;
     t.after(() => releaseSettings());
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page.locator("#message").fill("Retain me if saving fails.");
     await page.locator("#permission").click();
     await page
@@ -10635,7 +10635,7 @@ for (const engine of engines) {
     });
     const { page } = f;
     await page.locator("#sidebarToggle").click();
-    await page.locator("#sessions button").first().click();
+    await page.locator("#sessions button[data-id]").first().click();
     await page.locator("#history .agent h1").waitFor();
     assert(
       !(await page

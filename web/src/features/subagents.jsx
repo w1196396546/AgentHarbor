@@ -17,6 +17,8 @@ export function createSubagents({
   projectName,
   onAgentsChanged,
   jumpToItem,
+  openPanel,
+  closePanel,
   getRenderKey = () => document.documentElement.lang,
 }) {
   const { markdown } = createMarkdown({
@@ -158,8 +160,11 @@ export function createSubagents({
   }
   function showOperation(id) {
     if (!scope || scope !== currentScope() || !jumpToItem) return;
-    $("subagentsDialog").close();
+    closePanel();
     jumpToItem(id);
+  }
+  function panelOpen() {
+    return !$("changesPanel").hidden && state.sideTab === "agents";
   }
   function Overview({ agent, calls, detail = false }) {
     const indexed = graph.supports("agent_run_graph")
@@ -332,6 +337,8 @@ export function createSubagents({
         !called &&
         !listError &&
         !(supported && (page.loading || page.error)));
+    $("agentsTab").hidden = $("subagentsBar").hidden && !panelOpen();
+    $("subagentsToggle").setAttribute("aria-expanded", String(panelOpen()));
     $("subagentsCount").textContent = agents.length
       ? String(agents.length)
       : "";
@@ -438,14 +445,14 @@ export function createSubagents({
     listSeq++;
     detailSeq++;
     loadingList = loadingDetail = pending = false;
-    if ($("subagentsDialog").open) $("subagentsDialog").close();
+    if (panelOpen()) closePanel();
     clearView($("subagentsList"));
     clearView($("subagentMessages"));
     render();
   }
   function schedule() {
     if (timer) return;
-    if (scope && (state.running || $("subagentsDialog").open)) {
+    if (scope && (state.running || panelOpen())) {
       timer = setTimeout(() => {
         timer = null;
         if (document.hidden) schedule();
@@ -497,7 +504,7 @@ export function createSubagents({
       ) {
         loadingList = false;
         render();
-        if (selected && $("subagentsDialog").open && !loadingDetail)
+        if (selected && panelOpen() && !loadingDetail)
           loadAgent();
         if (pending) {
           pending = false;
@@ -519,7 +526,7 @@ export function createSubagents({
     loadingDetail = true;
     detailError = "";
     render();
-    const scroll = $("subagentsDialog"),
+    const scroll = $("agentsContent"),
       height = scroll.scrollHeight,
       top = scroll.scrollTop;
     try {
@@ -625,21 +632,22 @@ export function createSubagents({
   }
   $("subagentsToggle").onclick = () => {
     back();
-    $("subagentsDialog").showModal();
+    openPanel("agents");
     refresh();
     if (state.catalog.capabilities?.subagents === true) void loadGraph();
   };
+  $("agentsTab").onclick = $("subagentsToggle").onclick;
   $("subagentsBack").onclick = back;
-  $("closeSubagents").onclick = () => $("subagentsDialog").close();
   $("subagentOlder").onclick = () => loadAgent(true);
-  $("subagentsDialog").addEventListener("close", () => {
-    back();
-    schedule();
-  });
   window.addEventListener("pagehide", reset);
   return {
     syncSubagents: sync,
     resetSubagents: reset,
+    onSubagentsPanelChange: () => {
+      if (!panelOpen()) back();
+      render();
+      schedule();
+    },
     getSubagents: () => (scope && scope === currentScope() ? agents : []),
     openSubagent: (id) => {
       if (
@@ -648,7 +656,7 @@ export function createSubagents({
         !agents.some((agent) => agent.id === id)
       )
         return;
-      if (!$("subagentsDialog").open) $("subagentsDialog").showModal();
+      openPanel("agents");
       openAgent(id);
     },
   };

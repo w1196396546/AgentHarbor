@@ -73,3 +73,17 @@ test("project identity matches Windows extended drive and UNC forms without wide
   assert.equal(projectContainsPath("/work/shop", "/work/shop-copy"), false);
   assert.equal(sameProjectPath("", ""), false);
 });
+
+test("creation choices use native project records and an authorized root, never historical directories", async () => {
+  const { selectableProjects } = await paths;
+  const shared = ["/home/user", "/home/user/.codex", "/projects/shop", "/worktrees/shop", "C:\\work\\app"];
+  const choices = selectableProjects(shared, [
+    { id: "shop", name: "Shop", root_paths: ["/projects/shop", "/worktrees/shop"] },
+    { id: "windows", name: "Windows App", root_paths: ["c:/WORK/app"] },
+    { id: "unshared", root_paths: ["/unshared"] },
+  ]);
+  assert.deepEqual(choices.map(project => project.name), ["Shop", "Windows App"]);
+  assert.deepEqual(choices[0].root_paths, ["/projects/shop", "/worktrees/shop"]);
+  assert.deepEqual(selectableProjects(shared, []), []);
+  assert.deepEqual(selectableProjects(shared, null), []);
+});

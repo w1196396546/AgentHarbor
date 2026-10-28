@@ -78,6 +78,7 @@ async function fixture(t, engine, lang, width = 1280, options = {}) {
           json: {
             sessions: [parent, other],
             projects: [project],
+            sidebar_projects: [{ id: "project", name: "Project", root_paths: [project] }],
             total: 2,
             next: 2,
             has_more: false,
@@ -298,6 +299,8 @@ for (const engine of engines) {
         "zh-CN",
         width,
       );
+      const entry = await page.locator('#subagentsToggle').boundingBox();
+      assert(entry.x >= 0 && entry.x + entry.width <= width, 'agents entry fits the narrow header');
       setAgents([
         {
           id: "long-name",
@@ -312,7 +315,7 @@ for (const engine of engines) {
       const fits = await page
         .locator('#subagentsList [data-agent-id="long-name"]')
         .evaluate((row) => {
-          const dialog = row.closest("dialog").getBoundingClientRect(),
+          const dialog = row.closest("#agentsContent").getBoundingClientRect(),
             bounds = row.getBoundingClientRect();
           return (
             [
@@ -442,10 +445,10 @@ for (const engine of engines) {
     ["ja-JP", "エージェント", 390],
     ["de-DE", "Agenten", 1280],
   ]) {
-    test(`${engine} ${lang}: agents above composer show read-only history and pagination`, async (t) => {
+    test(`${engine} ${lang}: agents in the right sidebar show read-only history and pagination`, async (t) => {
       const { page, requests, errors } = await fixture(t, engine, lang, width);
       assert.match(
-        await page.locator("#subagentsToggle").innerText(),
+        await page.locator("#subagentsToggle").getAttribute("aria-label"),
         new RegExp(label),
       );
       assert.equal(await page.locator("#subagentsCount").textContent(), "2");
@@ -453,8 +456,9 @@ for (const engine of engines) {
         composer = await page.locator("#composer").boundingBox();
       assert(
         bubble.y + bubble.height <= composer.y,
-        "agents bubble is above composer",
+        "agents entry stays in the header",
       );
+      assert.equal(await page.locator('.composer-dock #subagentsBar').count(), 0);
       await page.locator("#latest").evaluate((node) => { node.hidden = false; });
       const latest = await page.locator("#latest").boundingBox(),
         dock = await page.locator(".composer-dock").boundingBox();
@@ -465,7 +469,6 @@ for (const engine of engines) {
       if (width <= 760) {
         const permission = await page.locator("#permission").boundingBox();
         const toolbar = await page.locator(".composer-controls").boundingBox();
-        const scroll = await page.locator("#conversationScroll").boundingBox();
         assert(
           permission.x >= toolbar.x &&
             permission.y >= toolbar.y &&
@@ -483,8 +486,8 @@ for (const engine of engines) {
         assert(permission.width > 0 && permission.height >= 30, "permission remains a visible control");
         assert(bubble.y + bubble.height <= permission.y, "agents do not overlap composer controls");
         assert(
-          bubble.y >= scroll.y && bubble.x >= 0 && bubble.x + bubble.width <= width,
-          "agents stay visible below the conversation header",
+          bubble.y >= 0 && bubble.x >= 0 && bubble.x + bubble.width <= width,
+          "agents stay visible in the conversation header",
         );
         assert(
           bubble.x + bubble.width <= latest.x ||
@@ -496,9 +499,18 @@ for (const engine of engines) {
         assert(latest.y + latest.height <= permission.y, "latest output does not overlap composer controls");
       }
       assert.deepEqual(await page.locator("#sessions [data-id]").evaluateAll(nodes => [...new Set(nodes.map(node => node.dataset.id))].sort()), ["other", "parent"]);
-      assert.equal(await page.locator('[data-path="all-projects"] [data-id="parent"]').count(), 1, "selected conversation remains in its project");
+      assert.equal(await page.locator('[data-path="project:project"] [data-id="parent"]').count(), 1, "selected conversation remains in its project");
       await page.locator("#message").fill("Keep my draft");
       await page.locator("#subagentsToggle").click();
+      assert.equal(await page.locator('#changesPanel #agentsContent').isVisible(), true);
+      assert.equal(await page.locator('#agentsTab').getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('#subagentsToggle').getAttribute('aria-expanded'), 'true');
+      await page.locator('#agentsTab').focus();
+      await page.keyboard.press('ArrowLeft');
+      assert.equal(await page.locator('#detailsTab').getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('#agentsContent').isVisible(), false);
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await page.locator('#agentsContent').isVisible(), true);
       await page
         .locator('#subagentsList [data-agent-id="child-one"]')
         .waitFor();
@@ -541,7 +553,8 @@ for (const engine of engines) {
       await page
         .locator('#subagentsList [data-agent-id="child-one"]')
         .waitFor();
-      await page.locator("#closeSubagents").click();
+      await page.locator("#closeChanges").click();
+      assert.equal(await page.locator('#subagentsToggle').getAttribute('aria-expanded'), 'false');
       assert.equal(
         await page.locator("#message").inputValue(),
         "Keep my draft",
@@ -592,7 +605,7 @@ for (const engine of engines) {
     await page.locator("#subagentsBack").click();
     await page.locator('#subagentsList [data-agent-id="child-two"]').click();
     await waitForDelayed();
-    await page.locator("#closeSubagents").click();
+    await page.locator("#closeChanges").click();
     await select("other");
     release();
     await page
@@ -601,7 +614,7 @@ for (const engine of engines) {
       .waitFor();
     assert.equal(await page.locator("#subagentsBar").isVisible(), false);
     assert.equal(
-      await page.locator("#subagentsDialog").evaluate((node) => node.open),
+      await page.locator("#agentsContent").isVisible(),
       false,
     );
     assert.equal(

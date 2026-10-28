@@ -251,6 +251,21 @@ export function Workspace() {
             >
               <Icon name="settings" />
             </Button>
+            <div id="subagentsBar" className="subagents-bar" hidden>
+              <Button
+                variant="ghost"
+                id="subagentsToggle"
+                className="top-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="agentsContent"
+                data-label="Agents"
+              >
+                <Icon name="agent" />
+                <span className="subagents-label" data-t="Agents"></span>
+                <span id="subagentsCount" className="count"></span>
+              </Button>
+            </div>
             <Button
               variant="ghost"
               id="filesToggle"
@@ -316,7 +331,7 @@ export function Workspace() {
               <h2 data-t="What can we build?"></h2>
               <p
                 id="welcomeDescription"
-                data-t="Choose a project to start, or pick up a conversation from your history."
+                data-t="Start a conversation, or pick up one from your history."
               ></p>
               <Button
                 variant="ghost"
@@ -445,30 +460,19 @@ export function Workspace() {
               ></p>
               <div id="queueList"></div>
             </section>
-            <form id="composer" hidden>
-              <div id="workspaceContext" className="workspace-context" hidden>
+            <div id="workspaceContext" className="workspace-context" hidden>
+              <div className="workspace-project">
                 <Icon name="folder" />
                 <Button variant="ghost" id="workspaceProject" type="button"
                   aria-haspopup="menu" />
+              </div>
+              <div id="workspaceBranchControl" className="workspace-branch" hidden>
                 <Icon name="branch" />
                 <Button variant="ghost" id="workspaceBranch" type="button"
                   aria-haspopup="menu" />
               </div>
-              <div id="subagentsBar" className="subagents-bar" hidden>
-                <Button
-                  variant="ghost"
-                  id="subagentsToggle"
-                  className="subagents-chip"
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-controls="subagentsDialog"
-                >
-                  <Icon name="agent" />
-                  <span data-t="Agents"></span>
-                  <span id="subagentsCount"></span>
-                  <Icon name="chevron" />
-                </Button>
-              </div>
+            </div>
+            <form id="composer" hidden>
               <ComposerSurface>
                 <div id="attachments" className="attachment-list" />
                 <div className="composer-line">
@@ -664,6 +668,19 @@ export function Workspace() {
               </Button>
               <Button
                 variant="ghost"
+                id="agentsTab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="agentsContent"
+                tabIndex={-1}
+                hidden
+              >
+                <Icon name="agent" />
+                <span data-t="Agents"></span>
+              </Button>
+              <Button
+                variant="ghost"
                 id="filesTab"
                 type="button"
                 role="tab"
@@ -756,6 +773,41 @@ export function Workspace() {
           >
             <div id="detailsInfo" className="inspector-card"></div>
             <div id="detailsActivity"></div>
+          </div>
+          <div
+            id="agentsContent"
+            className="inspector-content"
+            role="tabpanel"
+            aria-labelledby="agentsTab"
+            tabIndex={0}
+            hidden
+          >
+            <div className="subagents-heading">
+              <Button
+                variant="ghost"
+                id="subagentsBack"
+                className="icon-button"
+                type="button"
+                data-label="Back to agents"
+                hidden
+              >
+                <Icon name="back" />
+              </Button>
+              <h2 id="subagentsTitle" data-t="Agents"></h2>
+            </div>
+            <p id="subagentsStatus" className="note" role="status"></p>
+            <div id="subagentsList" className="subagents-list"></div>
+            <div id="subagentConversation" className="subagent-conversation" hidden>
+              <Button
+                variant="ghost"
+                id="subagentOlder"
+                className="subtle"
+                type="button"
+                data-t="Load older conversation"
+                hidden
+              ></Button>
+              <div id="subagentMessages"></div>
+            </div>
           </div>
           <div
             id="logsContent"

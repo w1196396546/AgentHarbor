@@ -3,6 +3,7 @@ import {
   messageCapability,
   queueActionCapability,
 } from "./owner-capabilities";
+import { sameProjectPath } from "../project-paths";
 export function createOwners({
   t,
   state,
@@ -104,25 +105,40 @@ export function createOwners({
                   ? queueActionCapability(action, method)
                   : "";
   }
-  function chooseComposeProject() {
+  function chooseComposeProject(trigger = $("workspaceProject")) {
     if (state.selected || state.sending) return;
     const generation = state.generation;
-    showMenu($("breadcrumbProject"), [
+    const choose = async (path, projectless = false) => {
+      if (state.selected || state.sending || generation !== state.generation) return;
+      if (!projectless && !state.creationProjects?.some((project) => sameProjectPath(project.root_paths[0], path))) return;
+      const text = $("message").value;
+      state.project = path;
+      state.projectless = projectless;
+      if (!(await resetSelection())) return;
+      $("message").value = text;
+      state.optionsLoaded = false;
+      renderProjects();
+      await loadOptions();
+      updateControls();
+    };
+    const projectlessAvailable = state.catalog.capabilities?.projectless_creation === true;
+    showMenu(trigger, [
       { heading: "New conversation folder" },
-      ...state.projects.map((path) => ({
-        label: projectName(path),
-        description: path,
+      ...(state.creationProjects || []).map((project) => ({
+        label: project.name || projectName(project.root_paths[0]),
+        description: project.root_paths[0],
         icon: "folder",
-        selected: path === state.project,
-        action: async () => {
-          if (state.selected || state.sending || generation !== state.generation || !(await resetSelection())) return;
-          state.project = path;
-          state.optionsLoaded = false;
-          renderProjects();
-          await loadOptions();
-          updateControls();
-        },
+        selected: !state.projectless && sameProjectPath(project.root_paths[0], state.project),
+        action: () => choose(project.root_paths[0]),
       })),
+      {
+        label: "Work outside a project",
+        icon: "close",
+        selected: state.projectless,
+        disabled: !projectlessAvailable,
+        reason: projectlessAvailable ? undefined : "Working outside a project requires an updated agentTools client.",
+        action: () => choose("", true),
+      },
     ]);
   }
   function renderOwner() {
