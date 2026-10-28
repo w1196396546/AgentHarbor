@@ -87,8 +87,11 @@ The reading surface uses an 820px maximum width including gutters, 15px desktop 
 and 12px command/code text. The 16px root preserves the shared components' rem
 scale while the application body stays 14px. System UI/PingFang/Windows CJK
 fallbacks and a separate system monospace stack keep the interface available
-without network font loading. Tool disclosures use quiet separators and reveal
-their surface on expansion; message text remains the main visual focus.
+without network font loading. Tool disclosures use rounded, bordered cards with
+an independent surface and blue icon tiles even when collapsed. Running, completed,
+failed and waiting states retain their text labels with blue, green, red and amber
+accents in both themes. Command input uses a blue-tinted strip above the output;
+ordinary conversation and reasoning retain their existing presentation.
 
 The blue brand mark is unchanged. Interactive/semantic text colors have separate
 light/dark values and paired button foregrounds for readable contrast. Account
@@ -166,7 +169,10 @@ skip a redundant owner connection. A matching creation receipt with a connected
 owner, epoch and live snapshot also skips the full detail read before the first
 message; older or incomplete receipts keep the detail confirmation path. Selection
 generations and newer streamed state still take precedence. Confirmed settings and sends release their UI
-controls before history/list refreshes; newer drafts and streamed state win over
+controls before history/list refreshes. The conversation activity indicator waits for
+the current turn to be in progress and its user message to appear in the timeline;
+preparing a send or receiving a turn ID alone does not show thinking. Existing
+stop and queue controls continue to follow the reported busy state. Newer drafts and streamed state win over
 late responses. Attachment uploads run in ordered pairs, and new image chips use
 temporary local previews instead of downloading the image again. The encrypted
 wire format, authorization and uncertain-delivery retry rules remain unchanged.
@@ -379,3 +385,16 @@ it does not reset a healthy peer. Recovery refreshes the same selected ID before
 allowing owner actions. Connection and retry remain in desktop agentTools; the
 webpage never invokes Agent startup. Polling a healthy selected Agent refreshes
 its list once and does not reload options/detail on a peer-only status change.
+
+
+The composer shows the project name and Git branch, with the actual directory in the project tooltip. Existing
+conversations keep both controls read-only. New from an existing conversation
+opens a draft where project and local branch can be selected. With
+`workspace_git:true`, encrypted `GET /api/workspace` reads the authorized project
+or conversation directory. New creation includes an optional `branch`; the
+local agentTools client switches the original folder without creating a worktree.
+Conflicting changes stop creation rather than being overwritten. Conversations
+using the same folder share its branch. A failed or uncertain native creation
+does not switch back automatically. Read failures remain unknown, and older
+clients keep project display without branch selection.
+The relay only forwards ciphertext. See the architecture contract for limits.

@@ -105,6 +105,8 @@ export function createOwners({
                   : "";
   }
   function chooseComposeProject() {
+    if (state.selected || state.sending) return;
+    const generation = state.generation;
     showMenu($("breadcrumbProject"), [
       { heading: "New conversation folder" },
       ...state.projects.map((path) => ({
@@ -113,7 +115,7 @@ export function createOwners({
         icon: "folder",
         selected: path === state.project,
         action: async () => {
-          if (state.sending || !(await resetSelection())) return;
+          if (state.selected || state.sending || generation !== state.generation || !(await resetSelection())) return;
           state.project = path;
           state.optionsLoaded = false;
           renderProjects();

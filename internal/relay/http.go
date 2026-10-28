@@ -64,7 +64,7 @@ func (s *Server) Handler() http.Handler {
 		"GET /api/threads/{id}/plan", "POST /api/threads/{id}/execute-plan", "GET /api/threads/{id}/changes",
 		"GET /api/threads/{id}/queue", "POST /api/threads/{id}/queue", "POST /api/threads/{id}/queue/resume",
 		"POST /api/threads/{id}/queue/{messageID}/steer", "PATCH /api/threads/{id}/queue/{messageID}", "DELETE /api/threads/{id}/queue/{messageID}",
-		"GET /api/agents", "GET /api/options", "GET /api/files", "GET /api/project-file",
+		"GET /api/agents", "GET /api/options", "GET /api/workspace", "GET /api/files", "GET /api/project-file",
 		"POST /api/attachments", "GET /api/attachments/{id}", "DELETE /api/attachments/{id}",
 	} {
 		mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {

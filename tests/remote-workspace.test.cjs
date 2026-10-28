@@ -1042,6 +1042,120 @@ async function visibleActionIcons(page) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: tool cards separate execution from prose across themes and widths`, async (t) => {
+    const command = richItems().find(item => item.id === "cmd-1");
+    const tool = richItems().find(item => item.id === "tool-1");
+    const items = [
+      { id: "intro", type: "agentMessage", turn_id: "turn-1", text: "I will check the project and run the tests." },
+      { ...command, status: "inProgress" },
+      tool,
+      { ...tool, id: "failed-tool", data: { ...tool.data, result: { isError: true, content: [{ type: "text", text: "Documentation unavailable" }] } } },
+      { ...tool, id: "pending-tool", status: "pending" },
+    ];
+    const f = await fixture(t, engine, {
+      state: { live: { status: "inProgress", turn_id: "turn-1", items, requests: [] } },
+    });
+    const { page } = f;
+    await page.locator('#sessions button[data-id="remote-rich"]').first().click();
+    const batch = page.locator("#live .tool-batch");
+    await batch.waitFor();
+    const commandCard = page.locator('#live [data-id="cmd-1"]');
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ["dark", "light"]) {
+        if (await page.locator("html").evaluate(node => node.classList.contains("dark")) !== (theme === "dark"))
+          await page.evaluate(() => document.querySelector('#workspace .theme-toggle').click());
+        const colors = await batch.evaluate(node => {
+          const style = element => getComputedStyle(element);
+          const prose = style(document.querySelector('#live [data-id="intro"] .markdown'));
+          const probe = document.createElement("span");
+          document.body.append(probe);
+          const token = name => { probe.style.color = `var(${name})`; return style(probe).color; };
+          const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => {
+            v /= 255;
+            return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
+          }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+          const contrast = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+          const background = style(node).backgroundColor;
+          const statuses = [...node.querySelectorAll('.tool-batch-item > summary .activity-meta')].map(meta => ({
+            status: meta.dataset.status, color: style(meta).color, contrast: contrast(style(meta).color, background),
+          }));
+          const icon = style(node.querySelector('summary > .icon'));
+          const line = style(node.querySelector('.command-line'));
+          const result = {
+            background, paper: token("--background"), border: style(node).borderTopWidth,
+            radius: parseFloat(style(node).borderRadius), prose: prose.color, icon: icon.color,
+            iconContrast: contrast(icon.color, icon.backgroundColor),
+            commandContrast: contrast(line.color, line.backgroundColor),
+            statuses, expected: ["--status-running", "--status-done", "--destructive", "--status-interrupted"].map(token),
+            overflow: document.documentElement.scrollWidth > innerWidth,
+          };
+          probe.remove();
+          return result;
+        });
+        assert.notEqual(colors.background, "rgba(0, 0, 0, 0)", "collapsed and expanded tools need a solid surface");
+        assert.notEqual(colors.background, colors.paper, "tools must stand apart from the conversation background");
+        assert.equal(colors.border, "1px");
+        assert(colors.radius >= 8);
+        assert.notEqual(colors.icon, colors.prose, "tool icons need their own accent");
+        assert.deepEqual(colors.statuses.map(value => value.status), ["inProgress", "completed", "failed", "pending"]);
+        assert.deepEqual(colors.statuses.map(value => value.color), colors.expected);
+        for (const value of colors.statuses) assert(value.contrast >= 4.5, `${theme} ${width}px status contrast: ${JSON.stringify(value)}`);
+        assert(colors.iconContrast >= 3 && colors.commandContrast >= 4.5, "blue accents must stay readable");
+        assert.equal(colors.overflow, false, "tool cards must not widen the viewport");
+        await screenshot(page, `tool-cards-${engine}-${theme}-${width}.png`);
+        await commandCard.locator(":scope > summary").focus();
+        await page.keyboard.press("Enter");
+        assert.equal(await commandCard.evaluate(node => node.open), false, "keyboard can collapse a command");
+        await page.keyboard.press("Enter");
+        assert.equal(await commandCard.evaluate(node => node.open), true, "keyboard can reopen a command");
+      }
+    }
+    await f.clean();
+  });
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "de-DE"])
+    test(`${engine} ${locale}: thinking waits for the current user message`, async (t) => {
+      let release;
+      const pending = new Promise((resolve) => { release = resolve; });
+      t.after(() => release());
+      const f = await fixture(t, engine, {
+        locale, streaming: true,
+        catalog: { capabilities: { ...catalog.capabilities, streaming: true } },
+        beforeTurn: () => pending,
+        onTurn() {},
+      });
+      const { page, state, seen } = f;
+      await page.locator('#sessions button[data-id="remote-rich"]').first().click();
+      await page.waitForFunction(() => window.fixtureStreams.length === 1);
+      await page.locator("#message").fill("Wait for this message");
+      await page.locator("#send").click();
+      const emit = async (status, turnID, items = []) => {
+        Object.assign(state.live, { status, turn_id: turnID, items });
+        await page.evaluate((packet) => window.fixtureStreams[0].emit(packet), {
+          state: { status, turn_id: turnID }, items, remove: [],
+        });
+      };
+      await emit("starting", "");
+      assert(await page.locator("#working").isHidden(), "dispatching is not thinking");
+      assert.equal(await page.locator("#message").inputValue(), "Wait for this message");
+      const oldMessage = { id: "old-user", type: "userMessage", turn_id: "previous", text: "Previous input" };
+      await emit("inProgress", "next-turn", [oldMessage]);
+      assert(await page.locator("#working").isHidden(), "previous input cannot confirm the current turn");
+      release();
+      await page.waitForFunction(() => document.getElementById("message").value === "");
+      assert(await page.locator("#working").isHidden(), "acknowledgement alone must not precede the user bubble");
+      const message = { id: "current-user", type: "userMessage", turn_id: "next-turn", text: "Wait for this message" };
+      await emit("starting", "next-turn", [oldMessage, message]);
+      assert(await page.locator('[data-id="current-user"]').isVisible());
+      assert(await page.locator("#working").isHidden());
+      await emit("inProgress", "next-turn", [oldMessage, message]);
+      assert(await page.locator("#working").isVisible());
+      await emit("completed", "next-turn", [oldMessage, message]);
+      assert(await page.locator("#working").isHidden());
+      assert.equal(seen.posts.filter((post) => post.path.endsWith("/turn")).length, 1);
+      await f.clean();
+    });
+
   test(`${engine}: compact phone toolbar keeps stop, queue and context actions reachable`, async (t) => {
     const f = await fixture(t, engine, {
       width: 320, height: 540, locale: "de-DE",
@@ -1471,6 +1585,7 @@ for (const engine of engines) {
     await page.evaluate(() => window.fixtureStreams[0].open());
     await page.locator("#dismissRequest").click();
     assert.match(await page.locator("#pendingRequest").textContent(), /\(2\)/);
+    assert.equal(await page.locator('[data-id="waiting-command"] > summary .activity-meta').getAttribute("data-status"), "waiting", "pending questions take precedence over a running tool's color");
     assert.match(
       await page.locator(".message-phase").textContent(),
       /Final answer/,
@@ -4540,6 +4655,7 @@ for (const engine of engines) {
     await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     await page.waitForFunction(() => !document.getElementById("model").disabled);
     await page.locator("#new").click();
+    await page.locator("#startChat").click();
     await page.waitForFunction(() => !document.getElementById("new").disabled);
     const created = seen.posts.find((post) => post.path === "/api/threads");
     assert(created, "the native origin project was lost after reading worktree details");
@@ -5020,7 +5136,7 @@ for (const engine of engines) {
     await f.clean();
   });
 
-  test(`${engine}: reselecting a history supersedes a folder change waiting for attachment cleanup`, async (t) => {
+  test(`${engine}: reselecting a history supersedes a new draft waiting for attachment cleanup`, async (t) => {
     const owner = {
       kind: "native",
       state: "connected",
@@ -5058,11 +5174,8 @@ for (const engine of engines) {
       }
       return route.fallback();
     });
-    await page.locator("#breadcrumbProject").click();
-    await page
-      .locator("#menu button")
-      .filter({ hasText: otherProject })
-      .click();
+    assert(await page.locator("#breadcrumbProject").isDisabled());
+    await page.locator("#new").click();
     await pending;
     await page.locator('#sessions button[data-id="remote-rich"]').first().click();
     release();
@@ -6356,6 +6469,7 @@ for (const engine of engines) {
               )
             : null;
       await page.locator(entry.startsWith("new") ? "#new" : "#send").click();
+      if (entry === "new-from-existing") await page.locator("#startChat").click();
       await createdResponse;
       if (turnResponse) await turnResponse;
       await page
@@ -10924,6 +11038,7 @@ for (const engine of engines) {
           await page.waitForFunction(() => window.fixtureStreams.length === 1);
           const emit = (packet) => page.evaluate((packet) => window.fixtureStreams[0].emit(packet), packet);
           const row = page.locator("#live .model-error");
+          await row.waitFor();
           assert.equal(await row.count(), 1);
           assert.equal(await row.evaluate((node) => node.open), false);
           assert.equal(await row.locator('[data-slot="step-row"]').count(), 0);

@@ -562,6 +562,7 @@ export function createSessions({
     state.archivedSelection = "";
     state.ownerUnavailable = false;
     state.session = null;
+    state.cwd = "";
     state.optionsSeq++;
     clearTimeout(state.timer);
     state.currentRequests = [];
@@ -756,6 +757,7 @@ export function createSessions({
         scope[1] === getAgent().id,
       options = {
         project,
+        ...(!selected && state.creationBranch ? { branch: state.creationBranch } : {}),
         ...(!selected ? state.prefs : {}),
         executor: "background",
       };
@@ -768,6 +770,8 @@ export function createSessions({
         throw new Error("The active agent changed. Refresh before continuing.");
       if (!catalog || optionsSeq !== state.optionsSeq || !current())
         throw new Error("Connection failed.");
+      if (options.branch && catalog.capabilities?.workspace_git !== true)
+        throw new Error("Branch selection requires an updated agentTools client.");
       if (catalog.capabilities?.background_creation !== true)
         throw new Error(
           "Background conversations are unavailable. Update agentTools on your computer and reconnect.",
@@ -901,8 +905,17 @@ export function createSessions({
       }
     }
   }
-  async function create() {
+  async function create(draftOnly = false) {
     if (state.sending) return;
+    if (draftOnly && state.selected) {
+      if (!(await resetSelection())) return;
+      renderProjects();
+      renderSessions();
+      setNavigation(false);
+      if (state.project) await loadOptions();
+      else chooseComposeProject();
+      return;
+    }
     if (!state.project) {
       chooseComposeProject();
       return;

@@ -4,6 +4,7 @@ import {
 } from "./features/owner-capabilities";
 import { createReadIndexes } from "./features/indexes";
 import { sessionProject } from "./project-paths";
+import { createWorkspaceContext } from "./features/workspace-context";
 import { createReading } from "./features/reading";
 import {
   loadedItems,
@@ -365,8 +366,11 @@ export function startRemote() {
     renderItems($("live"), timeline.filter(isLive), new Set(), conversationView, true);
     reading.afterRender();
   }
+  let noticeTimer;
   const notice = (text = "") => {
+    clearTimeout(noticeTimer);
     $("notice").textContent = t(text);
+    if (text) noticeTimer = setTimeout(() => notice(), 5000);
   };
   let namingNotice = null;
   function translate() {
@@ -569,7 +573,7 @@ export function startRemote() {
     $("agentSelect").disabled =
       !state.agentDiscovered || state.sending || state.uploading > 0;
     $("startChat").disabled = state.sending || offline || agentUnavailable;
-    $("breadcrumbProject").disabled = state.sending;
+    $("breadcrumbProject").disabled = state.sending || !!state.selected;
     for (const b of $("sessions").querySelectorAll("button"))
       b.disabled = state.sending;
     $("composer").hidden = !state.selected && !state.project;
@@ -667,6 +671,7 @@ export function startRemote() {
     renderContext();
     renderReasoning();
     syncSubagents();
+    renderWorkspace();
   }
   async function connectionMetadata(generation, refresh = false) {
     const id = state.selected, revision = state.liveRevision;
@@ -803,7 +808,11 @@ export function startRemote() {
     renderRequests(state.currentRequests);
     syncInteractionHistory();
     $("working").hidden =
-      !state.running ||
+      live.status !== "inProgress" ||
+      !live.turn_id ||
+      !conversationItems().some(
+        (item) => item.turn_id === live.turn_id && item.type === "userMessage",
+      ) ||
       !!state.currentRequests.length ||
       state.live.owner?.state === "offline";
     renderView(
@@ -1539,6 +1548,9 @@ export function startRemote() {
     ensureStream,
     renderCurrent,
     mergeOrdered,
+  });
+  const { renderWorkspace } = createWorkspaceContext({
+    $, t, state, api, getAgent, showMenu, chooseComposeProject, projectName,
   });
   const { archiveConversation, unavailableConversation, renderContext } =
     createLifecycle({

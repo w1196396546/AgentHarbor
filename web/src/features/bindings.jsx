@@ -125,7 +125,7 @@ export function bindWorkspace({
     }, $("older"));
   $("more").onclick = () => run(() => list(true), $("more"));
   $("search").oninput = renderSessions;
-  $("new").onclick = () => run(create, $("new"));
+  $("new").onclick = () => run(() => create(true), $("new"));
   $("startChat").onclick = () => run(create, $("startChat"));
   $("capabilityIssue").onclick = () =>
     showMenu($("capabilityIssue"), [

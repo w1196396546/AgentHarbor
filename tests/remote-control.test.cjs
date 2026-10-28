@@ -262,14 +262,11 @@ for (const engine of engines)
           undefined,
           "transcript became executable HTML",
         );
-        await page.locator("#breadcrumbProject").click();
-        await page
-          .locator("#menu button")
-          .filter({ hasText: project })
-          .click();
+        assert(await page.locator("#breadcrumbProject").isDisabled());
         if (width < 760) await page.locator("#sidebarToggle").click();
         const previousOptionCount = optionQueries.length;
         await page.locator("#new").click();
+        await page.locator("#startChat").click();
         await page
           .locator('[data-path="current"] [data-id="remote-session"][aria-current="true"]')
           .waitFor({ state: "attached" });

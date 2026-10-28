@@ -249,7 +249,10 @@ export function createConversation({
           <Icon name={symbol} />
           <span className="activity-title">{t(title)}</span>
           <span className="activity-subtitle">{subtitle || ""}</span>
-          <span className="activity-meta">
+          <span
+            className="activity-meta"
+            data-status={requests.length ? "waiting" : status}
+          >
             {requests.length
               ? requestLabel(requests) + " · " + requests.length
               : statusLabel(status)}

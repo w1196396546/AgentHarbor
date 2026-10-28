@@ -35,7 +35,7 @@ func TestPlaintextPairAndOperationsNeverReachClient(t *testing.T) {
 		{"POST", "/api/threads"}, {"POST", "/api/threads/id/turn"}, {"POST", "/api/threads/id/connect"},
 		{"POST", "/api/threads/id/settings"}, {"POST", "/api/threads/id/interrupt"}, {"POST", "/api/threads/id/answer"},
 		{"GET", "/api/threads/id/queue"}, {"PATCH", "/api/threads/id/queue/message"}, {"DELETE", "/api/threads/id/queue/message"},
-		{"GET", "/api/options"}, {"GET", "/api/files"}, {"GET", "/api/project-file"}, {"GET", "/api/attachments/id"}, {"POST", "/api/attachments"},
+		{"GET", "/api/options"}, {"GET", "/api/workspace"}, {"GET", "/api/files"}, {"GET", "/api/project-file"}, {"GET", "/api/attachments/id"}, {"POST", "/api/attachments"},
 	} {
 		res := request(t, client, operation.method, ts.URL+operation.path, `{"text":"private command"}`)
 		res.Body.Close()

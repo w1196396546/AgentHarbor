@@ -86,8 +86,10 @@ for (const engine of engines) {
       });
       assert(Object.values(controls).every(r => Math.abs(r.top - controls.send.top) <= 1), 'mobile controls share one row: ' + JSON.stringify(controls));
       assert(await page.locator('#effort').isHidden(), 'reasoning uses the combined model picker on mobile');
-      const composerHeight = await page.locator('#composer').evaluate(node => node.getBoundingClientRect().height);
-      assert(composerHeight < 110, 'short draft composer stays compact at ' + width + 'px: ' + composerHeight);
+      const composerHeight = await page.locator('.composer-surface').evaluate(node => node.getBoundingClientRect().height);
+      assert(composerHeight < 110, 'short draft input and controls stay compact at ' + width + 'px: ' + composerHeight);
+      const contextHeight = await page.locator('#workspaceContext').evaluate(node => node.getBoundingClientRect().height);
+      assert(contextHeight <= 52, 'directory and branch fit one touch-accessible row: ' + contextHeight);
       for (const id of ['permission', 'mode']) assert((await page.locator('#' + id).getAttribute('aria-label'))?.length, id + ' keeps its accessible label');
       for (const [id, r] of Object.entries(controls)) assert(r.left >= 0 && r.right <= width + 1 && r.width >= 24 && r.height >= 24, id + ' needs an in-bounds compact target: ' + JSON.stringify(controls));
       for (const id of ['sidebarToggle', 'sessionInfo', 'filesToggle']) {

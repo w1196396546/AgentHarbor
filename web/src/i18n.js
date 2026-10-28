@@ -49,6 +49,19 @@ if (typeof I18N !== 'undefined') Object.assign(I18N.zh, window.REMOTE_I18N.zh);
 
 // The remote workspace shares these strings with the desktop setup page.
 const remoteWorkspaceTranslations = [
+  ["Creating switches this folder's branch. Other conversations using this folder are affected.", "创建时会切换此目录的分支，使用同一目录的其他对话也会受影响。", "建立時會切換此目錄的分支，使用同一目錄的其他對話也會受影響。", "作成時にこのフォルダーのブランチを切り替えます。同じフォルダーを使う他の会話にも影響します。", "Beim Erstellen wird der Branch dieses Ordners gewechselt. Andere Unterhaltungen mit diesem Ordner sind ebenfalls betroffen."],
+  ["Choose an existing local branch.", "请选择现有本地分支。", "請選擇現有本機分支。", "既存のローカルブランチを選択してください。", "Wähle einen vorhandenen lokalen Branch."],
+  ["Branch selection requires an updated agentTools client.", "选择分支需要更新电脑端 agentTools。", "選擇分支需要更新電腦端 agentTools。", "ブランチの選択には agentTools の更新が必要です。", "Die Branch-Auswahl erfordert einen aktuellen agentTools-Client."],
+  ["Unable to switch branches. Check for conflicting changes or a branch in use elsewhere.", "无法切换分支，请检查未提交的冲突更改或分支是否已在其他目录使用。", "無法切換分支，請檢查未提交的衝突變更或分支是否已在其他目錄使用。", "ブランチを切り替えられません。競合する変更や別の場所で使用中のブランチを確認してください。", "Der Branch konnte nicht gewechselt werden. Prüfe auf kollidierende Änderungen oder einen andernorts verwendeten Branch."],
+  ["The selected branch could not be confirmed. Check the project before retrying.", "无法确认所选分支，请检查项目后再重试。", "無法確認所選分支，請檢查專案後再重試。", "選択したブランチを確認できません。再試行する前にプロジェクトを確認してください。", "Der gewählte Branch konnte nicht bestätigt werden. Prüfe das Projekt vor einem erneuten Versuch."],
+  ["The project has too many branches to display.", "项目分支过多，无法完整显示。", "專案分支過多，無法完整顯示。", "ブランチが多すぎて表示できません。", "Das Projekt hat zu viele Branches zur Anzeige."],
+  ["Project folder", "项目目录", "專案目錄", "プロジェクトフォルダー", "Projektordner"],
+  ["Branch", "分支", "分支", "ブランチ", "Branch"],
+  ["New conversation branch", "新会话分支", "新對話分支", "新規会話のブランチ", "Branch für neue Unterhaltung"],
+  ["Branch unknown", "分支未知", "分支未知", "ブランチ不明", "Branch unbekannt"],
+  ["Detached HEAD", "游离 HEAD", "分離 HEAD", "Detached HEAD", "Detached HEAD"],
+  ["No Git repository", "非 Git 项目", "非 Git 專案", "Git リポジトリなし", "Kein Git-Repository"],
+  ["Unable to read the project's Git state.", "无法读取项目的 Git 状态。", "無法讀取專案的 Git 狀態。", "プロジェクトの Git 状態を読み取れません。", "Der Git-Status des Projekts konnte nicht gelesen werden."],
   ["Disconnected", "已断开", "已中斷", "切断済み", "Getrennt"],
   ["The selected Agent is not connected. Connect it in agentTools on your computer.", "所选智能体尚未连接，请在电脑端 agentTools 中连接。", "所選智慧代理尚未連線，請在電腦端 agentTools 中連線。", "選択したエージェントは未接続です。コンピューターの agentTools で接続してください。", "Der ausgewählte Agent ist nicht verbunden. Verbinde ihn in agentTools auf deinem Computer."],
   ["Accept edits", "允许编辑", "允許編輯", "編集を許可", "Änderungen erlauben"],

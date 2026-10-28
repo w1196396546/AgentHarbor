@@ -446,6 +446,14 @@ export function Workspace() {
               <div id="queueList"></div>
             </section>
             <form id="composer" hidden>
+              <div id="workspaceContext" className="workspace-context" hidden>
+                <Icon name="folder" />
+                <Button variant="ghost" id="workspaceProject" type="button"
+                  aria-haspopup="menu" />
+                <Icon name="branch" />
+                <Button variant="ghost" id="workspaceBranch" type="button"
+                  aria-haspopup="menu" />
+              </div>
               <div id="subagentsBar" className="subagents-bar" hidden>
                 <Button
                   variant="ghost"
