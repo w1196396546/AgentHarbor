@@ -62,6 +62,11 @@ explicit empty current catalog never falls back to old paths. Latest orders load
 Current shows the selected conversation and other reported running or waiting
 conversations. Search continues to apply across these sections; the separate
 "All projects" list filter is removed, so all shared project groups remain visible.
+Each project starts with five conversations and its own Load more button reveals
+five more. Codex project summaries come from `project_sessions`, requested through
+`project_limits`, independently of the global recent page. Refresh preserves each
+project's expanded count. The bottom Load more button still pages global history;
+older clients without project summaries need it to find older project conversations.
 Each shared project heading has a new-session button that opens a draft in that
 project. The compact project and branch controls sit in a separate row above the
 composer; long labels truncate and full paths remain available on hover.

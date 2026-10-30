@@ -571,7 +571,8 @@ body.inspector-resizing * {
 #sessions .note {
   padding: 0 10px;
 }
-#more {
+#more,
+.project-more {
   width: 100%;
   margin: 10px 0;
   font-size: 12px;

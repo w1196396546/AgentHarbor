@@ -46,6 +46,7 @@ export function createSessions({
   let listRequests = 0,
     restoredScope = "",
     createdScope = "";
+  let projectScope = "", projectLimits = {}, projectPages = {};
   const createdSessions = new Map();
   let inventoryRequest = null;
   let creationRequests;
@@ -129,17 +130,25 @@ export function createSessions({
     if (!state.project && state.creationProjects.length === 1)
       state.project = state.creationProjects[0].root_paths[0];
   }
-  async function list(append = false, refresh = false) {
+  async function list(append = false, refresh = false, projectChange = false) {
     if (refresh && listRequests) return;
     listRequests++;
     try {
+      const scope = JSON.stringify([state.device?.id, getAgent().id]);
+      if (scope !== projectScope) {
+        projectScope = scope;
+        projectLimits = {};
+        projectPages = {};
+      }
       const seq = ++state.listSeq,
         project = "",
-        loaded = refresh ? state.next || state.sessions.length : 0;
+        project_limits = JSON.stringify(projectLimits),
+        loaded = refresh || projectChange ? state.next || state.sessions.length : 0;
       let value = await api(
         "sessions?" +
           new URLSearchParams({
             project,
+            project_limits,
             offset: String(append ? state.next : 0),
           }),
         undefined,
@@ -147,11 +156,11 @@ export function createSessions({
       );
       if (seq !== state.listSeq) return;
       const rows = [...value.sessions];
-      while (refresh && value.has_more && value.next < loaded) {
+      while ((refresh || projectChange) && value.has_more && value.next < loaded) {
         const offset = value.next;
         value = await api(
           "sessions?" +
-            new URLSearchParams({ project, offset: String(offset) }),
+            new URLSearchParams({ project, project_limits, offset: String(offset) }),
           undefined,
           { observation: true },
         );
@@ -159,6 +168,8 @@ export function createSessions({
         rows.push(...value.sessions);
         if (!(value.next > offset)) break;
       }
+      projectPages = value.project_sessions || {};
+      rows.push(...Object.values(projectPages).flatMap((page) => page.sessions));
       for (const capability of [
         "controls_options",
         "connection_metadata",
@@ -352,7 +363,7 @@ export function createSessions({
         {group.empty && !group.sessions.length && (
           <p className="note session-section-empty">{t(group.empty)}</p>
         )}
-        {group.sessions.map((session) => {
+        {(group.project ? group.sessions.slice(0, projectLimits[group.project.id] || 5) : group.sessions).map((session) => {
           const date = new Date(session.last);
           return (
             <PanelRow
@@ -421,6 +432,29 @@ export function createSessions({
             </PanelRow>
           );
         })}
+        {group.project && (group.sessions.length > (projectLimits[group.project.id] || 5) || projectPages[group.project.id]?.has_more) && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="subtle project-more"
+            aria-label={t("Load more") + ": " + group.name}
+            onClick={(event) => run(async () => {
+              const id = group.project.id, previous = projectLimits[id] || 5,
+                scope = projectScope;
+              projectLimits[id] = previous + 5;
+              try {
+                if (projectPages[id]?.has_more) await list(false, false, true);
+                else renderSessions();
+              } catch (error) {
+                if (scope === projectScope && projectLimits[id] === previous + 5)
+                  projectLimits[id] = previous;
+                throw error;
+              }
+            }, event.currentTarget)}
+          >
+            {t("Load more")}
+          </Button>
+        )}
       </details>
     );
     renderView(

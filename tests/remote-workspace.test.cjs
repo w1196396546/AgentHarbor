@@ -447,14 +447,25 @@ async function fixture(t, engine, options = {}) {
             row.cwd === selected ||
             row.cwd.startsWith(selected + "/"),
         );
+        const offset = Number(u.searchParams.get("offset") || 0),
+          next = Math.min(offset + (options.sessionPageSize || rows.length), rows.length);
+        const limits = JSON.parse(u.searchParams.get("project_limits") || "null");
+        const projectPages = options.projectPagination && limits ? Object.fromEntries(
+          state.sidebarProjects.map((project) => {
+            const members = rows.filter((row) => row.project_id === project.id || project.root_paths.includes(row.cwd));
+            const limit = limits[project.id] || 5;
+            return [project.id, { sessions: members.slice(0, limit), has_more: members.length > limit }];
+          }),
+        ) : undefined;
         return route.fulfill({
           json: {
-            sessions: state.historyUnavailable ? [] : rows,
+            sessions: state.historyUnavailable ? [] : rows.slice(offset, next),
+            project_sessions: projectPages,
             projects: state.projects,
             sidebar_projects: state.sidebarProjects,
             total: rows.length,
-            next: rows.length,
-            has_more: false,
+            next,
+            has_more: next < rows.length,
             archived_ids: state.archivedIDs || [],
             history_unavailable: !!state.historyUnavailable,
             history_warning: state.historyUnavailable
@@ -1042,6 +1053,46 @@ async function visibleActionIcons(page) {
 }
 
 for (const engine of engines) {
+  test(`${engine}: each project starts with five conversations and loads five independently`, async (t) => {
+    const recent = Array.from({ length: 101 }, (_, i) => ({ ...session, id: "recent-" + i })),
+      older = Array.from({ length: 12 }, (_, i) => ({ ...session, id: "older-" + i,
+        title: "Older conversation " + i, cwd: otherProject }));
+    const { page, seen, clean } = await fixture(t, engine, {
+      locale: engine === "webkit" ? "zh-CN" : "en-US",
+      rows: [...recent, ...older], projects: [project, otherProject],
+      sessionPageSize: 100, projectPagination: true,
+      state: { sidebarProjects: [
+        { id: "shop", name: "Shop", root_paths: [project] },
+        { id: "older", name: "Older project", root_paths: [otherProject] },
+      ] },
+    });
+    const first = page.locator('[data-path="project:shop"]'),
+      second = page.locator('[data-path="project:older"]');
+    await second.locator('[data-id="older-4"]').waitFor();
+    assert.equal(await first.locator("[data-id]").count(), 5);
+    assert.equal(await second.locator("[data-id]").count(), 5);
+    assert.equal(seen.lists.length, 1, "initial catalog should not scan all global pages");
+    await second.locator(".project-more").click();
+    await second.locator('[data-id="older-9"]').waitFor();
+    assert.equal(await second.locator("[data-id]").count(), 10);
+    assert.equal(await first.locator("[data-id]").count(), 5);
+    assert.deepEqual(JSON.parse(seen.lists.at(-1).project_limits), { older: 10 });
+    await page.locator("#refresh").click();
+    await page.waitForFunction(() => !document.getElementById("refresh").disabled);
+    assert.equal(await second.locator("[data-id]").count(), 10);
+    await second.locator(".project-more").click();
+    await second.locator('[data-id="older-11"]').waitFor();
+    assert.equal(await second.locator("[data-id]").count(), 12);
+    assert.equal(await second.locator(".project-more").count(), 0);
+    await page.locator("#more").click();
+    await page.waitForFunction(() => document.getElementById("more").hidden);
+    assert.ok(seen.lists.some((query) => query.offset === "100"));
+    assert.equal(await first.locator("[data-id]").count(), 5);
+    assert.equal(await second.locator("[data-id]").count(), 12);
+    assert.equal(seen.posts.filter((post) => post.path.startsWith("/api/threads")).length, 0);
+    await clean();
+  });
+
   test(`${engine}: tool cards separate execution from prose across themes and widths`, async (t) => {
     const command = richItems().find(item => item.id === "cmd-1");
     const tool = richItems().find(item => item.id === "tool-1");

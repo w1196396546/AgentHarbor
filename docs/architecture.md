@@ -225,6 +225,8 @@ Markdown 正文按实例复用，只有文本或语言、设备、Agent、会话
 
 现代历史目录从当前最高版本官方 SQLite 索引读取，按 ID 定点查找，无需逐条解码全部 rollout 或逐页等待 `thread/list`。详情优先有界 rich history，成功时不同时传整份 legacy 正文；更早内容经游标分页。旧版缺少目录字段时兼容回退，读错误标记 `history_unavailable`，不视作空目录。
 
+网页每个项目默认显示 5 条会话，并提供独立的“加载更多”，每次增加 5 条。Codex 列表请求可附 `project_limits` JSON 对象（项目 ID → 已展开条数，最少 5）；客户端从完整的已授权、未归档主会话目录生成 `project_sessions`（项目 ID → `{sessions,has_more}`），未指定的当前项目默认 5 条，保持原生项目归属及外置 worktree，置顶会话仍单列。该字段独立于全局 `sessions` / `next` / `has_more`，底部按钮继续读取全局下一页。网页按设备和 Agent 隔离展开数，刷新保持各项目深度，失败保留已加载内容；旧客户端缺少字段时按已加载会话分页展示，缺失历史仍须通过底部全局分页读取。Claude Desktop 已返回全部目录，沿用前端每项目 5 条的展示分页。只读取目录，不连接执行 owner。
+
 归档仍每次检查：列表 `archived_ids` 是明确证据；详情和控制返回 410、`archived: true`；流发 `archived` 并结束，不停止外部任务。归档元数据不可读时禁用控制，显式刷新成功后才恢复。活跃流最多每秒检查一次，空闲流约 12 秒内检查。共享根目录、Host/Origin、客户端授权与撤销继续由既有边界校验。
 
 `live.owner` 提供 kind/state/epoch/capabilities。后台 owner 使用 kind `background`；控制在加密请求内携 `X-Remote-Owner-Epoch` 及兼容别名 `X-Codex-Owner-Epoch`，由本机解密并检查。中转只路由密文，重建外层请求头，不透传浏览器明文 owner 头。归属变化或操作不确定时不自动重发。连接端通过现有本机 IPC 发布自有后台 owner，桌面可按同 ID 跟随；IPC 未提供跨应用原子 claim，另一个绕过 owner 发现的独立 CLI 同时恢复同 ID 不在保证范围内。
